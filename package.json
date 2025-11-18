@@ -1,0 +1,31 @@
+{
+  "name": "fearless-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "League of Legends drafting and champion pool management tool",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "@vueuse/core": "^10.11.1",
+    "@vueuse/firebase": "^10.11.1",
+    "firebase": "^10.11.1",
+    "localforage": "^1.10.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "autoprefixer": "^10.4.19",
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.8",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  }
+}

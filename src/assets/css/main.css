@@ -1,0 +1,18 @@
+/* Import existing CSS files - must come before @tailwind directives */
+@import '../../../css/style.css';
+@import '../../../css/champion-pool.css';
+@import '../../../css/drafting-tool.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Additional global styles */
+/* Note: body styles are already defined in css/style.css */
+/* This ensures #app takes full height and matches original styling */
+#app {
+  min-height: 100vh;
+  background-color: #121212; /* Match original body background */
+}
+
+
