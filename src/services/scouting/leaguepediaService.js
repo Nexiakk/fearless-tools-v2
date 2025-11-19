@@ -15,7 +15,10 @@ export const leaguepediaService = {
    */
   async getPlayerChampionPool(playerName) {
     try {
-      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
+      const apiUrl = `${BACKEND_API_URL}/leaguepedia`
+      console.log('[Leaguepedia] Calling API:', apiUrl, 'for player:', playerName)
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -26,12 +29,22 @@ export const leaguepediaService = {
         })
       })
 
+      console.log('[Leaguepedia] Response status:', response.status, response.statusText)
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        console.error('[Leaguepedia] Error response:', errorText)
+        let error
+        try {
+          error = JSON.parse(errorText)
+        } catch (e) {
+          error = { message: errorText || `HTTP error! status: ${response.status}` }
+        }
+        throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`)
       }
 
       const result = await response.json()
+      console.log('[Leaguepedia] Success, received data:', result)
       if (result.success && Array.isArray(result.data)) {
         return result.data
       }

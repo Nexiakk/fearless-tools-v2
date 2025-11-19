@@ -26,7 +26,11 @@ export const opggService = {
       }
 
       // Call backend API with full champions URL
-      const response = await fetch(`${BACKEND_API_URL}/scoutOpgg`, {
+      const apiUrl = `${BACKEND_API_URL}/scoutOpgg`
+      console.log('[op.gg] Calling API:', apiUrl)
+      console.log('[op.gg] Request data:', { playerName: urlData.playerName, region: urlData.region, tag: urlData.tag, championsUrl: urlData.fullUrl })
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -39,12 +43,22 @@ export const opggService = {
         })
       })
 
+      console.log('[op.gg] Response status:', response.status, response.statusText)
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        console.error('[op.gg] Error response:', errorText)
+        let error
+        try {
+          error = JSON.parse(errorText)
+        } catch (e) {
+          error = { message: errorText || `HTTP error! status: ${response.status}` }
+        }
+        throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('[op.gg] Success, received data:', data)
       return data
     } catch (error) {
       console.error('Error scraping op.gg:', error)
