@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, getDocs, getDoc, addDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/services/firebase/config'
 import { useWorkspaceStore } from './workspace'
 import { useAuthStore } from './auth'
@@ -207,7 +207,7 @@ export const useScoutingStore = defineStore('scouting', () => {
   async function loadScoutingData(playerId) {
     try {
       const dataRef = getScoutingDoc('data', playerId)
-      const dataSnap = await dataRef.get()
+      const dataSnap = await getDoc(dataRef)
       
       if (dataSnap.exists()) {
         scoutingData.value[playerId] = dataSnap.data()
@@ -221,7 +221,7 @@ export const useScoutingStore = defineStore('scouting', () => {
   async function saveScoutingData(playerId, data) {
     try {
       const dataRef = getScoutingDoc('data', playerId)
-      await updateDoc(dataRef, {
+      await setDoc(dataRef, {
         ...data,
         lastUpdated: serverTimestamp()
       }, { merge: true })
@@ -232,22 +232,8 @@ export const useScoutingStore = defineStore('scouting', () => {
         lastUpdated: new Date()
       }
     } catch (err) {
-      // If document doesn't exist, create it
-      if (err.code === 'not-found' || err.message?.includes('not found')) {
-        const dataRef = doc(db, getScoutingPath('data'), playerId)
-        await updateDoc(dataRef, {
-          ...data,
-          lastUpdated: serverTimestamp()
-        }, { merge: true })
-        
-        scoutingData.value[playerId] = {
-          ...data,
-          lastUpdated: new Date()
-        }
-      } else {
-        console.error('Error saving scouting data:', err)
-        throw err
-      }
+      console.error('Error saving scouting data:', err)
+      throw err
     }
   }
   

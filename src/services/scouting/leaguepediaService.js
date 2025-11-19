@@ -14,7 +14,7 @@ export const leaguepediaService = {
    */
   async getPlayerChampionPool(playerName) {
     try {
-      const matches = await cargo.query({
+      const result = await cargo.query({
         tables: ['MatchScheduleGame'],
         fields: [
           'MatchScheduleGame.Champion',
@@ -27,12 +27,20 @@ export const leaguepediaService = {
         limit: 50
       })
       
+      // Handle different response formats from poro
+      const matches = Array.isArray(result) ? result : (result?.results || result?.data || [])
+      
+      if (!Array.isArray(matches)) {
+        console.warn('Unexpected Leaguepedia response format:', result)
+        return []
+      }
+      
       return matches.map(match => ({
-        championName: match.Champion,
-        games: parseInt(match.Games) || 0,
-        wins: parseInt(match.Wins) || 0,
-        losses: (parseInt(match.Games) || 0) - (parseInt(match.Wins) || 0),
-        winrate: match.Games > 0 ? ((parseInt(match.Wins) || 0) / parseInt(match.Games)) * 100 : 0
+        championName: match.Champion || match.championName,
+        games: parseInt(match.Games || match.games || 0) || 0,
+        wins: parseInt(match.Wins || match.wins || 0) || 0,
+        losses: (parseInt(match.Games || match.games || 0) || 0) - (parseInt(match.Wins || match.wins || 0) || 0),
+        winrate: (match.Games || match.games) > 0 ? ((parseInt(match.Wins || match.wins || 0) || 0) / parseInt(match.Games || match.games || 0)) * 100 : 0
       }))
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerChampionPool):', error)
