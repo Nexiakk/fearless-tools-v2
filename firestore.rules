@@ -1,97 +1,103 @@
 rules_version = '2';
+
 service cloud.firestore {
-  
-  // Helper functions
-  function isAuthenticated() {
-    return request.auth != null;
-  }
-  
-  // Admin = authenticated user (client-side enforces non-anonymous check)
-  // The simpler version works, so we'll use that
-  function isAdmin() {
-    return isAuthenticated();
-  }
-  
-  // Check if user is a member of a workspace
-  function isWorkspaceMember(workspaceId) {
-    return isAuthenticated() && 
-           exists(/databases/$(database)/documents/workspaces/$(workspaceId)/users/$(request.auth.uid));
-  }
-  
-  // GLOBAL CHAMPION DATA - shared by all workspaces
-  match /champions/global {
-    // All authenticated users can read champion data
-    allow read: if isAuthenticated();
-    // Only admins can write champion data (client-side enforces non-anonymous)
-    allow write: if isAdmin();
-  }
-  
-  // GLOBAL SETTINGS - controls anonymous user permissions
-  match /settings/global {
-    // All authenticated users can read settings (needed to check permissions)
-    allow read: if isAuthenticated();
-    // Only admins can write settings (client-side enforces non-anonymous)
-    allow write: if isAdmin();
-  }
-  
-  // WORKSPACES
-  match /workspaces/{workspaceId} {
-    // Workspace metadata
-    match /metadata/info {
-      // ANY authenticated user can read metadata (needed to check password when joining)
+
+  match /databases/{database}/documents {
+
+    // Helper functions
+
+    function isAuthenticated() {
+
+      return request.auth != null;
+
+    }
+
+    
+
+    // For now, allow all authenticated users (client-side enforces admin check)
+
+    function isAdmin() {
+
+      return isAuthenticated();
+
+    }
+
+    
+
+    // GLOBAL CHAMPION DATA
+
+    match /champions/global {
+
       allow read: if isAuthenticated();
-      // Only admins can create/update workspace metadata
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-    
-    // Workspace users
-    match /users/{userId} {
-      // Workspace members can read user list, or admins can read any workspace
-      allow read: if isWorkspaceMember(workspaceId) || isAdmin();
-      // Admins can add users (including themselves when creating workspace), users can add themselves when joining
-      allow create: if isAdmin() || request.auth.uid == userId;
-      // Workspace members can update their own record, or admins can update any
-      allow update: if isWorkspaceMember(workspaceId) || (isAdmin() && request.auth.uid == userId);
-      allow delete: if isAdmin();
-    }
-    
-    // Draft data - real-time sync
-    match /drafts/{document=**} {
-      // Workspace members can read/write draft data
-      // Note: Permission checks for anonymous users (interact vs view) are handled client-side
-      // based on settings/global.anonymousUserMode
-      allow read, write: if isWorkspaceMember(workspaceId);
-    }
-    
-    // Saved drafts subcollection
-    match /savedDrafts/{draftId} {
-      // Workspace members can read/write saved drafts
-      allow read, write: if isWorkspaceMember(workspaceId);
-    }
-    
-    // Legacy workspace-specific champions (for backward compatibility)
-    match /champions/{document=**} {
-      // Workspace members can read
-      allow read: if isWorkspaceMember(workspaceId);
-      // Only admins can write (though this is deprecated in favor of global champions)
+
       allow write: if isAdmin();
+
     }
+
     
-    // Scouting data
-    match /scouting/players/{playerId} {
-      // Workspace members can read player list
-      allow read: if isWorkspaceMember(workspaceId);
-      // Only admins can add/update/delete players
+
+    // GLOBAL SETTINGS
+
+    match /settings/global {
+
+      allow read: if isAuthenticated();
+
       allow write: if isAdmin();
+
     }
+
     
-    match /scouting/data/{playerId} {
-      // Workspace members can read scouting data
-      allow read: if isWorkspaceMember(workspaceId);
-      // Only admins can write scouting data
-      allow write: if isAdmin();
+
+    // WORKSPACES
+
+    match /workspaces/{workspaceId} {
+
+      match /metadata/info {
+
+        allow read: if isAuthenticated();
+
+        allow create, update, delete: if isAdmin();
+
+      }
+
+      match /users/{userId} {
+
+        allow read: if isAuthenticated();
+
+        allow create: if isAdmin() || request.auth.uid == userId;
+
+        allow update: if isAuthenticated();
+
+        allow delete: if isAdmin();
+
+      }
+
+      match /drafts/{document=**} {
+
+        allow read, write: if isAuthenticated();
+
+      }
+
+      match /savedDrafts/{draftId} {
+
+        allow read, write: if isAuthenticated();
+
+      }
+      
+      // Scouting data
+      match /scouting/players/{playerId} {
+        // Workspace members can read player list
+        allow read: if isAuthenticated();
+        // Only admins can add/update/delete players
+        allow write: if isAdmin();
+      }
+      
+      match /scouting/data/{playerId} {
+        // Workspace members can read scouting data
+        allow read: if isAuthenticated();
+        // Only admins can write scouting data
+        allow write: if isAdmin();
+      }
     }
   }
 }

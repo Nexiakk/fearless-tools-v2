@@ -1,9 +1,10 @@
 /**
  * Frontend service for Leaguepedia API
- * Calls Netlify Function (backend) to avoid browser compatibility issues with poro
+ * Uses poro library directly in the browser (with polyfills)
  */
+import { CargoClient } from 'poro'
 
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || '/.netlify/functions'
+const cargo = new CargoClient()
 
 export const leaguepediaService = {
   /**
@@ -13,23 +14,26 @@ export const leaguepediaService = {
    */
   async getPlayerChampionPool(playerName) {
     try {
-      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'getChampionPool',
-          playerName
-        })
+      const matches = await cargo.query({
+        tables: ['MatchScheduleGame'],
+        fields: [
+          'MatchScheduleGame.Champion',
+          'COUNT(*) as Games',
+          'SUM(CASE WHEN MatchScheduleGame.Win="1" THEN 1 ELSE 0 END) as Wins'
+        ],
+        where: `MatchScheduleGame.Player="${playerName}"`,
+        groupBy: 'MatchScheduleGame.Champion',
+        orderBy: 'Games DESC',
+        limit: 50
       })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`)
-      }
-
-      return await response.json()
+      
+      return matches.map(match => ({
+        championName: match.Champion,
+        games: parseInt(match.Games) || 0,
+        wins: parseInt(match.Wins) || 0,
+        losses: (parseInt(match.Games) || 0) - (parseInt(match.Wins) || 0),
+        winrate: match.Games > 0 ? ((parseInt(match.Wins) || 0) / parseInt(match.Games)) * 100 : 0
+      }))
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerChampionPool):', error)
       throw error
@@ -43,23 +47,20 @@ export const leaguepediaService = {
    */
   async getPlayerInfo(playerName) {
     try {
-      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'getPlayerInfo',
-          playerName
-        })
+      const players = await cargo.query({
+        tables: ['Players'],
+        fields: [
+          'Players.ID',
+          'Players.Name',
+          'Players.Team',
+          'Players.Role',
+          'Players.Region'
+        ],
+        where: `Players.Name="${playerName}"`,
+        limit: 1
       })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`)
-      }
-
-      return await response.json()
+      
+      return players.length > 0 ? players[0] : null
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerInfo):', error)
       throw error
@@ -74,26 +75,58 @@ export const leaguepediaService = {
    */
   async getRecentMatches(playerName, limit = 20) {
     try {
-      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'getRecentMatches',
-          playerName,
-          limit
-        })
+      const matches = await cargo.query({
+        tables: ['MatchScheduleGame'],
+        fields: [
+          'MatchScheduleGame.Champion',
+          'MatchScheduleGame.Win',
+          'MatchScheduleGame.Date',
+          'MatchScheduleGame.Opponent',
+          'MatchScheduleGame.Team',
+          'MatchScheduleGame.Tournament'
+        ],
+        where: `MatchScheduleGame.Player="${playerName}"`,
+        orderBy: 'MatchScheduleGame.Date DESC',
+        limit: limit
       })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`)
-      }
-
-      return await response.json()
+      
+      return matches.map(match => ({
+        champion: match.Champion,
+        win: match.Win === '1',
+        date: match.Date,
+        opponent: match.Opponent,
+        team: match.Team,
+        tournament: match.Tournament
+      }))
     } catch (error) {
       console.error('Leaguepedia API error (getRecentMatches):', error)
+      throw error
+    }
+  },
+
+  /**
+   * Search for players by name (fuzzy search)
+   * @param {string} searchTerm - Search term
+   * @returns {Promise<Array>} Array of matching players
+   */
+  async searchPlayers(searchTerm) {
+    try {
+      const players = await cargo.query({
+        tables: ['Players'],
+        fields: [
+          'Players.ID',
+          'Players.Name',
+          'Players.Team',
+          'Players.Role',
+          'Players.Region'
+        ],
+        where: `Players.Name LIKE "%${searchTerm}%"`,
+        limit: 20
+      })
+      
+      return players
+    } catch (error) {
+      console.error('Leaguepedia API error (searchPlayers):', error)
       throw error
     }
   }
