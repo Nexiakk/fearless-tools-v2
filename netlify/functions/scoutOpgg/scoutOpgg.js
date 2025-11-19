@@ -82,6 +82,22 @@ exports.handler = async (event, context) => {
       championRows = $('[class*="champion-item"], [class*="champion-box"], [data-champion]')
     }
     
+    // First, identify and skip the summary row (first row like "Wszyscy bohaterowie")
+    // We need to check this before filtering, as the filter index won't match original index
+    const allRows = championRows.toArray()
+    if (allRows.length > 0) {
+      const firstRow = $(allRows[0])
+      const firstRowText = firstRow.text().toLowerCase()
+      // Check if first row is a summary row
+      if (firstRowText.includes('wszyscy') || firstRowText.includes('all') || 
+          firstRowText.includes('total') || firstRowText.includes('bohaterowie') || 
+          firstRowText.includes('champions') || !firstRow.find('img[alt]').length) {
+        // Remove first row from array
+        allRows.shift()
+        championRows = $(allRows)
+      }
+    }
+    
     // Filter out matchup rows and expanded sections
     championRows = championRows.filter((i, elem) => {
       const $row = $(elem)
@@ -150,32 +166,169 @@ exports.handler = async (event, context) => {
       
       if (!championName || championName.length < 2) return
       
-      // Extract stats - try multiple selectors
-      const gamesText = $row.find('[data-stat="games"], .games, [class*="game"], td:nth-child(3)').first().text().trim() ||
-                       $row.find('td').eq(2).text().trim()
-      
-      const winsText = $row.find('[data-stat="wins"], .wins, [class*="win"], td:nth-child(4)').first().text().trim() ||
-                      $row.find('td').eq(3).text().trim()
-      
-      const lossesText = $row.find('[data-stat="losses"], .losses, [class*="loss"], td:nth-child(5)').first().text().trim() ||
-                        $row.find('td').eq(4).text().trim()
-      
-      const winrateText = $row.find('[data-stat="winrate"], .win-rate, .winrate, [class*="winrate"], td:nth-child(6)').first().text().trim() ||
-                         $row.find('td').eq(5).text().trim()
-      
-      const kdaText = $row.find('[data-stat="kda"], .kda, [class*="kda"], td:nth-child(7)').first().text().trim() ||
-                     $row.find('td').eq(6).text().trim()
-
-      // Parse numbers, removing commas, spaces, and other formatting
-      const games = parseInt(gamesText.replace(/[^0-9]/g, '')) || 0
-      const wins = parseInt(winsText.replace(/[^0-9]/g, '')) || 0
-      const losses = parseInt(lossesText.replace(/[^0-9]/g, '')) || 0
-      const winrate = parseFloat(winrateText.replace(/[^0-9.]/g, '')) || 0
-
-      // Parse KDA (format: "K/D/A" or "K/D/A (ratio)")
+      // Extract stats from individual table cells
+      // op.gg typically has: Champion | Games | Wins | Losses | Winrate | KDA
+      // We need to get each stat from its specific cell, not concatenate them
+      let games = 0
+      let wins = 0
+      let losses = 0
+      let winrate = 0
       let kda = null
-      if (kdaText) {
+      
+      if ($row.is('tr')) {
+        // Get all table cells
+        const cells = $row.find('td')
+        
+        // Try to find stats in specific cells
+        // Common op.gg structure: [Champion Icon/Name] | [Games] | [Wins] | [Losses] | [Winrate] | [KDA]
+        // Index might vary, so we'll try multiple approaches
+        
+        // Method 1: Try data attributes or specific classes
+        cells.each((idx, cell) => {
+          const $cell = $(cell)
+          const cellText = $cell.text().trim()
+          const cellClass = $cell.attr('class') || ''
+          
+          // Skip empty cells
+          if (!cellText) return
+          
+          // Games (usually just a number)
+          if (cellClass.includes('game') || $cell.attr('data-stat') === 'games') {
+            // Extract first number only (avoid concatenation)
+            const numMatch = cellText.match(/^\s*(\d+)/)
+            if (numMatch) {
+              const num = parseInt(numMatch[1])
+              if (num > 0 && num < 10000 && games === 0) games = num
+            }
+          }
+          // Wins
+          else if (cellClass.includes('win') && !cellClass.includes('winrate') && $cell.attr('data-stat') !== 'winrate') {
+            const numMatch = cellText.match(/^\s*(\d+)/)
+            if (numMatch) {
+              const num = parseInt(numMatch[1])
+              if (num > 0 && num < 10000 && wins === 0) wins = num
+            }
+          }
+          // Losses
+          else if (cellClass.includes('loss')) {
+            const numMatch = cellText.match(/^\s*(\d+)/)
+            if (numMatch) {
+              const num = parseInt(numMatch[1])
+              if (num > 0 && num < 10000 && losses === 0) losses = num
+            }
+          }
+          // Winrate (usually has %)
+          else if (cellClass.includes('winrate') || cellText.includes('%')) {
+            const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
+            if (winrateMatch) {
+              const num = parseFloat(winrateMatch[1])
+              if (num > 0 && num <= 100 && winrate === 0) winrate = num
+            }
+          }
+          // KDA (has slashes)
+          else if (cellText.includes('/') && !kda) {
+            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            if (kdaMatch) {
+              kda = {
+                kills: parseFloat(kdaMatch[1]),
+                deaths: parseFloat(kdaMatch[2]),
+                assists: parseFloat(kdaMatch[3])
+              }
+            }
+          }
+        })
+        
+        // Method 2: If we didn't find stats via classes, try positional approach
+        // Skip first cell (usually champion icon/name), then try cells 1-5
+        // op.gg structure is typically: [Champion] | [Games] | [Wins] | [Losses] | [Winrate %] | [KDA]
+        if (games === 0 && wins === 0 && losses === 0) {
+          // Try to parse from cell positions
+          for (let idx = 1; idx < Math.min(cells.length, 6); idx++) {
+            const $cell = $(cells[idx])
+            const cellText = $cell.text().trim()
+            
+            // Skip empty cells
+            if (!cellText) continue
+            
+            // Extract just the FIRST number from the cell text (avoid concatenation)
+            // Use match to get the first number, not all numbers
+            const firstNumberMatch = cellText.match(/^\s*(\d+)/)
+            
+            // Check for winrate (has % symbol)
+            if (cellText.includes('%')) {
+              const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
+              if (winrateMatch) {
+                const num = parseFloat(winrateMatch[1])
+                if (num > 0 && num <= 100 && winrate === 0) {
+                  winrate = num
+                  continue
+                }
+              }
+            }
+            
+            // Check for KDA (has slashes)
+            if (cellText.includes('/') && !kda) {
+              const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+              if (kdaMatch) {
+                kda = {
+                  kills: parseFloat(kdaMatch[1]),
+                  deaths: parseFloat(kdaMatch[2]),
+                  assists: parseFloat(kdaMatch[3])
+                }
+                continue
+              }
+            }
+            
+            // For regular numbers, extract first number only
+            if (firstNumberMatch) {
+              const num = parseInt(firstNumberMatch[1])
+              
+              // Assign based on position and what we've already found
+              // Cell 1 is usually games, cell 2 is wins, cell 3 is losses
+              if (idx === 1 && games === 0 && num > 0 && num < 10000) {
+                games = num
+              } else if (idx === 2 && wins === 0 && num > 0 && num < 10000) {
+                wins = num
+              } else if (idx === 3 && losses === 0 && num > 0 && num < 10000) {
+                losses = num
+              } else if (games === 0 && num > 0 && num < 10000) {
+                // Fallback: if we haven't found games yet, this might be it
+                games = num
+              } else if (wins === 0 && num > 0 && num < 10000) {
+                // Fallback: if we haven't found wins yet, this might be it
+                wins = num
+              } else if (losses === 0 && num > 0 && num < 10000) {
+                // Fallback: if we haven't found losses yet, this might be it
+                losses = num
+              }
+            }
+          }
+        }
+        
+        // Calculate games from wins + losses if we have those but not games
+        if (games === 0 && wins > 0 && losses > 0) {
+          games = wins + losses
+        }
+      } else {
+        // Not a table row, try other selectors
+        const gamesText = $row.find('[data-stat="games"], .games, [class*="game"]').first().text().trim()
+        const winsText = $row.find('[data-stat="wins"], .wins, [class*="win"]').first().text().trim()
+        const lossesText = $row.find('[data-stat="losses"], .losses, [class*="loss"]').first().text().trim()
+        const winrateText = $row.find('[data-stat="winrate"], .win-rate, .winrate, [class*="winrate"]').first().text().trim()
+        const kdaText = $row.find('[data-stat="kda"], .kda, [class*="kda"]').first().text().trim()
+        
+        // Extract first number only (avoid concatenation)
+        const gamesMatch = gamesText.match(/\d+/)
+        const winsMatch = winsText.match(/\d+/)
+        const lossesMatch = lossesText.match(/\d+/)
+        const winrateMatch = winrateText.match(/\d+\.?\d*/)
         const kdaMatch = kdaText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+        
+        games = gamesMatch ? parseInt(gamesMatch[0]) : 0
+        wins = winsMatch ? parseInt(winsMatch[0]) : 0
+        losses = lossesMatch ? parseInt(lossesMatch[0]) : 0
+        winrate = winrateMatch ? parseFloat(winrateMatch[0]) : 0
+        
         if (kdaMatch) {
           kda = {
             kills: parseFloat(kdaMatch[1]),
@@ -185,8 +338,7 @@ exports.handler = async (event, context) => {
         }
       }
 
-      // Only add if we have valid games data (to avoid adding matchup rows or empty rows)
-      // Also verify it's not a duplicate
+      // Only add if we have valid data
       if (games > 0 && championName && championName.length >= 2) {
         champions.push({
           championName: championName,
