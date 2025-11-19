@@ -39,7 +39,13 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     commonjsOptions: {
-      include: [/poro/, /node_modules/]
+      include: [/poro/, /node_modules/],
+      transformMixedEsModules: true
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
     }
   },
   root: '.'
