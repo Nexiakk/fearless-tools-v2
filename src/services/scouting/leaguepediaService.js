@@ -1,10 +1,11 @@
 /**
  * Frontend service for Leaguepedia API
- * Uses poro library directly in the browser (with polyfills)
+ * Calls backend API endpoint (Netlify Function) to avoid CORS issues
+ * 
+ * For Netlify: Functions are at /.netlify/functions/
+ * For local dev with Netlify CLI: use '/.netlify/functions'
  */
-import { CargoClient } from 'poro'
-
-const cargo = new CargoClient()
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || '/.netlify/functions'
 
 export const leaguepediaService = {
   /**
@@ -14,46 +15,27 @@ export const leaguepediaService = {
    */
   async getPlayerChampionPool(playerName) {
     try {
-      const result = await cargo.query({
-        tables: ['MatchScheduleGame'],
-        fields: [
-          'MatchScheduleGame.Champion',
-          'COUNT(*) as Games',
-          'SUM(CASE WHEN MatchScheduleGame.Win="1" THEN 1 ELSE 0 END) as Wins'
-        ],
-        where: `MatchScheduleGame.Player="${playerName}"`,
-        groupBy: 'MatchScheduleGame.Champion',
-        orderBy: 'Games DESC',
-        limit: 50
+      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'getPlayerChampionPool',
+          params: { playerName }
+        })
       })
-      
-      // Handle different response formats from poro
-      let matches = []
-      
-      if (Array.isArray(result)) {
-        matches = result
-      } else if (result && typeof result === 'object') {
-        // Try various possible properties
-        matches = result.results || result.data || result.items || result.rows || []
-        
-        // If still not an array, try to convert object values
-        if (!Array.isArray(matches) && typeof matches === 'object') {
-          matches = Object.values(matches)
-        }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error(error.message || `HTTP error! status: ${response.status}`)
       }
-      
-      if (!Array.isArray(matches)) {
-        console.warn('Unexpected Leaguepedia response format:', result)
-        return []
+
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        return result.data
       }
-      
-      return matches.map(match => ({
-        championName: match.Champion || match.championName || match.champion || '',
-        games: parseInt(match.Games || match.games || 0) || 0,
-        wins: parseInt(match.Wins || match.wins || 0) || 0,
-        losses: (parseInt(match.Games || match.games || 0) || 0) - (parseInt(match.Wins || match.wins || 0) || 0),
-        winrate: (match.Games || match.games) > 0 ? ((parseInt(match.Wins || match.wins || 0) || 0) / parseInt(match.Games || match.games || 0)) * 100 : 0
-      }))
+      return []
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerChampionPool):', error)
       // Return empty array instead of throwing to allow op.gg data to still work
@@ -68,20 +50,27 @@ export const leaguepediaService = {
    */
   async getPlayerInfo(playerName) {
     try {
-      const players = await cargo.query({
-        tables: ['Players'],
-        fields: [
-          'Players.ID',
-          'Players.Name',
-          'Players.Team',
-          'Players.Role',
-          'Players.Region'
-        ],
-        where: `Players.Name="${playerName}"`,
-        limit: 1
+      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'getPlayerInfo',
+          params: { playerName }
+        })
       })
-      
-      return players.length > 0 ? players[0] : null
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        return result.data
+      }
+      return null
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerInfo):', error)
       throw error
@@ -96,29 +85,27 @@ export const leaguepediaService = {
    */
   async getRecentMatches(playerName, limit = 20) {
     try {
-      const matches = await cargo.query({
-        tables: ['MatchScheduleGame'],
-        fields: [
-          'MatchScheduleGame.Champion',
-          'MatchScheduleGame.Win',
-          'MatchScheduleGame.Date',
-          'MatchScheduleGame.Opponent',
-          'MatchScheduleGame.Team',
-          'MatchScheduleGame.Tournament'
-        ],
-        where: `MatchScheduleGame.Player="${playerName}"`,
-        orderBy: 'MatchScheduleGame.Date DESC',
-        limit: limit
+      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'getRecentMatches',
+          params: { playerName, limit }
+        })
       })
-      
-      return matches.map(match => ({
-        champion: match.Champion,
-        win: match.Win === '1',
-        date: match.Date,
-        opponent: match.Opponent,
-        team: match.Team,
-        tournament: match.Tournament
-      }))
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        return result.data
+      }
+      return []
     } catch (error) {
       console.error('Leaguepedia API error (getRecentMatches):', error)
       throw error
@@ -132,20 +119,27 @@ export const leaguepediaService = {
    */
   async searchPlayers(searchTerm) {
     try {
-      const players = await cargo.query({
-        tables: ['Players'],
-        fields: [
-          'Players.ID',
-          'Players.Name',
-          'Players.Team',
-          'Players.Role',
-          'Players.Region'
-        ],
-        where: `Players.Name LIKE "%${searchTerm}%"`,
-        limit: 20
+      const response = await fetch(`${BACKEND_API_URL}/leaguepedia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'searchPlayers',
+          params: { searchTerm }
+        })
       })
-      
-      return players
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error(error.message || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        return result.data
+      }
+      return []
     } catch (error) {
       console.error('Leaguepedia API error (searchPlayers):', error)
       throw error
