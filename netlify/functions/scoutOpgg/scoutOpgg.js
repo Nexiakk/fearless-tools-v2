@@ -103,15 +103,14 @@ exports.handler = async (event, context) => {
     
     // Find the main champion list table
     // Look for tables that contain champion data but NOT matchup data
-    const searchScope = mainContainer || $
-    
     // Try to find the main champion table by looking for tables that:
     // 1. Are NOT inside matchup/expanded sections
     // 2. Have multiple rows (champion list)
     // 3. Don't have matchup-specific classes
     // 4. Are in the main container (if we found one)
-    const allTables = searchScope.find('table').filter((i, table) => {
+    const allTables = (mainContainer ? mainContainer.find('table') : $('table')).filter((i, table) => {
       const $table = $(table)
+      
       // Skip if inside matchup/expanded sections
       if ($table.closest('[class*="matchup"]').length > 0 ||
           $table.closest('[class*="expanded"]').length > 0 ||

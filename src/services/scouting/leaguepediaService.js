@@ -28,7 +28,19 @@ export const leaguepediaService = {
       })
       
       // Handle different response formats from poro
-      const matches = Array.isArray(result) ? result : (result?.results || result?.data || [])
+      let matches = []
+      
+      if (Array.isArray(result)) {
+        matches = result
+      } else if (result && typeof result === 'object') {
+        // Try various possible properties
+        matches = result.results || result.data || result.items || result.rows || []
+        
+        // If still not an array, try to convert object values
+        if (!Array.isArray(matches) && typeof matches === 'object') {
+          matches = Object.values(matches)
+        }
+      }
       
       if (!Array.isArray(matches)) {
         console.warn('Unexpected Leaguepedia response format:', result)
@@ -36,7 +48,7 @@ export const leaguepediaService = {
       }
       
       return matches.map(match => ({
-        championName: match.Champion || match.championName,
+        championName: match.Champion || match.championName || match.champion || '',
         games: parseInt(match.Games || match.games || 0) || 0,
         wins: parseInt(match.Wins || match.wins || 0) || 0,
         losses: (parseInt(match.Games || match.games || 0) || 0) - (parseInt(match.Wins || match.wins || 0) || 0),
@@ -44,7 +56,8 @@ export const leaguepediaService = {
       }))
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerChampionPool):', error)
-      throw error
+      // Return empty array instead of throwing to allow op.gg data to still work
+      return []
     }
   },
 
