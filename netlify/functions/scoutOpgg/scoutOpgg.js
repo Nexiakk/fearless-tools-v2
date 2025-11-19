@@ -204,6 +204,21 @@ exports.handler = async (event, context) => {
         return false
       }
       
+      // CRITICAL: Skip if this row contains nested tables - it's expanded and has matchup data
+      // We want only the main champion rows, not expanded rows with nested content
+      if ($row.find('table').length > 0) {
+        // This row has nested tables - it's expanded
+        // We still want to process it, but we'll be extra careful in stat extraction
+        // However, if it has too many nested tables or matchup-specific content, skip it
+        const nestedTables = $row.find('table').length
+        const matchupElements = $row.find('[class*="matchup"], [class*="opponent"]').length
+        // If there are many nested tables or matchup elements, this might be mostly matchup data
+        // Skip it to avoid confusion
+        if (nestedTables > 2 || matchupElements > 3) {
+          return false
+        }
+      }
+      
       // Must have stats (games/wins/losses) to be a main champion row
       // Get only direct children td elements (not from nested tables)
       const cells = $row.children('td')
@@ -211,8 +226,13 @@ exports.handler = async (event, context) => {
       
       // Check if cells contain numbers (stats) - but exclude nested table content
       let hasStats = false
+      let cellsWithTables = 0
       cells.each((idx, cell) => {
         const $cell = $(cell)
+        // Count cells with nested tables
+        if ($cell.find('table').length > 0) {
+          cellsWithTables++
+        }
         // CRITICAL: Remove nested tables before checking for stats
         const $cellClone = $cell.clone()
         $cellClone.find('table').remove() // Remove nested tables
@@ -225,46 +245,79 @@ exports.handler = async (event, context) => {
       })
       if (!hasStats) return false
       
+      // If most cells have nested tables, this row is probably mostly matchup data
+      // Only allow if at least half the cells don't have tables
+      if (cellsWithTables > cells.length / 2) {
+        return false
+      }
+      
       return true
     })
     
     championRows.each((i, elem) => {
       const $row = $(elem)
       
-      // Extract champion name - try multiple selectors
+      // CRITICAL: Check if this row is expanded (contains nested matchup tables)
+      // If it is, we need to be extra careful to only get stats from the main row, not nested content
+      const isExpanded = $row.find('table').length > 0 || 
+                        $row.find('[class*="matchup"]').length > 0 ||
+                        $row.find('[class*="expanded"]').length > 0
+      
+      // Extract champion name - based on actual HTML structure
+      // Column 2 (index 1) contains: <img alt="Yone"> and <strong>Yone</strong>
       let championName = ''
       
-      // Try data attributes first
-      championName = $row.attr('data-champion') || 
-                     $row.find('[data-champion-name]').attr('data-champion-name') ||
-                     $row.find('[data-champion]').attr('data-champion')
-      
-      // Try class-based selectors
-      if (!championName) {
-        championName = $row.find('.champion-name, [class*="champion-name"], .name').first().text().trim()
+      if ($row.is('tr')) {
+        const directCells = $row.children('td')
+        
+        // Column 2 (index 1) contains champion name
+        if (directCells.length > 1) {
+          const nameCell = $(directCells[1])
+          
+          // Method 1: Get from image alt attribute (most reliable)
+          const imgAlt = nameCell.find('img[alt]').first().attr('alt') || ''
+          if (imgAlt) {
+            championName = imgAlt.trim()
+          }
+          
+          // Method 2: Get from <strong> tag if alt didn't work
+          if (!championName) {
+            championName = nameCell.find('strong').first().text().trim()
+          }
+          
+          // Method 3: Get from any text in the cell (fallback)
+          if (!championName) {
+            // Remove nested tables/matchup content before extracting text
+            const $cellClone = nameCell.clone()
+            $cellClone.find('table, [class*="matchup"]').remove()
+            championName = $cellClone.text().trim()
+          }
+        }
       }
       
-      // Try image alt text
+      // Fallback: Try data attributes
       if (!championName) {
-        const imgAlt = $row.find('img[alt]').first().attr('alt') || ''
-        // Extract champion name from alt (remove file extension, clean up)
-        championName = imgAlt.replace(/\.(png|jpg|jpeg|webp)$/i, '').trim()
-      }
-      
-      // Try table cell (second column often has name)
-      if (!championName && $row.is('tr')) {
-        championName = $row.find('td:nth-child(2), td:nth-child(1)').first().text().trim()
+        championName = $row.attr('data-champion') || 
+                       $row.find('[data-champion-name]').attr('data-champion-name') ||
+                       $row.find('[data-champion]').attr('data-champion')
       }
       
       // Clean up champion name
       championName = championName.replace(/['"]/g, '').trim()
       
-      if (!championName || championName.length < 2) return
+      if (!championName || championName.length < 2) {
+        console.log(`[DEBUG] Skipping row - no valid champion name found`)
+        return
+      }
+      
+      console.log(`[DEBUG] Processing champion: ${championName}`)
       
       // Extract stats from individual table cells
-      // op.gg typically has: Champion | Games | Wins | Losses | Winrate | KDA
-      // CRITICAL: We must extract each stat from its specific cell, NOT concatenate them
-      // When a champion is expanded, matchups are in nested tables - we must exclude those
+      // Based on actual op.gg HTML structure:
+      // Column 1: Rank number
+      // Column 2: Champion name/image
+      // Column 3: Games/Wins/Losses/Winrate (all in one cell with progress bar)
+      // Column 4: KDA
       let games = 0
       let wins = 0
       let losses = 0
@@ -272,91 +325,87 @@ exports.handler = async (event, context) => {
       let kda = null
       
       if ($row.is('tr')) {
-        // CRITICAL: Get only direct children td elements (not from nested tables)
-        // When a champion is expanded, matchups are in nested tables inside cells
         const directCells = $row.children('td')
         
-        // op.gg structure: [Champion Icon/Name] | [Games] | [Wins] | [Losses] | [Winrate %] | [KDA]
-        // We'll use positional approach since class names may vary
-        // Skip first cell (champion icon/name), then parse cells 1-5
-        
-        for (let idx = 1; idx < Math.min(directCells.length, 7); idx++) {
-          const $cell = $(directCells[idx])
+        // Column 3 (index 2) contains: Games/Wins/Losses/Winrate
+        // Structure: <div> with progress bar showing "32W" and "28P", plus "53%" winrate
+        if (directCells.length > 2) {
+          const statsCell = $(directCells[2])
           
-          // CRITICAL: Remove ALL nested content before extracting text
-          // This includes nested tables (matchup data) and any other nested elements
-          const $cellClone = $cell.clone()
-          $cellClone.find('table').remove() // Remove nested tables
-          $cellClone.find('[class*="matchup"]').remove() // Remove matchup elements
-          $cellClone.find('[class*="opponent"]').remove() // Remove opponent elements
-          const cellText = $cellClone.text().trim()
-          
-          // Skip empty cells
-          if (!cellText) continue
-          
-          // Check for winrate first (has % symbol) - this is most distinctive
-          if (cellText.includes('%')) {
+          // Skip if this cell contains a nested table (expanded matchup data)
+          if (statsCell.find('table').length === 0) {
+            // Get all text from the cell
+            const cellText = statsCell.text()
+            
+            // DEBUG: Log what we're extracting
+            console.log(`[DEBUG] Champion: ${championName}, Stats cell text: "${cellText}"`)
+            
+            // Extract winrate (has % symbol) - e.g., "53%"
             const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
             if (winrateMatch) {
-              const num = parseFloat(winrateMatch[1])
-              if (num > 0 && num <= 100 && winrate === 0) {
-                winrate = num
-                continue
-              }
+              winrate = parseFloat(winrateMatch[1])
+              console.log(`[DEBUG] Extracted winrate: ${winrate}%`)
             }
+            
+            // Extract wins and losses from progress bar
+            // HTML structure: "32W" (wins) and "28P" (losses) in spans, plus "53%" winrate
+            // The text might be "32W28P53%" or "32 W 28 P 53%" depending on extraction
+            // Pattern 1: "32W" or "32 W" (wins) - look for number followed by W (not followed by digit or %)
+            const winsMatch = cellText.match(/(\d+)\s*W(?!\d|%)/i) || 
+                             cellText.match(/(\d+)\s*Wins?/i) ||
+                             cellText.match(/(\d+)\s*W\b/i)
+            
+            // Pattern 2: "28P" or "28 P" (losses - P stands for Polish "Przegrane" or "Played")
+            // Also try "28L" for losses
+            const lossesMatch = cellText.match(/(\d+)\s*P(?!\d|%)/i) ||
+                               cellText.match(/(\d+)\s*L(?!\d|%)/i) ||
+                               cellText.match(/(\d+)\s*Loss(?:es)?/i) ||
+                               cellText.match(/(\d+)\s*P\b/i)
+            
+            if (winsMatch) {
+              wins = parseInt(winsMatch[1])
+              console.log(`[DEBUG] Extracted wins: ${wins}`)
+            }
+            if (lossesMatch) {
+              losses = parseInt(lossesMatch[1])
+              console.log(`[DEBUG] Extracted losses: ${losses}`)
+            }
+            
+            // Calculate games from wins + losses
+            if (wins > 0 || losses > 0) {
+              games = wins + losses
+              console.log(`[DEBUG] Calculated games: ${games}`)
+            }
+            
+            // If we have games but no winrate, calculate it
+            if (winrate === 0 && games > 0 && wins > 0) {
+              winrate = (wins / games) * 100
+              console.log(`[DEBUG] Calculated winrate: ${winrate}%`)
+            }
+          } else {
+            console.log(`[DEBUG] Skipping stats cell for ${championName} - contains nested table`)
           }
+        }
+        
+        // Column 4 (index 3) contains: KDA
+        // Structure: "2.19:1" and "3.9 / 4.5 / 6 (42%)"
+        if (directCells.length > 3 && !kda) {
+          const kdaCell = $(directCells[3])
           
-          // Check for KDA (has slashes) - this is also distinctive
-          if (cellText.includes('/') && cellText.match(/\d+\s*\/\s*\d+\s*\/\s*\d+/)) {
-            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
-            if (kdaMatch && !kda) {
+          // Skip if this cell contains a nested table
+          if (kdaCell.find('table').length === 0) {
+            const kdaText = kdaCell.text()
+            
+            // Look for KDA pattern: "3.9 / 4.5 / 6"
+            const kdaMatch = kdaText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            if (kdaMatch) {
               kda = {
                 kills: parseFloat(kdaMatch[1]),
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }
-              continue
             }
           }
-          
-          // For regular numbers, extract ONLY the first number from the cell
-          // This prevents concatenation of multiple numbers
-          const firstNumberMatch = cellText.match(/^\s*(\d+)/)
-          if (firstNumberMatch) {
-            const num = parseInt(firstNumberMatch[1])
-            
-            // Sanity check: numbers should be reasonable
-            if (num <= 0 || num >= 10000) continue
-            
-            // Assign based on position (typical op.gg layout)
-            // Cell 1 = Games, Cell 2 = Wins, Cell 3 = Losses
-            if (idx === 1 && games === 0) {
-              games = num
-            } else if (idx === 2 && wins === 0) {
-              wins = num
-            } else if (idx === 3 && losses === 0) {
-              losses = num
-            } else {
-              // Fallback: assign to first available slot
-              if (games === 0) {
-                games = num
-              } else if (wins === 0) {
-                wins = num
-              } else if (losses === 0) {
-                losses = num
-              }
-            }
-          }
-        }
-        
-        // Calculate games from wins + losses if we have those but not games
-        if (games === 0 && wins > 0 && losses > 0) {
-          games = wins + losses
-        }
-        
-        // Calculate winrate from wins/losses if we have those but not winrate
-        if (winrate === 0 && games > 0 && wins > 0) {
-          winrate = (wins / games) * 100
         }
       }
 
