@@ -62,13 +62,31 @@ export const useScoutingStore = defineStore('scouting', () => {
     return Array.from(champions)
   })
   
-  // Helper to get workspace scouting collection path
-  function getScoutingPath(subcollection) {
+  // Helper to get workspace scouting collection reference
+  // Structure: workspaces/{workspaceId}/scouting/{subcollection}/{docId}
+  // scouting is a document, subcollection is a collection under it
+  function getScoutingCollection(subcollection) {
     const workspaceStore = useWorkspaceStore()
     if (!workspaceStore.currentWorkspaceId) {
       throw new Error('No workspace selected')
     }
-    return `workspaces/${workspaceStore.currentWorkspaceId}/scouting/${subcollection}`
+    // Create workspace document reference
+    const workspaceRef = doc(db, 'workspaces', workspaceStore.currentWorkspaceId)
+    // Create scouting document reference (document may not exist yet, but subcollections can be created)
+    const scoutingRef = doc(workspaceRef, 'scouting')
+    // Get the subcollection from the scouting document
+    return collection(scoutingRef, subcollection)
+  }
+  
+  // Helper to get workspace scouting document reference
+  function getScoutingDoc(subcollection, docId) {
+    const workspaceStore = useWorkspaceStore()
+    if (!workspaceStore.currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    const workspaceRef = doc(db, 'workspaces', workspaceStore.currentWorkspaceId)
+    const scoutingRef = doc(workspaceRef, 'scouting')
+    return doc(collection(scoutingRef, subcollection), docId)
   }
   
   // Actions
@@ -76,7 +94,7 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const playersRef = collection(db, getScoutingPath('players'))
+      const playersRef = getScoutingCollection('players')
       const snapshot = await getDocs(playersRef)
       
       players.value = snapshot.docs.map(doc => ({
@@ -101,7 +119,7 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const playersRef = collection(db, getScoutingPath('players'))
+      const playersRef = getScoutingCollection('players')
       const newPlayer = {
         name: playerData.name,
         opggUrl: playerData.opggUrl,
@@ -139,7 +157,7 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const playerRef = doc(db, getScoutingPath('players'), playerId)
+      const playerRef = getScoutingDoc('players', playerId)
       await updateDoc(playerRef, {
         ...updates,
         updatedAt: serverTimestamp()
@@ -171,7 +189,7 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const playerRef = doc(db, getScoutingPath('players'), playerId)
+      const playerRef = getScoutingDoc('players', playerId)
       await deleteDoc(playerRef)
       
       // Remove from local state
@@ -192,7 +210,7 @@ export const useScoutingStore = defineStore('scouting', () => {
   
   async function loadScoutingData(playerId) {
     try {
-      const dataRef = doc(db, getScoutingPath('data'), playerId)
+      const dataRef = getScoutingDoc('data', playerId)
       const dataSnap = await dataRef.get()
       
       if (dataSnap.exists()) {
@@ -206,7 +224,7 @@ export const useScoutingStore = defineStore('scouting', () => {
   
   async function saveScoutingData(playerId, data) {
     try {
-      const dataRef = doc(db, getScoutingPath('data'), playerId)
+      const dataRef = getScoutingDoc('data', playerId)
       await updateDoc(dataRef, {
         ...data,
         lastUpdated: serverTimestamp()
