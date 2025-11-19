@@ -215,11 +215,31 @@ exports.handler = async (event, context) => {
     }
     
     // Filter out matchup rows, expanded sections, and ensure we only get main champion rows
+    // CRITICAL: When op.gg expands the first champion, it creates nested tables/rows for matchups
+    // We must ONLY get direct children of tbody, and skip any rows that are inside nested tables
     championRows = championRows.filter((i, elem) => {
       const $row = $(elem)
       
+      // CRITICAL CHECK: Skip if this row is inside a nested table
+      // When a champion is expanded, matchups are in a nested table inside that row
+      // We want only the top-level champion rows, not nested matchup rows
+      const parentTable = $row.closest('table')
+      if (parentTable.length > 0) {
+        // Check if this table is nested inside another row (expanded champion)
+        const tableParent = parentTable.parent()
+        // If the table's parent is a td (cell in another row), this is a nested table
+        if (tableParent.is('td') || tableParent.closest('tr').length > 0) {
+          // Check if this table is inside a row that's not the tbody direct child
+          const containingRow = tableParent.closest('tr')
+          if (containingRow.length > 0) {
+            // This is a nested table inside an expanded row - skip it
+            return false
+          }
+        }
+      }
+      
       // Must have a champion image to be a valid champion row
-      const hasChampionImage = $row.find('img[alt], img[src*="champion"]').length > 0
+      const hasChampionImage = $row.find('> td img[alt], > td img[src*="champion"], td:first-child img[alt]').length > 0
       if (!hasChampionImage) return false
       
       // Skip if it's explicitly a matchup row
@@ -243,6 +263,11 @@ exports.handler = async (event, context) => {
                                  $row.parents().filter((j, parent) => {
                                    const $parent = $(parent)
                                    const parentClass = ($parent.attr('class') || '').toLowerCase()
+                                   const parentTag = $parent.prop('tagName')?.toLowerCase()
+                                   // Skip if inside a nested table or expanded container
+                                   if (parentTag === 'table' && $parent.closest('td, tr').length > 0) {
+                                     return true // This is a nested table
+                                   }
                                    return parentClass.includes('matchup') || 
                                           parentClass.includes('opponent') ||
                                           parentClass.includes('expanded')
@@ -259,7 +284,8 @@ exports.handler = async (event, context) => {
       
       // Must have stats (games/wins/losses) to be a main champion row, not a matchup row
       // Matchup rows typically don't have full stats in the same format
-      const cells = $row.find('td')
+      // Get only direct children td elements (not from nested tables)
+      const cells = $row.children('td')
       if (cells.length > 0) {
         // Check if this looks like a main champion row (has multiple stat cells)
         // Main rows usually have 4+ cells (champion, games, wins, losses, winrate, kda)
@@ -270,9 +296,20 @@ exports.handler = async (event, context) => {
         // Check if cells contain numbers (stats)
         let hasStats = false
         cells.each((idx, cell) => {
-          const cellText = $(cell).text().trim()
+          const $cell = $(cell)
+          const cellText = $cell.text().trim()
           // Skip first cell (usually champion name/icon)
-          if (idx > 0 && /\d+/.test(cellText)) {
+          // Also skip if this cell contains a nested table (expanded matchup section)
+          if ($cell.find('table').length > 0) {
+            // This cell has a nested table - extract text excluding the nested table
+            const cellClone = $cell.clone()
+            cellClone.find('table').remove()
+            const cleanText = cellClone.text().trim()
+            if (idx > 0 && /\d+/.test(cleanText)) {
+              hasStats = true
+              return false // break
+            }
+          } else if (idx > 0 && /\d+/.test(cellText)) {
             hasStats = true
             return false // break
           }
@@ -326,17 +363,24 @@ exports.handler = async (event, context) => {
       let kda = null
       
       if ($row.is('tr')) {
-        // Get all table cells
-        const cells = $row.find('td')
+        // CRITICAL: Get only direct children td elements (not from nested tables)
+        // When a champion is expanded, matchups are in nested tables inside cells
+        const directCells = $row.children('td')
         
         // Try to find stats in specific cells
         // Common op.gg structure: [Champion Icon/Name] | [Games] | [Wins] | [Losses] | [Winrate] | [KDA]
         // Index might vary, so we'll try multiple approaches
         
         // Method 1: Try data attributes or specific classes
-        cells.each((idx, cell) => {
+        // CRITICAL: Only get direct children td (not from nested tables)
+        directCells.each((idx, cell) => {
           const $cell = $(cell)
-          const cellText = $cell.text().trim()
+          
+          // CRITICAL: Remove nested tables before extracting text
+          // When a champion is expanded, matchups are in nested tables inside cells
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove() // Remove nested tables
+          const cellText = $cellClone.text().trim()
           const cellClass = $cell.attr('class') || ''
           
           // Skip empty cells
@@ -393,9 +437,13 @@ exports.handler = async (event, context) => {
         // op.gg structure is typically: [Champion] | [Games] | [Wins] | [Losses] | [Winrate %] | [KDA]
         if (games === 0 && wins === 0 && losses === 0) {
           // Try to parse from cell positions
-          for (let idx = 1; idx < Math.min(cells.length, 6); idx++) {
-            const $cell = $(cells[idx])
-            const cellText = $cell.text().trim()
+          // CRITICAL: Use direct children only, and exclude nested table content
+          for (let idx = 1; idx < Math.min(directCells.length, 6); idx++) {
+            const $cell = $(directCells[idx])
+            // Remove nested tables before extracting text
+            const $cellClone = $cell.clone()
+            $cellClone.find('table').remove()
+            const cellText = $cellClone.text().trim()
             
             // Skip empty cells
             if (!cellText) continue
