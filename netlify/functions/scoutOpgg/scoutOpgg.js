@@ -66,20 +66,137 @@ exports.handler = async (event, context) => {
     // op.gg automatically expands the first champion, so we need to avoid matchup data
     const champions = []
     
-    // Strategy: op.gg typically uses table rows or list items for champions
-    // Matchup data is usually in nested elements or sibling rows with specific classes
-    // We'll target the main champion rows and explicitly exclude matchup rows
+    // Strategy: Find the MAIN champion list table for CURRENT SEASON, not matchup tables
+    // op.gg has a main table for champions, and separate tables for matchups
+    // We want the current season's champion list, not previous seasons or matchups
     
-    // Try multiple strategies to find champion rows
-    // 1. Look for table rows in champion tables (most common)
-    // 2. Look for list items with champion data
-    // 3. Look for divs with champion classes
+    // First, try to find a container that indicates "current season" or main champion list
+    // Look for sections/containers that might indicate the main list
+    let mainTable = null
+    let mainContainer = null
     
-    let championRows = $('table tbody tr, table.champion-table tr, [class*="champion"] tr')
+    // Try to find containers that indicate current season or main list
+    const possibleContainers = [
+      '[class*="current-season"]',
+      '[class*="champion-list"]',
+      '[class*="most-champion"]',
+      'section[class*="champion"]',
+      'div[class*="champion"]'
+    ]
     
-    // If no table rows found, try list items or divs
-    if (championRows.length === 0) {
-      championRows = $('[class*="champion-item"], [class*="champion-box"], [data-champion]')
+    for (const selector of possibleContainers) {
+      const containers = $(selector).filter((i, cont) => {
+        const $cont = $(cont)
+        // Must not be in matchup section
+        if ($cont.closest('[class*="matchup"]').length > 0) return false
+        // Must contain a table with champion rows
+        return $cont.find('table tr').filter((j, row) => {
+          return $(row).find('img[alt], img[src*="champion"]').length > 0
+        }).length > 0
+      })
+      
+      if (containers.length > 0) {
+        mainContainer = $(containers[0])
+        break
+      }
+    }
+    
+    // Find the main champion list table
+    // Look for tables that contain champion data but NOT matchup data
+    const searchScope = mainContainer || $
+    
+    // Try to find the main champion table by looking for tables that:
+    // 1. Are NOT inside matchup/expanded sections
+    // 2. Have multiple rows (champion list)
+    // 3. Don't have matchup-specific classes
+    // 4. Are in the main container (if we found one)
+    const allTables = searchScope.find('table').filter((i, table) => {
+      const $table = $(table)
+      // Skip if inside matchup/expanded sections
+      if ($table.closest('[class*="matchup"]').length > 0 ||
+          $table.closest('[class*="expanded"]').length > 0 ||
+          $table.closest('[class*="opponent"]').length > 0) {
+        return false
+      }
+      // Skip if it's a matchup table
+      const tableClass = ($table.attr('class') || '').toLowerCase()
+      const headerText = $table.find('thead th').text().toLowerCase()
+      if (tableClass.includes('matchup') || 
+          headerText.includes('opponent') ||
+          headerText.includes('vs') ||
+          headerText.includes('against')) {
+        return false
+      }
+      // Must have rows with champion images
+      const championRows = $table.find('tr').filter((j, row) => {
+        return $(row).find('img[alt], img[src*="champion"]').length > 0
+      })
+      // Must have at least 2 champion rows (summary + at least 1 champion)
+      return championRows.length >= 2
+    })
+    
+    // Get the largest table (main list) that's not a matchup table
+    if (allTables.length > 0) {
+      let maxRows = 0
+      let bestTable = null
+      allTables.each((i, table) => {
+        const $table = $(table)
+        const rowCount = $table.find('tbody tr, tr').not('thead tr').length
+        // Prefer tables with more rows (main list has many champions)
+        if (rowCount > maxRows && rowCount > 2) {
+          maxRows = rowCount
+          bestTable = $table
+        }
+      })
+      mainTable = bestTable || $(allTables[0])
+    }
+    
+    // If we found a main table, get rows from it
+    // Otherwise fall back to finding rows directly
+    let championRows
+    if (mainTable) {
+      // Get rows from the main table's tbody, or direct children if no tbody
+      // CRITICAL: Only get direct children of tbody, not nested rows from expanded sections
+      if (mainTable.find('tbody').length > 0) {
+        // Get direct children of tbody only (not nested)
+        championRows = mainTable.find('tbody').children('tr')
+      } else {
+        // No tbody, get direct children of table (not nested)
+        championRows = mainTable.children('tr').not('thead tr')
+      }
+      
+      // Additional safety: filter out any rows that are nested too deep
+      // Main champion rows should be direct children, not nested in other elements
+      championRows = championRows.filter((i, row) => {
+        const $row = $(row)
+        // Check how many tr ancestors this row has - if more than 1, it's nested
+        const trAncestors = $row.parents('tr').length
+        // Should be 0 (direct child of tbody/table) or at most 1 (if inside a wrapper)
+        return trAncestors <= 1
+      })
+    } else {
+      // Fallback: try to find champion rows more carefully
+      championRows = $('table tbody tr').filter((i, row) => {
+        const $row = $(row)
+        // Must have champion image
+        if ($row.find('img[alt], img[src*="champion"]').length === 0) return false
+        // Must NOT be in matchup section
+        if ($row.closest('[class*="matchup"]').length > 0) return false
+        // Must NOT be a matchup row
+        if ($row.hasClass('matchup') || $row.attr('class')?.includes('matchup')) return false
+        // Must be a direct child of tbody (not nested)
+        const trAncestors = $row.parents('tr').length
+        return trAncestors === 0
+      })
+      
+      // If still nothing, try list items
+      if (championRows.length === 0) {
+        championRows = $('[class*="champion-item"], [class*="champion-box"], [data-champion]')
+          .filter((i, elem) => {
+            const $elem = $(elem)
+            return $elem.closest('[class*="matchup"]').length === 0
+          })
+      }
     }
     
     // First, identify and skip the summary row (first row like "Wszyscy bohaterowie")
@@ -98,39 +215,73 @@ exports.handler = async (event, context) => {
       }
     }
     
-    // Filter out matchup rows and expanded sections
+    // Filter out matchup rows, expanded sections, and ensure we only get main champion rows
     championRows = championRows.filter((i, elem) => {
       const $row = $(elem)
       
+      // Must have a champion image to be a valid champion row
+      const hasChampionImage = $row.find('img[alt], img[src*="champion"]').length > 0
+      if (!hasChampionImage) return false
+      
       // Skip if it's explicitly a matchup row
+      const rowClass = ($row.attr('class') || '').toLowerCase()
       const isMatchupRow = $row.hasClass('matchup') ||
                           $row.hasClass('matchup-row') ||
-                          $row.attr('class')?.includes('matchup') ||
-                          $row.attr('class')?.includes('opponent') ||
-                          $row.attr('data-type') === 'matchup'
+                          rowClass.includes('matchup') ||
+                          rowClass.includes('opponent') ||
+                          $row.attr('data-type') === 'matchup' ||
+                          $row.attr('data-type') === 'opponent'
       
       if (isMatchupRow) return false
       
-      // Skip if inside an expanded matchup section
+      // Skip if inside an expanded matchup section (check all parent elements)
       const isInExpandedSection = $row.closest('[class*="matchup"]').length > 0 ||
                                  $row.closest('[class*="expanded"]').length > 0 ||
                                  $row.closest('[class*="opponent"]').length > 0 ||
                                  $row.closest('.matchup-table').length > 0 ||
-                                 $row.closest('[class*="vs"]').length > 0
+                                 $row.closest('[class*="vs"]').length > 0 ||
+                                 $row.closest('table.matchup').length > 0 ||
+                                 $row.parents().filter((j, parent) => {
+                                   const $parent = $(parent)
+                                   const parentClass = ($parent.attr('class') || '').toLowerCase()
+                                   return parentClass.includes('matchup') || 
+                                          parentClass.includes('opponent') ||
+                                          parentClass.includes('expanded')
+                                 }).length > 0
       
       if (isInExpandedSection) return false
       
-      // Skip if it contains matchup-specific elements
+      // Skip if it contains matchup-specific elements or text
+      const rowText = $row.text().toLowerCase()
       const hasMatchupElements = $row.find('[class*="matchup"], [class*="opponent"], [class*="vs"], [class*="against"]').length > 0
+      const hasMatchupText = rowText.includes('vs') && rowText.includes('win') && rowText.length < 50 // Short text with "vs" is likely matchup
       
-      if (hasMatchupElements) return false
+      if (hasMatchupElements || hasMatchupText) return false
       
-      // Must have a champion name or image to be a valid champion row
-      const hasChampionName = $row.find('[class*="champion-name"], [data-champion-name], .name, img[alt*="champion"], img[src*="champion"]').length > 0 ||
-                             $row.attr('data-champion') ||
-                             $row.find('img[alt]').length > 0
+      // Must have stats (games/wins/losses) to be a main champion row, not a matchup row
+      // Matchup rows typically don't have full stats in the same format
+      const cells = $row.find('td')
+      if (cells.length > 0) {
+        // Check if this looks like a main champion row (has multiple stat cells)
+        // Main rows usually have 4+ cells (champion, games, wins, losses, winrate, kda)
+        // Matchup rows might have fewer cells or different structure
+        const cellCount = cells.length
+        if (cellCount < 3) return false // Too few cells, probably not a main row
+        
+        // Check if cells contain numbers (stats)
+        let hasStats = false
+        cells.each((idx, cell) => {
+          const cellText = $(cell).text().trim()
+          // Skip first cell (usually champion name/icon)
+          if (idx > 0 && /\d+/.test(cellText)) {
+            hasStats = true
+            return false // break
+          }
+        })
+        if (!hasStats) return false
+      }
       
-      return hasChampionName
+      return true
     })
     
     championRows.each((i, elem) => {
