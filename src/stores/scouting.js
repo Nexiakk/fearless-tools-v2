@@ -63,19 +63,16 @@ export const useScoutingStore = defineStore('scouting', () => {
   })
   
   // Helper to get workspace scouting collection reference
-  // Structure: workspaces/{workspaceId}/scouting/{subcollection}/{docId}
-  // scouting is a document, subcollection is a collection under it
+  // Structure: workspaces/{workspaceId}/scoutingPlayers/{playerId}
+  // Direct collection under workspace (like drafts)
   function getScoutingCollection(subcollection) {
     const workspaceStore = useWorkspaceStore()
     if (!workspaceStore.currentWorkspaceId) {
       throw new Error('No workspace selected')
     }
-    // Create workspace document reference
-    const workspaceRef = doc(db, 'workspaces', workspaceStore.currentWorkspaceId)
-    // Create scouting document reference (document may not exist yet, but subcollections can be created)
-    const scoutingRef = doc(workspaceRef, 'scouting')
-    // Get the subcollection from the scouting document
-    return collection(scoutingRef, subcollection)
+    // Use direct collection path like drafts: workspaces/{workspaceId}/scoutingPlayers
+    const collectionName = subcollection === 'players' ? 'scoutingPlayers' : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
+    return collection(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName)
   }
   
   // Helper to get workspace scouting document reference
@@ -84,9 +81,8 @@ export const useScoutingStore = defineStore('scouting', () => {
     if (!workspaceStore.currentWorkspaceId) {
       throw new Error('No workspace selected')
     }
-    const workspaceRef = doc(db, 'workspaces', workspaceStore.currentWorkspaceId)
-    const scoutingRef = doc(workspaceRef, 'scouting')
-    return doc(collection(scoutingRef, subcollection), docId)
+    const collectionName = subcollection === 'players' ? 'scoutingPlayers' : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
+    return doc(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName, docId)
   }
   
   // Actions

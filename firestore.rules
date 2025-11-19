@@ -84,15 +84,15 @@ service cloud.firestore {
 
       }
       
-      // Scouting data
-      match /scouting/players/{playerId} {
+      // Scouting data - direct collections under workspace (like drafts)
+      match /scoutingPlayers/{playerId} {
         // Workspace members can read player list
         allow read: if isAuthenticated();
         // Only admins can add/update/delete players
         allow write: if isAdmin();
       }
       
-      match /scouting/data/{playerId} {
+      match /scoutingData/{playerId} {
         // Workspace members can read scouting data
         allow read: if isAuthenticated();
         // Only admins can write scouting data
