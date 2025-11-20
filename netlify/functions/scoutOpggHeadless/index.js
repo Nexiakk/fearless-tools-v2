@@ -108,29 +108,19 @@ exports.handler = async (event, context) => {
               usingHeadless = true
               console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
               
-              // Check if HTML is suspiciously small (likely bot detection)
+              // Check if HTML is suspiciously small or contains error messages (likely bot detection)
               if (html.length < 5000) {
                 console.warn(`[Headless] ⚠️ HTML response is very small (${html.length} chars) - might be bot detection page`)
                 console.warn(`[Headless] First 500 chars: ${html.substring(0, 500)}`)
-                // Still use it, but log the warning
+                
+                // Check if it's an error page (403, blocked, etc.)
+                if (html.includes('403 ERROR') || html.includes('Request blocked') || html.includes('could not be satisfied')) {
+                  throw new Error('op.gg is blocking Browserless.io requests (403 error). The /content API cannot bypass this bot detection. Consider using the regular scraper or upgrading Browserless.io plan for /unblock API with better bot detection bypass.')
+                }
+                // Still use it if it's just small but not an error page
               }
             } else {
               throw new Error('Empty or invalid response from Browserless.io /content')
-            }
-            
-            // /unblock returns JSON with html property
-            if (unblockResponse.data && unblockResponse.data.html) {
-              html = unblockResponse.data.html
-              usingHeadless = true
-              console.log(`[Headless] ✅ Successfully fetched HTML via /unblock (${html.length} chars)`)
-            } else if (typeof unblockResponse.data === 'string' && unblockResponse.data.length > 0) {
-              html = unblockResponse.data
-              usingHeadless = true
-              console.log(`[Headless] ✅ Successfully fetched HTML via /unblock (${html.length} chars)`)
-            } else {
-              // /unblock succeeded but didn't return HTML in expected format
-              console.warn('[Headless] /unblock returned unexpected format:', typeof unblockResponse.data, Object.keys(unblockResponse.data || {}))
-              throw new Error('/unblock API returned unexpected response format')
             }
           } catch (contentError) {
             console.error('[Headless] /content failed:', contentError.message)
@@ -142,12 +132,6 @@ exports.handler = async (event, context) => {
               throw new Error(`Browserless.io /content timed out after 20 seconds. This may be due to bot detection or slow response.`)
             }
             throw contentError
-          }
-          
-          // Validate HTML - if too small, likely bot detection page
-          if (html && html.length < 5000) {
-            console.warn(`[Headless] ⚠️ HTML response is very small (${html.length} chars) - might be bot detection page`)
-            console.warn(`[Headless] First 500 chars: ${html.substring(0, 500)}`)
           }
         } catch (error) {
           console.error('[Headless] /content failed:', error.message)
