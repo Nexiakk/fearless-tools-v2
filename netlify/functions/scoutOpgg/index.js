@@ -111,51 +111,109 @@ exports.handler = async (event, context) => {
     // Try to find champion data in __NEXT_DATA__ first (Next.js apps often embed data here)
     if (nextData) {
       console.log(`[Backend] Attempting to extract data from __NEXT_DATA__...`)
-      // Navigate through the nested structure to find champion data
-      // op.gg structure might be in props.pageProps or similar
+      
+      // Helper function to recursively search for champion data
+      const findChampionsData = (obj, path = '') => {
+        if (!obj || typeof obj !== 'object') return null
+        
+        // Check if this object looks like champion data
+        if (Array.isArray(obj)) {
+          // Check if array contains champion-like objects
+          if (obj.length > 0 && obj[0] && typeof obj[0] === 'object') {
+            const firstItem = obj[0]
+            if ((firstItem.championName || firstItem.name || firstItem.champion) && 
+                (firstItem.games !== undefined || firstItem.wins !== undefined)) {
+              console.log(`[Backend] Found champions array at path: ${path}`)
+              return obj
+            }
+          }
+        }
+        
+        // Recursively search in nested objects
+        for (const key in obj) {
+          if (key.toLowerCase().includes('champion') || key.toLowerCase().includes('summoner')) {
+            const result = findChampionsData(obj[key], `${path}.${key}`)
+            if (result) return result
+          }
+        }
+        
+        // Also check common data structures
+        if (obj.champions || obj.championStats || obj.data?.champions) {
+          const data = obj.champions || obj.championStats || obj.data?.champions
+          if (Array.isArray(data) && data.length > 0) {
+            console.log(`[Backend] Found champions at path: ${path}`)
+            return data
+          }
+        }
+        
+        return null
+      }
+      
+      // Search in props.pageProps first (most common location)
       const pageProps = nextData?.props?.pageProps
+      let championsData = null
+      
       if (pageProps) {
         console.log(`[Backend] Found pageProps, keys:`, Object.keys(pageProps))
-        // Look for champion/champions data in various possible locations
-        const championsData = pageProps.champions || 
-                             pageProps.championStats || 
-                             pageProps.data?.champions ||
-                             pageProps.summoner?.champions ||
-                             pageProps.summonerChampions
-        if (championsData && Array.isArray(championsData) && championsData.length > 0) {
-          console.log(`[Backend] Found champions in __NEXT_DATA__: ${championsData.length} champions`)
-          // Process the champions data
-          const extractedChampions = championsData.map(champ => {
-            return {
-              championName: champ.championName || champ.name || champ.champion || '',
-              games: champ.games || champ.totalGames || (champ.wins || 0) + (champ.losses || 0),
-              wins: champ.wins || 0,
-              losses: champ.losses || 0,
-              winrate: champ.winrate || champ.winRate || (champ.games > 0 && champ.wins > 0 ? (champ.wins / champ.games) * 100 : 0),
-              kda: champ.kda ? {
-                kills: champ.kda.kills || champ.kda.k || 0,
-                deaths: champ.kda.deaths || champ.kda.d || 0,
-                assists: champ.kda.assists || champ.kda.a || 0
-              } : null
-            }
-          }).filter(champ => champ.championName && champ.games > 0)
+        // Try direct paths first
+        championsData = pageProps.champions || 
+                       pageProps.championStats || 
+                       pageProps.data?.champions ||
+                       pageProps.summoner?.champions ||
+                       pageProps.summonerChampions ||
+                       pageProps.championList
+      }
+      
+      // If not found, do recursive search
+      if (!championsData || !Array.isArray(championsData) || championsData.length === 0) {
+        console.log(`[Backend] Direct paths failed, doing recursive search...`)
+        championsData = findChampionsData(nextData, 'root')
+      }
+      
+      if (championsData && Array.isArray(championsData) && championsData.length > 0) {
+        console.log(`[Backend] Found champions in __NEXT_DATA__: ${championsData.length} champions`)
+        console.log(`[Backend] Sample champion data:`, JSON.stringify(championsData[0], null, 2))
+        
+        // Process the champions data
+        const extractedChampions = championsData.map(champ => {
+          // Try various field names for champion name
+          const name = champ.championName || champ.name || champ.champion || champ.champion_id || ''
+          // Try various field names for stats
+          const wins = champ.wins || champ.win || 0
+          const losses = champ.losses || champ.loss || champ.defeats || 0
+          const games = champ.games || champ.totalGames || champ.gameCount || (wins + losses)
+          const winrate = champ.winrate || champ.winRate || champ.win_rate || 
+                         (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
           
-          if (extractedChampions.length > 0) {
-            console.log(`[Backend] Successfully extracted ${extractedChampions.length} champions from __NEXT_DATA__`)
-            // Extract rank and LP from pageProps if available
-            const rankText = pageProps.summoner?.tier || pageProps.tier || pageProps.rank || ''
-            const lp = pageProps.summoner?.lp || pageProps.lp || 0
-            
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({
-                champions: extractedChampions,
-                rank: rankText,
-                lp,
-                lastUpdated: new Date().toISOString()
-              })
-            }
+          return {
+            championName: name,
+            games: games || 0,
+            wins: wins || 0,
+            losses: losses || 0,
+            winrate: winrate || 0,
+            kda: champ.kda ? {
+              kills: champ.kda.kills || champ.kda.k || 0,
+              deaths: champ.kda.deaths || champ.kda.d || 0,
+              assists: champ.kda.assists || champ.kda.a || 0
+            } : null
+          }
+        }).filter(champ => champ.championName && champ.games > 0)
+        
+        if (extractedChampions.length > 0) {
+          console.log(`[Backend] Successfully extracted ${extractedChampions.length} champions from __NEXT_DATA__`)
+          // Extract rank and LP from pageProps if available
+          const rankText = pageProps?.summoner?.tier || pageProps?.tier || pageProps?.rank || ''
+          const lp = pageProps?.summoner?.lp || pageProps?.lp || 0
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              champions: extractedChampions,
+              rank: rankText,
+              lp,
+              lastUpdated: new Date().toISOString()
+            })
           }
         }
       }
@@ -221,139 +279,75 @@ exports.handler = async (event, context) => {
       mainTable = bestTable || $(allTables[0])
     }
     
-    // Get rows from the main table
-    // CRITICAL: Only get DIRECT children of tbody, not nested rows
+    // Get rows from the main table - use a simpler, more permissive approach
     let championRows = $()
     if (mainTable && mainTable.length > 0) {
       if (mainTable.find('tbody').length > 0) {
-        // Get ONLY direct children of tbody (not nested)
+        // Get ALL direct children of tbody
         championRows = mainTable.find('tbody').children('tr')
       } else {
-        // No tbody, get direct children of table (not nested)
+        // No tbody, get direct children of table
         championRows = mainTable.children('tr').not('thead tr')
       }
     } else {
-      // Fallback: find rows directly
-      championRows = $('table tbody tr').filter((i, row) => {
+      // Fallback: find all table rows with champion images
+      championRows = $('table tbody tr, table > tr').filter((i, row) => {
         const $row = $(row)
         // Must have champion image
-        if ($row.find('img[alt], img[src*="champion"]').length === 0) return false
-        // Must NOT be in matchup section
-        if ($row.closest('[class*="matchup"]').length > 0) return false
-        // Must be a direct child of tbody (not nested)
-        const trAncestors = $row.parents('tr').length
-        return trAncestors === 0
+        return $row.find('img[alt], img[src*="champion"]').length > 0
       })
     }
     
-    // First, identify and skip the summary row (first row like "Wszyscy bohaterowie")
-    const allRows = championRows.toArray()
-    if (allRows.length > 0) {
-      const firstRow = $(allRows[0])
-      const firstRowText = firstRow.text().toLowerCase()
-      // Check if first row is a summary row
-      if (firstRowText.includes('wszyscy') || firstRowText.includes('all') || 
-          firstRowText.includes('total') || firstRowText.includes('bohaterowie') || 
-          firstRowText.includes('champions') || !firstRow.find('img[alt]').length) {
-        // Remove first row from array
-        allRows.shift()
-        championRows = $(allRows)
-      }
-    }
+    console.log(`[Backend] Found ${championRows.length} potential champion rows before filtering`)
     
-    // Filter out matchup rows and ensure we only get main champion rows
-    // CRITICAL: When op.gg expands the first champion, it creates nested tables/rows for matchups
-    // We must ONLY get direct children of tbody, and skip any rows that are inside nested tables
+    // Filter more permissively - only exclude obvious matchup rows
     championRows = championRows.filter((i, elem) => {
       const $row = $(elem)
       
-      // CRITICAL CHECK: Skip if this row is inside a nested table
-      // When a champion is expanded, matchups are in a nested table inside that row
-      const parentTable = $row.closest('table')
-      if (parentTable.length > 0) {
-        const tableParent = parentTable.parent()
-        // If the table's parent is a td (cell in another row), this is a nested table
-        if (tableParent.is('td')) {
-          // This is definitely a nested table - skip it
-          return false
-        }
-        // Check if this table is nested inside another row
-        const containingRow = tableParent.closest('tr')
-        if (containingRow.length > 0 && containingRow[0] !== $row[0]) {
-          // This is a nested table inside an expanded row - skip it
-          return false
-        }
+      // Skip if explicitly a matchup row
+      const rowClass = ($row.attr('class') || '').toLowerCase()
+      const rowData = ($row.attr('data-type') || '').toLowerCase()
+      if (rowClass.includes('matchup') || rowClass.includes('opponent') || 
+          rowData === 'matchup' || rowData === 'opponent') {
+        return false
       }
       
-      // Must have a champion image to be a valid champion row
-      const hasChampionImage = $row.find('> td img[alt], > td img[src*="champion"], td:first-child img[alt]').length > 0
+      // Skip if inside a matchup container
+      if ($row.closest('[class*="matchup"]').length > 0 && 
+          $row.closest('[class*="matchup"]').attr('class')?.toLowerCase().includes('matchup')) {
+        return false
+      }
+      
+      // Must have champion image
+      const hasChampionImage = $row.find('img[alt]').length > 0
       if (!hasChampionImage) return false
       
-      // Skip if it's explicitly a matchup row
-      const rowClass = ($row.attr('class') || '').toLowerCase()
-      if (rowClass.includes('matchup') || 
-          rowClass.includes('opponent') ||
-          $row.attr('data-type') === 'matchup' ||
-          $row.attr('data-type') === 'opponent') {
+      // Must have some stats (numbers) in the row
+      const rowText = $row.text()
+      if (!/\d+/.test(rowText)) return false
+      
+      // Skip summary rows (like "All Champions")
+      const rowTextLower = rowText.toLowerCase()
+      if (rowTextLower.includes('all champions') || rowTextLower.includes('wszyscy') || 
+          rowTextLower.includes('total') && !rowTextLower.includes('games')) {
         return false
       }
       
-      // Skip if inside an expanded matchup section
-      if ($row.closest('[class*="matchup"]').length > 0 ||
-          $row.closest('[class*="expanded"]').length > 0 ||
-          $row.closest('[class*="opponent"]').length > 0) {
-        return false
-      }
-      
-      // CRITICAL: Skip if this row contains nested tables - it's expanded and has matchup data
-      // We want only the main champion rows, not expanded rows with nested content
-      if ($row.find('table').length > 0) {
-        // This row has nested tables - it's expanded
-        // We still want to process it, but we'll be extra careful in stat extraction
-        // However, if it has too many nested tables or matchup-specific content, skip it
-        const nestedTables = $row.find('table').length
-        const matchupElements = $row.find('[class*="matchup"], [class*="opponent"]').length
-        // If there are many nested tables or matchup elements, this might be mostly matchup data
-        // Skip it to avoid confusion
-        if (nestedTables > 2 || matchupElements > 3) {
+      // Check if row is inside a nested table (inside a td of another row)
+      const parentTd = $row.closest('td')
+      if (parentTd.length > 0) {
+        const parentRow = parentTd.closest('tr')
+        // If parent row is not this row, and parent row also has champion image, this is nested
+        if (parentRow.length > 0 && parentRow[0] !== $row[0] && parentRow.find('img[alt]').length > 0) {
+          // This is likely a matchup row inside an expanded champion row
           return false
         }
-      }
-      
-      // Must have stats (games/wins/losses) to be a main champion row
-      // Get only direct children td elements (not from nested tables)
-      const cells = $row.children('td')
-      if (cells.length < 3) return false // Too few cells, probably not a main row
-      
-      // Check if cells contain numbers (stats) - but exclude nested table content
-      let hasStats = false
-      let cellsWithTables = 0
-      cells.each((idx, cell) => {
-        const $cell = $(cell)
-        // Count cells with nested tables
-        if ($cell.find('table').length > 0) {
-          cellsWithTables++
-        }
-        // CRITICAL: Remove nested tables before checking for stats
-        const $cellClone = $cell.clone()
-        $cellClone.find('table').remove() // Remove nested tables
-        const cleanText = $cellClone.text().trim()
-        // Skip first cell (usually champion name/icon)
-        if (idx > 0 && /\d+/.test(cleanText)) {
-          hasStats = true
-          return false // break
-        }
-      })
-      if (!hasStats) return false
-      
-      // If most cells have nested tables, this row is probably mostly matchup data
-      // Only allow if at least half the cells don't have tables
-      if (cellsWithTables > cells.length / 2) {
-        return false
       }
       
       return true
     })
+    
+    console.log(`[Backend] After filtering: ${championRows.length} champion rows`)
     
     championRows.each((i, elem) => {
       const $row = $(elem)
@@ -390,8 +384,10 @@ exports.handler = async (event, context) => {
           if (!championName) {
             // Remove nested tables/matchup content before extracting text
             const $cellClone = nameCell.clone()
-            $cellClone.find('table, [class*="matchup"]').remove()
-            championName = $cellClone.text().trim()
+            $cellClone.find('table, [class*="matchup"], img').remove() // Also remove images to get clean text
+            championName = $cellClone.text()
+              .replace(/\s+/g, ' ') // Normalize whitespace
+              .trim()
           }
         }
       }
@@ -403,8 +399,43 @@ exports.handler = async (event, context) => {
                        $row.find('[data-champion]').attr('data-champion')
       }
       
-      // Clean up champion name
-      championName = championName.replace(/['"]/g, '').trim()
+      // Clean up and normalize champion name
+      // Handle cases where name might be split with spaces/line breaks (e.g., "Ambe a" -> "Ambessa")
+      championName = championName
+        .replace(/['"]/g, '') // Remove quotes
+        .replace(/\s+/g, ' ') // Replace multiple whitespace/newlines with single space
+        .trim() // Trim edges
+      
+      // Fix known split names (where HTML has line breaks causing names to be split)
+      const splitNameFixes = {
+        'ambe a': 'Ambessa',
+        'ambea': 'Ambessa'
+      }
+      const normalizedKey = championName.toLowerCase().replace(/\s+/g, ' ')
+      if (splitNameFixes[normalizedKey]) {
+        console.log(`[DEBUG] Fixed split champion name "${championName}" to "${splitNameFixes[normalizedKey]}"`)
+        championName = splitNameFixes[normalizedKey]
+      }
+      
+      // If name has a space in the middle and looks like it might be split, try to join it
+      // This handles cases like "Ambe a" where it should be "Ambessa"
+      // But be careful - some champion names legitimately have spaces (like "Dr. Mundo" or "Miss Fortune")
+      // Only fix if it's a short name with a single space that looks like a line break
+      if (championName && championName.length < 15 && championName.includes(' ') && !splitNameFixes[normalizedKey]) {
+        const parts = championName.split(' ')
+        // If it's two short parts that might be a split name, join them
+        // But preserve names that should have spaces
+        const knownMultiWordChampions = ['dr', 'miss', 'master', 'twisted', 'lee', 'xin', 'aurelion', 'jarvan']
+        const firstPart = parts[0].toLowerCase()
+        if (parts.length === 2 && !knownMultiWordChampions.includes(firstPart)) {
+          // Might be a split name, but let's be conservative
+          // Only fix obvious cases where both parts are very short
+          if (parts[0].length <= 4 && parts[1].length <= 2) {
+            championName = parts.join('') // Join without space
+            console.log(`[DEBUG] Fixed split champion name to: ${championName}`)
+          }
+        }
+      }
       
       if (!championName || championName.length < 2) {
         console.log(`[DEBUG] Skipping row - no valid champion name found`)
@@ -413,100 +444,118 @@ exports.handler = async (event, context) => {
       
       console.log(`[DEBUG] Processing champion: ${championName}`)
       
-      // Extract stats from individual table cells
-      // Based on actual op.gg HTML structure:
-      // Column 1: Rank number
-      // Column 2: Champion name/image
-      // Column 3: Games/Wins/Losses/Winrate (all in one cell with progress bar)
-      // Column 4: KDA
+      // Extract stats from the entire row - be more flexible
+      // op.gg structure can vary, so check all cells
       let games = 0
       let wins = 0
       let losses = 0
       let winrate = 0
       let kda = null
       
+      // Get the full row text for pattern matching
+      const fullRowText = $row.text()
+      console.log(`[DEBUG] Champion: ${championName}, Full row text: "${fullRowText.substring(0, 200)}"`)
+      
       if ($row.is('tr')) {
         const directCells = $row.children('td')
+        console.log(`[DEBUG] Champion: ${championName}, Number of cells: ${directCells.length}`)
         
-        // Column 3 (index 2) contains: Games/Wins/Losses/Winrate
-        // Structure: <div> with progress bar showing "32W" and "28P", plus "53%" winrate
-        if (directCells.length > 2) {
-          const statsCell = $(directCells[2])
+        // Try to extract from each cell, starting from cell 2 (index 1+)
+        for (let cellIdx = 1; cellIdx < directCells.length; cellIdx++) {
+          const $cell = $(directCells[cellIdx])
           
-          // Skip if this cell contains a nested table (expanded matchup data)
-          if (statsCell.find('table').length === 0) {
-            // Get all text from the cell
-            const cellText = statsCell.text()
+          // Skip cells with nested tables (matchup data)
+          if ($cell.find('table').length > 0 && $cell.find('table').length > 2) {
+            continue
+          }
+          
+          // Get cell text, removing nested table content
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
+          
+          if (!cellText) continue
+          
+          console.log(`[DEBUG] Champion: ${championName}, Cell ${cellIdx} text: "${cellText}"`)
+          
+          // Try multiple patterns for wins/losses
+          // Pattern 1: "60 W 41 L" or "60W 41L" or "60W41L" (with spaces)
+          const winsLossesMatch1 = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i) || 
+                                  cellText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i)
+          if (winsLossesMatch1) {
+            wins = parseInt(winsLossesMatch1[1])
+            losses = parseInt(winsLossesMatch1[2])
+            games = wins + losses
+            console.log(`[DEBUG] Pattern 1 matched: ${wins}W ${losses}L (from "${cellText}")`)
+          }
+          
+          // Pattern 2: Separate wins and losses
+          if (!wins && !losses) {
+            // Look for wins: number followed by W (not followed by another digit)
+            const winsMatch = cellText.match(/(\d+)\s*W(?!\d)/i) || cellText.match(/(\d+)\s*W\b/i)
+            if (winsMatch) {
+              wins = parseInt(winsMatch[1])
+            }
             
-            // DEBUG: Log what we're extracting
-            console.log(`[DEBUG] Champion: ${championName}, Stats cell text: "${cellText}"`)
+            // Look for losses: number followed by L or P (not followed by another digit)
+            const lossesMatch = cellText.match(/(\d+)\s*L(?!\d)/i) || 
+                               cellText.match(/(\d+)\s*P(?!\d)/i) ||
+                               cellText.match(/(\d+)\s*L\b/i) ||
+                               cellText.match(/(\d+)\s*P\b/i)
+            if (lossesMatch) {
+              losses = parseInt(lossesMatch[1])
+            }
             
-            // Extract winrate (has % symbol) - e.g., "53%"
+            if (wins || losses) {
+              games = wins + losses
+              console.log(`[DEBUG] Pattern 2 matched: ${wins}W ${losses}L`)
+            }
+          }
+          
+          // Extract winrate (percentage)
+          if (!winrate) {
             const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
             if (winrateMatch) {
               winrate = parseFloat(winrateMatch[1])
               console.log(`[DEBUG] Extracted winrate: ${winrate}%`)
             }
-            
-            // Extract wins and losses from progress bar
-            // HTML structure: "32W" (wins) and "28P" (losses) in spans, plus "53%" winrate
-            // The text might be "32W28P53%" or "32 W 28 P 53%" depending on extraction
-            // Pattern 1: "32W" or "32 W" (wins) - look for number followed by W (not followed by digit or %)
-            const winsMatch = cellText.match(/(\d+)\s*W(?!\d|%)/i) || 
-                             cellText.match(/(\d+)\s*Wins?/i) ||
-                             cellText.match(/(\d+)\s*W\b/i)
-            
-            // Pattern 2: "28P" or "28 P" (losses - P stands for Polish "Przegrane" or "Played")
-            // Also try "28L" for losses
-            const lossesMatch = cellText.match(/(\d+)\s*P(?!\d|%)/i) ||
-                               cellText.match(/(\d+)\s*L(?!\d|%)/i) ||
-                               cellText.match(/(\d+)\s*Loss(?:es)?/i) ||
-                               cellText.match(/(\d+)\s*P\b/i)
-            
-            if (winsMatch) {
-              wins = parseInt(winsMatch[1])
-              console.log(`[DEBUG] Extracted wins: ${wins}`)
-            }
-            if (lossesMatch) {
-              losses = parseInt(lossesMatch[1])
-              console.log(`[DEBUG] Extracted losses: ${losses}`)
-            }
-            
-            // Calculate games from wins + losses
-            if (wins > 0 || losses > 0) {
-              games = wins + losses
-              console.log(`[DEBUG] Calculated games: ${games}`)
-            }
-            
-            // If we have games but no winrate, calculate it
-            if (winrate === 0 && games > 0 && wins > 0) {
-              winrate = (wins / games) * 100
-              console.log(`[DEBUG] Calculated winrate: ${winrate}%`)
-            }
-          } else {
-            console.log(`[DEBUG] Skipping stats cell for ${championName} - contains nested table`)
           }
-        }
-        
-        // Column 4 (index 3) contains: KDA
-        // Structure: "2.19:1" and "3.9 / 4.5 / 6 (42%)"
-        if (directCells.length > 3 && !kda) {
-          const kdaCell = $(directCells[3])
           
-          // Skip if this cell contains a nested table
-          if (kdaCell.find('table').length === 0) {
-            const kdaText = kdaCell.text()
-            
-            // Look for KDA pattern: "3.9 / 4.5 / 6"
-            const kdaMatch = kdaText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+          // Extract KDA pattern: "3.9 / 4.5 / 6" or "3.9/4.5/6"
+          if (!kda) {
+            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
             if (kdaMatch) {
               kda = {
                 kills: parseFloat(kdaMatch[1]),
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }
+              console.log(`[DEBUG] Extracted KDA: ${kda.kills}/${kda.deaths}/${kda.assists}`)
             }
           }
+          
+          // If we found wins/losses, we can break (found the stats cell)
+          if (wins || losses) {
+            break
+          }
+        }
+        
+        // If we still don't have wins/losses, try extracting from full row text
+        if (!wins && !losses) {
+          const fullMatch = fullRowText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i) || 
+                           fullRowText.match(/(\d+)\s*W\s*(\d+)\s*L/i)
+          if (fullMatch) {
+            wins = parseInt(fullMatch[1])
+            losses = parseInt(fullMatch[2])
+            games = wins + losses
+            console.log(`[DEBUG] Extracted from full row: ${wins}W ${losses}L`)
+          }
+        }
+        
+        // Calculate winrate if we have games but no winrate
+        if (winrate === 0 && games > 0 && wins > 0) {
+          winrate = (wins / games) * 100
+          console.log(`[DEBUG] Calculated winrate: ${winrate}%`)
         }
       }
 
@@ -517,11 +566,20 @@ exports.handler = async (event, context) => {
           games,
           wins,
           losses,
-          winrate,
+          winrate: winrate || (games > 0 && wins > 0 ? (wins / games) * 100 : 0),
           kda
         })
+        console.log(`[DEBUG] Added champion: ${championName} - ${games} games (${wins}W ${losses}L, ${winrate}%)`)
+      } else {
+        console.log(`[DEBUG] Skipped champion: ${championName} - games: ${games}, name length: ${championName.length}`)
       }
     })
+    
+    console.log(`[Backend] === Champion Processing Summary ===`)
+    console.log(`[Backend] Total champions extracted: ${champions.length}`)
+    if (champions.length > 0) {
+      console.log(`[Backend] Sample champions:`, champions.slice(0, 5).map(c => `${c.championName}: ${c.games} games (${c.wins}W ${c.losses}L)`))
+    }
     
     // Remove duplicates and sort by games (most played first, matching op.gg order)
     const uniqueChampions = []
@@ -531,14 +589,16 @@ exports.handler = async (event, context) => {
       if (!seen.has(key)) {
         seen.add(key)
         uniqueChampions.push(champ)
+      } else {
+        console.log(`[Backend] Duplicate champion skipped: ${champ.championName}`)
       }
     }
     
     // Sort by games descending (most played first)
     uniqueChampions.sort((a, b) => b.games - a.games)
 
-    console.log(`[Backend] Processed ${champions.length} champions, ${uniqueChampions.length} unique`)
-    console.log(`[Backend] First 3 champions:`, uniqueChampions.slice(0, 3))
+    console.log(`[Backend] After deduplication: ${uniqueChampions.length} unique champions`)
+    console.log(`[Backend] Top 5 champions:`, uniqueChampions.slice(0, 5).map(c => `${c.championName}: ${c.games} games (${c.wins}W ${c.losses}L, ${c.winrate.toFixed(1)}%)`))
     
     // If no champions found, try alternative extraction methods
     if (uniqueChampions.length === 0) {
