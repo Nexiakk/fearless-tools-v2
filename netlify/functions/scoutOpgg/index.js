@@ -66,9 +66,101 @@ exports.handler = async (event, context) => {
     
     const $ = cheerio.load(response.data)
     
+    // Check if page is Next.js and has __NEXT_DATA__ (common for op.gg)
+    let nextData = null
+    const nextDataScript = $('script#__NEXT_DATA__').html()
+    if (nextDataScript) {
+      try {
+        nextData = JSON.parse(nextDataScript)
+        console.log(`[Backend] Found __NEXT_DATA__ script tag`)
+        console.log(`[Backend] __NEXT_DATA__ keys:`, Object.keys(nextData))
+      } catch (e) {
+        console.log(`[Backend] Failed to parse __NEXT_DATA__:`, e.message)
+      }
+    }
+    
+    // Also check for other script tags that might contain data
+    const allScripts = $('script').length
+    console.log(`[Backend] Found ${allScripts} script tags total`)
+    const dataScripts = $('script').filter((i, script) => {
+      const scriptContent = $(script).html() || ''
+      return scriptContent.includes('champion') || scriptContent.includes('Champion') || scriptContent.includes('summoner')
+    })
+    console.log(`[Backend] Found ${dataScripts.length} script tags that might contain champion/summoner data`)
+    
     // Debug: Check if we can find any tables
     const totalTables = $('table').length
     console.log(`[Backend] Found ${totalTables} tables in HTML`)
+    
+    // Debug: Check for common op.gg structures
+    const championImages = $('img[alt]').length
+    console.log(`[Backend] Found ${championImages} images with alt attributes`)
+    
+    // Check for op.gg specific classes/structures
+    const championListElements = $('[class*="champion"], [class*="Champion"], [data-champion]').length
+    console.log(`[Backend] Found ${championListElements} elements with champion-related classes/attributes`)
+    
+    // Check if page might be JavaScript-rendered (check for common React/Vue markers)
+    const hasReactMarkers = response.data.includes('__NEXT_DATA__') || response.data.includes('react') || response.data.includes('__REACT')
+    console.log(`[Backend] Page appears to be JS-rendered: ${hasReactMarkers}`)
+    
+    // Log a sample of the HTML to see structure
+    const htmlSample = response.data.substring(0, 5000)
+    console.log(`[Backend] HTML sample (first 5000 chars):`, htmlSample)
+    
+    // Try to find champion data in __NEXT_DATA__ first (Next.js apps often embed data here)
+    if (nextData) {
+      console.log(`[Backend] Attempting to extract data from __NEXT_DATA__...`)
+      // Navigate through the nested structure to find champion data
+      // op.gg structure might be in props.pageProps or similar
+      const pageProps = nextData?.props?.pageProps
+      if (pageProps) {
+        console.log(`[Backend] Found pageProps, keys:`, Object.keys(pageProps))
+        // Look for champion/champions data in various possible locations
+        const championsData = pageProps.champions || 
+                             pageProps.championStats || 
+                             pageProps.data?.champions ||
+                             pageProps.summoner?.champions ||
+                             pageProps.summonerChampions
+        if (championsData && Array.isArray(championsData) && championsData.length > 0) {
+          console.log(`[Backend] Found champions in __NEXT_DATA__: ${championsData.length} champions`)
+          // Process the champions data
+          const extractedChampions = championsData.map(champ => {
+            return {
+              championName: champ.championName || champ.name || champ.champion || '',
+              games: champ.games || champ.totalGames || (champ.wins || 0) + (champ.losses || 0),
+              wins: champ.wins || 0,
+              losses: champ.losses || 0,
+              winrate: champ.winrate || champ.winRate || (champ.games > 0 && champ.wins > 0 ? (champ.wins / champ.games) * 100 : 0),
+              kda: champ.kda ? {
+                kills: champ.kda.kills || champ.kda.k || 0,
+                deaths: champ.kda.deaths || champ.kda.d || 0,
+                assists: champ.kda.assists || champ.kda.a || 0
+              } : null
+            }
+          }).filter(champ => champ.championName && champ.games > 0)
+          
+          if (extractedChampions.length > 0) {
+            console.log(`[Backend] Successfully extracted ${extractedChampions.length} champions from __NEXT_DATA__`)
+            // Extract rank and LP from pageProps if available
+            const rankText = pageProps.summoner?.tier || pageProps.tier || pageProps.rank || ''
+            const lp = pageProps.summoner?.lp || pageProps.lp || 0
+            
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                champions: extractedChampions,
+                rank: rankText,
+                lp,
+                lastUpdated: new Date().toISOString()
+              })
+            }
+          }
+        }
+      }
+      console.log(`[Backend] No champion data found in __NEXT_DATA__, falling back to HTML parsing`)
+    }
 
     // Extract champion stats from the main champion list
     // CRITICAL: Only get stats from top-level champion items, NOT from expanded matchup sections
@@ -448,16 +540,161 @@ exports.handler = async (event, context) => {
     console.log(`[Backend] Processed ${champions.length} champions, ${uniqueChampions.length} unique`)
     console.log(`[Backend] First 3 champions:`, uniqueChampions.slice(0, 3))
     
-    // If no champions found, log HTML structure for debugging
+    // If no champions found, try alternative extraction methods
     if (uniqueChampions.length === 0) {
-      console.log(`[Backend] WARNING: No champions found!`)
-      console.log(`[Backend] HTML sample (first 2000 chars):`, response.data.substring(0, 2000))
-      console.log(`[Backend] All table elements:`, $('table').length)
-      console.log(`[Backend] All tr elements:`, $('tr').length)
-      console.log(`[Backend] All img elements with alt:`, $('img[alt]').length)
-      // Try to find any champion-related content
-      const championImages = $('img[alt]').toArray().slice(0, 10).map(img => $(img).attr('alt'))
-      console.log(`[Backend] First 10 image alt texts:`, championImages)
+      console.log(`[Backend] WARNING: No champions found with primary method!`)
+      console.log(`[Backend] Trying alternative extraction methods...`)
+      
+      // Log detailed HTML structure for debugging
+      console.log(`[Backend] === HTML Structure Analysis ===`)
+      console.log(`[Backend] Total elements: ${$('*').length}`)
+      console.log(`[Backend] Total divs: ${$('div').length}`)
+      console.log(`[Backend] Total spans: ${$('span').length}`)
+      console.log(`[Backend] Elements with 'champion' in class: ${$('[class*="champion"]').length}`)
+      console.log(`[Backend] Elements with 'Champion' in class: ${$('[class*="Champion"]').length}`)
+      
+      // Check for common op.gg class patterns
+      const possibleChampionContainers = $('[class*="champion-list"], [class*="champion-table"], [class*="champion-item"], [class*="champion-row"]')
+      console.log(`[Backend] Found ${possibleChampionContainers.length} elements with champion-list/table/item/row classes`)
+      
+      // Alternative method 1: Look for any rows with champion images and stats
+      const allRowsWithImages = $('tr').filter((i, row) => {
+        const $row = $(row)
+        return $row.find('img[alt]').length > 0 && /\d+/.test($row.text())
+      })
+      console.log(`[Backend] Found ${allRowsWithImages.length} rows with images and numbers`)
+      
+      // Alternative method 2: Look for div-based structures (op.gg might use divs now)
+      const divChampions = $('[class*="champion"], [class*="Champion"]').filter((i, elem) => {
+        const $elem = $(elem)
+        return $elem.find('img[alt]').length > 0
+      })
+      console.log(`[Backend] Found ${divChampions.length} div elements with champion images`)
+      
+      // Alternative method 3: Look for data attributes
+      const dataChampions = $('[data-champion], [data-champion-name]')
+      console.log(`[Backend] Found ${dataChampions.length} elements with champion data attributes`)
+      
+      // Alternative method 4: Look for any element containing champion image and stats text
+      const allCandidateElements = $('*').filter((i, elem) => {
+        const $elem = $(elem)
+        const hasImage = $elem.find('img[alt]').length > 0 || $elem.is('img[alt]')
+        const hasStats = /\d+[WLP]\d*[WLP]?\d*%/.test($elem.text()) || /\d+\s*W\s*\d+\s*L/.test($elem.text())
+        return hasImage && hasStats
+      })
+      console.log(`[Backend] Found ${allCandidateElements.length} candidate elements with images and stats patterns`)
+      
+      // Log sample of what we're seeing
+      const sampleRows = allRowsWithImages.slice(0, 5)
+      sampleRows.each((i, row) => {
+        const $row = $(row)
+        const imgAlt = $row.find('img[alt]').first().attr('alt')
+        const rowText = $row.text().substring(0, 150)
+        const rowHtml = $row.html().substring(0, 200)
+        console.log(`[Backend] Sample row ${i}: img="${imgAlt}", text="${rowText}", html="${rowHtml}"`)
+      })
+      
+      // Log a few div candidates
+      const sampleDivs = divChampions.slice(0, 3)
+      sampleDivs.each((i, div) => {
+        const $div = $(div)
+        const imgAlt = $div.find('img[alt]').first().attr('alt')
+        const divText = $div.text().substring(0, 150)
+        const divClass = $div.attr('class') || ''
+        console.log(`[Backend] Sample div ${i}: class="${divClass}", img="${imgAlt}", text="${divText}"`)
+      })
+      
+      // Try to extract from div-based structures first (modern op.gg might use divs)
+      if (divChampions.length > 0) {
+        console.log(`[Backend] Attempting extraction from ${divChampions.length} div elements...`)
+        divChampions.each((i, elem) => {
+          const $elem = $(elem)
+          const imgAlt = $elem.find('img[alt]').first().attr('alt')
+          if (imgAlt && imgAlt.length > 2) {
+            const elemText = $elem.text()
+            // Try to extract stats - look for patterns like "32W 28L 53%" or "32W28P53%"
+            const winsMatch = elemText.match(/(\d+)\s*W(?!\d|%)/i) || elemText.match(/(\d+)\s*W\b/i)
+            const lossesMatch = elemText.match(/(\d+)\s*[LP](?!\d|%)/i) || elemText.match(/(\d+)\s*L(?!\d|%)/i)
+            const winrateMatch = elemText.match(/(\d+\.?\d*)\s*%/)
+            
+            if (winsMatch || lossesMatch) {
+              const wins = winsMatch ? parseInt(winsMatch[1]) : 0
+              const losses = lossesMatch ? parseInt(lossesMatch[1]) : 0
+              const games = wins + losses
+              const winrate = winrateMatch ? parseFloat(winrateMatch[1]) : (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
+              
+              if (games > 0) {
+                const champ = {
+                  championName: imgAlt.trim(),
+                  games,
+                  wins,
+                  losses,
+                  winrate
+                }
+                champions.push(champ)
+                console.log(`[Backend] Extracted champion from div:`, champ)
+              }
+            }
+          }
+        })
+      }
+      
+      // Try to extract from any structure we find
+      if (allRowsWithImages.length > 0) {
+        console.log(`[Backend] Attempting extraction from ${allRowsWithImages.length} candidate rows...`)
+        allRowsWithImages.each((i, elem) => {
+          const $row = $(elem)
+          const imgAlt = $row.find('img[alt]').first().attr('alt')
+          if (imgAlt && imgAlt.length > 2) {
+            // Try to extract stats from this row
+            const rowText = $row.text()
+            const winsMatch = rowText.match(/(\d+)\s*W(?!\d|%)/i) || rowText.match(/(\d+)\s*W\b/i)
+            const lossesMatch = rowText.match(/(\d+)\s*[LP](?!\d|%)/i) || rowText.match(/(\d+)\s*L(?!\d|%)/i)
+            const winrateMatch = rowText.match(/(\d+\.?\d*)\s*%/)
+            
+            if (winsMatch || lossesMatch) {
+              const wins = winsMatch ? parseInt(winsMatch[1]) : 0
+              const losses = lossesMatch ? parseInt(lossesMatch[1]) : 0
+              const games = wins + losses
+              const winrate = winrateMatch ? parseFloat(winrateMatch[1]) : (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
+              
+              const champ = {
+                championName: imgAlt.trim(),
+                games,
+                wins,
+                losses,
+                winrate
+              }
+              if (champ.games > 0) {
+                champions.push(champ)
+                console.log(`[Backend] Extracted champion from row:`, champ)
+              }
+            }
+          }
+        })
+      }
+      
+      // Re-process with newly found champions
+      const newUniqueChampions = []
+      const newSeen = new Set()
+      for (const champ of champions) {
+        const key = champ.championName.toLowerCase().trim()
+        if (!newSeen.has(key)) {
+          newSeen.add(key)
+          newUniqueChampions.push(champ)
+        }
+      }
+      uniqueChampions.push(...newUniqueChampions)
+      console.log(`[Backend] After alternative extraction: ${uniqueChampions.length} champions`)
+      
+      // If still no champions, log more HTML for manual inspection
+      if (uniqueChampions.length === 0) {
+        console.log(`[Backend] === Still no champions found. Logging more HTML for inspection ===`)
+        // Log a larger sample of HTML that might contain champion data
+        const bodyContent = $('body').html() || ''
+        const relevantSection = bodyContent.substring(0, 10000)
+        console.log(`[Backend] Body HTML sample (first 10000 chars):`, relevantSection)
+      }
     }
 
     // Extract rank info - adjust selectors based on actual structure
