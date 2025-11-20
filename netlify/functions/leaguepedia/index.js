@@ -47,15 +47,14 @@ exports.handler = async (event, context) => {
       case 'getPlayerChampionPool':
         // Query champion pool from MatchScheduleGame
         // CargoExport format: tables=TableName&fields=Field1,Field2&where=Condition&format=json
-        // Note: Player names in Leaguepedia are case-sensitive and must match exactly
-        // The WHERE clause should NOT have the player name URL-encoded inside quotes
+        // Note: Field name changed from "Champion" to "Champions" (plural)
         const playerName1 = params.playerName
         // Build URL with proper encoding - encode the entire query parameter, not the value inside quotes
         const championPoolParams = new URLSearchParams({
           tables: 'MatchScheduleGame',
-          fields: 'MatchScheduleGame.Champion,COUNT(*) as Games,SUM(CASE WHEN MatchScheduleGame.Win="1" THEN 1 ELSE 0 END) as Wins',
+          fields: 'MatchScheduleGame.Champions,COUNT(*) as Games,SUM(CASE WHEN MatchScheduleGame.Win="1" THEN 1 ELSE 0 END) as Wins',
           where: `MatchScheduleGame.Player="${playerName1}"`,
-          'group by': 'MatchScheduleGame.Champion',
+          'group by': 'MatchScheduleGame.Champions',
           'order by': 'Games DESC',
           limit: '50',
           format: 'json'
@@ -83,11 +82,12 @@ exports.handler = async (event, context) => {
 
       case 'getRecentMatches':
         // Query recent matches
+        // Try with "Champions" field (plural) instead of "Champion"
         const limit = params.limit || 20
         const playerName3 = params.playerName
         const recentMatchesParams = new URLSearchParams({
           tables: 'MatchScheduleGame',
-          fields: 'MatchScheduleGame.Champion,MatchScheduleGame.Win,MatchScheduleGame.Date,MatchScheduleGame.Opponent,MatchScheduleGame.Team,MatchScheduleGame.Tournament',
+          fields: 'MatchScheduleGame.Champions,MatchScheduleGame.Win,MatchScheduleGame.Date,MatchScheduleGame.Opponent,MatchScheduleGame.Team,MatchScheduleGame.Tournament',
           where: `MatchScheduleGame.Player="${playerName3}"`,
           'order by': 'MatchScheduleGame.Date DESC',
           limit: limit.toString(),
@@ -171,7 +171,7 @@ exports.handler = async (event, context) => {
 
     if (action === 'getPlayerChampionPool') {
       transformedData = results.map(match => ({
-        championName: match.Champion || match.championName || match.champion || '',
+        championName: match.Champions || match.Champion || match.championName || match.champion || '',
         games: parseInt(match.Games || match.games || 0) || 0,
         wins: parseInt(match.Wins || match.wins || 0) || 0,
         losses: (parseInt(match.Games || match.games || 0) || 0) - (parseInt(match.Wins || match.wins || 0) || 0),
@@ -179,7 +179,7 @@ exports.handler = async (event, context) => {
       }))
     } else if (action === 'getRecentMatches') {
       transformedData = results.map(match => ({
-        champion: match.Champion,
+        champion: match.Champions || match.Champion || '',
         win: match.Win === '1',
         date: match.Date,
         opponent: match.Opponent,
