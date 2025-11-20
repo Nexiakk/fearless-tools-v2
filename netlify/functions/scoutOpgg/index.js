@@ -385,9 +385,7 @@ exports.handler = async (event, context) => {
             // Remove nested tables/matchup content before extracting text
             const $cellClone = nameCell.clone()
             $cellClone.find('table, [class*="matchup"], img').remove() // Also remove images to get clean text
-            championName = $cellClone.text()
-              .replace(/\s+/g, ' ') // Normalize whitespace
-              .trim()
+            championName = $cellClone.text().trim()
           }
         }
       }
@@ -399,43 +397,10 @@ exports.handler = async (event, context) => {
                        $row.find('[data-champion]').attr('data-champion')
       }
       
-      // Clean up and normalize champion name
-      // Handle cases where name might be split with spaces/line breaks (e.g., "Ambe a" -> "Ambessa")
+      // Clean up champion name
       championName = championName
         .replace(/['"]/g, '') // Remove quotes
-        .replace(/\s+/g, ' ') // Replace multiple whitespace/newlines with single space
         .trim() // Trim edges
-      
-      // Fix known split names (where HTML has line breaks causing names to be split)
-      const splitNameFixes = {
-        'ambe a': 'Ambessa',
-        'ambea': 'Ambessa'
-      }
-      const normalizedKey = championName.toLowerCase().replace(/\s+/g, ' ')
-      if (splitNameFixes[normalizedKey]) {
-        console.log(`[DEBUG] Fixed split champion name "${championName}" to "${splitNameFixes[normalizedKey]}"`)
-        championName = splitNameFixes[normalizedKey]
-      }
-      
-      // If name has a space in the middle and looks like it might be split, try to join it
-      // This handles cases like "Ambe a" where it should be "Ambessa"
-      // But be careful - some champion names legitimately have spaces (like "Dr. Mundo" or "Miss Fortune")
-      // Only fix if it's a short name with a single space that looks like a line break
-      if (championName && championName.length < 15 && championName.includes(' ') && !splitNameFixes[normalizedKey]) {
-        const parts = championName.split(' ')
-        // If it's two short parts that might be a split name, join them
-        // But preserve names that should have spaces
-        const knownMultiWordChampions = ['dr', 'miss', 'master', 'twisted', 'lee', 'xin', 'aurelion', 'jarvan']
-        const firstPart = parts[0].toLowerCase()
-        if (parts.length === 2 && !knownMultiWordChampions.includes(firstPart)) {
-          // Might be a split name, but let's be conservative
-          // Only fix obvious cases where both parts are very short
-          if (parts[0].length <= 4 && parts[1].length <= 2) {
-            championName = parts.join('') // Join without space
-            console.log(`[DEBUG] Fixed split champion name to: ${championName}`)
-          }
-        }
-      }
       
       if (!championName || championName.length < 2) {
         console.log(`[DEBUG] Skipping row - no valid champion name found`)
@@ -444,13 +409,27 @@ exports.handler = async (event, context) => {
       
       console.log(`[DEBUG] Processing champion: ${championName}`)
       
-      // Extract stats from the entire row - be more flexible
-      // op.gg structure can vary, so check all cells
+      // Extract stats from specific cells based on op.gg structure
+      // Cell 0: Rank
+      // Cell 1: Champion name/image
+      // Cell 2: Wins/Losses/Winrate
+      // Cell 3: KDA (ratio, kills/deaths/assists, kill participation)
+      // Cell 4: op.gg score (SKIP)
+      // Cell 5: Laning winrate (SKIP)
+      // Cell 6: Damage (per minute, percentage)
+      // Cell 7: Wards (vision score, control wards, placed, killed)
+      // Cell 8: CS (total, per minute)
+      // Cell 9: Gold (total, per minute)
+      
       let games = 0
       let wins = 0
       let losses = 0
       let winrate = 0
       let kda = null
+      let damage = null
+      let wards = null
+      let cs = null
+      let gold = null
       
       // Get the full row text for pattern matching
       const fullRowText = $row.text()
@@ -460,8 +439,8 @@ exports.handler = async (event, context) => {
         const directCells = $row.children('td')
         console.log(`[DEBUG] Champion: ${championName}, Number of cells: ${directCells.length}`)
         
-        // Try to extract from each cell, starting from cell 2 (index 1+)
-        for (let cellIdx = 1; cellIdx < directCells.length; cellIdx++) {
+        // Extract from specific cells
+        for (let cellIdx = 0; cellIdx < directCells.length; cellIdx++) {
           const $cell = $(directCells[cellIdx])
           
           // Skip cells with nested tables (matchup data)
@@ -478,42 +457,17 @@ exports.handler = async (event, context) => {
           
           console.log(`[DEBUG] Champion: ${championName}, Cell ${cellIdx} text: "${cellText}"`)
           
-          // Try multiple patterns for wins/losses
-          // Pattern 1: "60 W 41 L" or "60W 41L" or "60W41L" (with spaces)
-          const winsLossesMatch1 = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i) || 
-                                  cellText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i)
-          if (winsLossesMatch1) {
-            wins = parseInt(winsLossesMatch1[1])
-            losses = parseInt(winsLossesMatch1[2])
-            games = wins + losses
-            console.log(`[DEBUG] Pattern 1 matched: ${wins}W ${losses}L (from "${cellText}")`)
-          }
-          
-          // Pattern 2: Separate wins and losses
-          if (!wins && !losses) {
-            // Look for wins: number followed by W (not followed by another digit)
-            const winsMatch = cellText.match(/(\d+)\s*W(?!\d)/i) || cellText.match(/(\d+)\s*W\b/i)
-            if (winsMatch) {
-              wins = parseInt(winsMatch[1])
-            }
-            
-            // Look for losses: number followed by L or P (not followed by another digit)
-            const lossesMatch = cellText.match(/(\d+)\s*L(?!\d)/i) || 
-                               cellText.match(/(\d+)\s*P(?!\d)/i) ||
-                               cellText.match(/(\d+)\s*L\b/i) ||
-                               cellText.match(/(\d+)\s*P\b/i)
-            if (lossesMatch) {
-              losses = parseInt(lossesMatch[1])
-            }
-            
-            if (wins || losses) {
+          // Cell 2 (index 2): Wins/Losses/Winrate - "60 W 41 L 59%"
+          if (cellIdx === 2) {
+            const winsLossesMatch = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i) || 
+                                    cellText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i)
+            if (winsLossesMatch) {
+              wins = parseInt(winsLossesMatch[1])
+              losses = parseInt(winsLossesMatch[2])
               games = wins + losses
-              console.log(`[DEBUG] Pattern 2 matched: ${wins}W ${losses}L`)
+              console.log(`[DEBUG] Extracted wins/losses: ${wins}W ${losses}L`)
             }
-          }
-          
-          // Extract winrate (percentage)
-          if (!winrate) {
+            
             const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
             if (winrateMatch) {
               winrate = parseFloat(winrateMatch[1])
@@ -521,26 +475,99 @@ exports.handler = async (event, context) => {
             }
           }
           
-          // Extract KDA pattern: "3.9 / 4.5 / 6" or "3.9/4.5/6"
-          if (!kda) {
+          // Cell 3 (index 3): KDA - "2.12:1 6.9 / 5.8 / 5.4 (44%)"
+          if (cellIdx === 3 && !kda) {
+            // Extract KDA ratio (e.g., "2.12:1")
+            const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1/)
+            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4")
             const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            // Extract kill participation (e.g., "(44%)")
+            const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
+            
             if (kdaMatch) {
               kda = {
                 kills: parseFloat(kdaMatch[1]),
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }
-              console.log(`[DEBUG] Extracted KDA: ${kda.kills}/${kda.deaths}/${kda.assists}`)
+              if (ratioMatch) {
+                kda.ratio = parseFloat(ratioMatch[1])
+              }
+              if (kpMatch) {
+                kda.killParticipation = parseFloat(kpMatch[1])
+              }
+              console.log(`[DEBUG] Extracted KDA:`, kda)
             }
           }
           
-          // If we found wins/losses, we can break (found the stats cell)
-          if (wins || losses) {
-            break
+          // Cell 6 (index 6): Damage - "1087.2/m 29.7%"
+          if (cellIdx === 6 && !damage) {
+            // Match pattern: "1087.2/m 29.7%" - damage per minute and damage percentage
+            const dmgMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m\s+(\d+\.?\d*)\s*%/i)
+            if (dmgMatch) {
+              damage = {
+                perMinute: parseFloat(dmgMatch[1]),
+                percentage: parseFloat(dmgMatch[2])
+              }
+              console.log(`[DEBUG] Extracted damage:`, damage)
+            } else {
+              // Fallback: try to match separately
+              const dmgPerMinMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m/i)
+              const dmgPercentMatch = cellText.match(/(\d+\.?\d*)\s*%/)
+              if (dmgPerMinMatch || dmgPercentMatch) {
+                damage = {}
+                if (dmgPerMinMatch) {
+                  damage.perMinute = parseFloat(dmgPerMinMatch[1])
+                }
+                if (dmgPercentMatch) {
+                  damage.percentage = parseFloat(dmgPercentMatch[1])
+                }
+                console.log(`[DEBUG] Extracted damage (fallback):`, damage)
+              }
+            }
+          }
+          
+          // Cell 7 (index 7): Wards - "14 1 (7/2)" (vision score, control wards, placed, killed)
+          if (cellIdx === 7 && !wards) {
+            // Pattern: "14 1 (7/2)" = vision score, control wards, (placed/killed)
+            const wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            if (wardsMatch) {
+              wards = {
+                visionScore: parseFloat(wardsMatch[1]),
+                controlWards: parseFloat(wardsMatch[2]),
+                placed: parseFloat(wardsMatch[3]),
+                killed: parseFloat(wardsMatch[4])
+              }
+              console.log(`[DEBUG] Extracted wards:`, wards)
+            }
+          }
+          
+          // Cell 8 (index 8): CS - "226 8.6/m"
+          if (cellIdx === 8 && !cs) {
+            const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (csMatch) {
+              cs = {
+                total: parseFloat(csMatch[1].replace(/,/g, '')),
+                perMinute: parseFloat(csMatch[2])
+              }
+              console.log(`[DEBUG] Extracted CS:`, cs)
+            }
+          }
+          
+          // Cell 9 (index 9): Gold - "12,898 489.1/m"
+          if (cellIdx === 9 && !gold) {
+            const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (goldMatch) {
+              gold = {
+                total: parseFloat(goldMatch[1].replace(/,/g, '')),
+                perMinute: parseFloat(goldMatch[2])
+              }
+              console.log(`[DEBUG] Extracted gold:`, gold)
+            }
           }
         }
         
-        // If we still don't have wins/losses, try extracting from full row text
+        // Fallback: If we still don't have wins/losses, try extracting from full row text
         if (!wins && !losses) {
           const fullMatch = fullRowText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i) || 
                            fullRowText.match(/(\d+)\s*W\s*(\d+)\s*L/i)
@@ -561,14 +588,22 @@ exports.handler = async (event, context) => {
 
       // Only add if we have valid data
       if (games > 0 && championName && championName.length >= 2) {
-        champions.push({
+        const championData = {
           championName: championName,
           games,
           wins,
           losses,
-          winrate: winrate || (games > 0 && wins > 0 ? (wins / games) * 100 : 0),
-          kda
-        })
+          winrate: winrate || (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
+        }
+        
+        // Add optional stats if available
+        if (kda) championData.kda = kda
+        if (damage) championData.damage = damage
+        if (wards) championData.wards = wards
+        if (cs) championData.cs = cs
+        if (gold) championData.gold = gold
+        
+        champions.push(championData)
         console.log(`[DEBUG] Added champion: ${championName} - ${games} games (${wins}W ${losses}L, ${winrate}%)`)
       } else {
         console.log(`[DEBUG] Skipped champion: ${championName} - games: ${games}, name length: ${championName.length}`)
