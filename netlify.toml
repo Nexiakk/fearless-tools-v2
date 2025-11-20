@@ -11,6 +11,10 @@
   directory = "netlify/functions"
   # Node version for functions
   node_bundler = "esbuild"
+  # Increase timeout for headless browser function (max 26s on paid tier, 10s on free)
+  # Note: Free tier has 10s limit, paid tier has 26s limit
+  # scoutOpggHeadless needs more time for Browserless.io API calls
+  "scoutOpggHeadless" = { timeout = 26 }
 
 # SPA redirect rule - redirect all routes to index.html for client-side routing
 [[redirects]]
