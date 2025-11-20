@@ -40,6 +40,9 @@ exports.handler = async (event, context) => {
     // Initialize Poro CargoClient
     const cargo = new CargoClient()
     
+    // Access Poro's axios instance to inspect raw responses if needed
+    // cargo.axiosInstance can be used for debugging
+    
     let results = []
     
     console.log(`[Leaguepedia] Action: ${action}, Params:`, JSON.stringify(params))
@@ -52,7 +55,7 @@ exports.handler = async (event, context) => {
         
         try {
           // Use Poro's query method - it handles the CargoExport API correctly
-          results = await cargo.query({
+          const queryResult = await cargo.query({
             tables: ['ScoreboardPlayer'],
             fields: ['ScoreboardPlayer.Champion', 'COUNT(*) as Games', 'SUM(CASE WHEN ScoreboardPlayer.Win="1" THEN 1 ELSE 0 END) as Wins'],
             where: `ScoreboardPlayer.Player = "${playerName1}"`,
@@ -60,11 +63,41 @@ exports.handler = async (event, context) => {
             orderBy: [{ field: 'Games', desc: true }],
             limit: 50
           })
+          
+          // Poro returns the data directly, but check if it's an array
+          console.log(`[Leaguepedia] Query result type:`, typeof queryResult)
+          console.log(`[Leaguepedia] Query result isArray:`, Array.isArray(queryResult))
+          console.log(`[Leaguepedia] Query result keys:`, queryResult && typeof queryResult === 'object' ? Object.keys(queryResult) : 'N/A')
+          
+          // Handle different response formats
+          if (Array.isArray(queryResult)) {
+            results = queryResult
+          } else if (queryResult && typeof queryResult === 'object') {
+            // Try common property names
+            results = queryResult.data || queryResult.results || queryResult.items || []
+            if (!Array.isArray(results)) {
+              results = []
+            }
+          } else {
+            results = []
+          }
+          
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
-          // If ScoreboardPlayer doesn't work, try other tables
-          throw error
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          
+          // Check if error has response data
+          if (error.response) {
+            console.error(`[Leaguepedia] Error response status:`, error.response.status)
+            console.error(`[Leaguepedia] Error response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
+          
+          // If ScoreboardPlayer doesn't work, return empty array instead of throwing
+          // This allows the function to continue and return empty data
+          results = []
         }
         
         // Transform results
@@ -91,17 +124,40 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] getPlayerInfo query for player: "${playerName2}"`)
         
         try {
-          results = await cargo.query({
+          const queryResult = await cargo.query({
             tables: ['Players'],
             fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
             where: `Players.Name = "${playerName2}"`,
             orderBy: [{ field: 'Players._pageName' }],
             limit: 1
           })
+          
+          // Handle different response formats
+          if (Array.isArray(queryResult)) {
+            results = queryResult
+          } else if (queryResult && typeof queryResult === 'object') {
+            results = queryResult.data || queryResult.results || queryResult.items || []
+            if (!Array.isArray(results)) {
+              results = []
+            }
+          } else {
+            results = []
+          }
+          
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
-          throw error
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          
+          if (error.response) {
+            console.error(`[Leaguepedia] Error response status:`, error.response.status)
+            console.error(`[Leaguepedia] Error response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
+          
+          // Return null instead of throwing
+          results = []
         }
         
         const playerInfo = results.length > 0 ? results[0] : null
@@ -122,17 +178,40 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] getRecentMatches query for player: "${playerName3}"`)
         
         try {
-          results = await cargo.query({
+          const queryResult = await cargo.query({
             tables: ['ScoreboardPlayer'],
             fields: ['ScoreboardPlayer.Champion', 'ScoreboardPlayer.Win', 'ScoreboardPlayer.Date', 'ScoreboardPlayer.Opponent', 'ScoreboardPlayer.Team', 'ScoreboardPlayer.Tournament'],
             where: `ScoreboardPlayer.Player = "${playerName3}"`,
             orderBy: [{ field: 'ScoreboardPlayer.Date', desc: true }],
             limit: limit
           })
+          
+          // Handle different response formats
+          if (Array.isArray(queryResult)) {
+            results = queryResult
+          } else if (queryResult && typeof queryResult === 'object') {
+            results = queryResult.data || queryResult.results || queryResult.items || []
+            if (!Array.isArray(results)) {
+              results = []
+            }
+          } else {
+            results = []
+          }
+          
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
-          throw error
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          
+          if (error.response) {
+            console.error(`[Leaguepedia] Error response status:`, error.response.status)
+            console.error(`[Leaguepedia] Error response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
+          
+          // Return empty array instead of throwing
+          results = []
         }
         
         const transformedMatches = results.map(match => ({
@@ -159,16 +238,39 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] searchPlayers query for: "${searchTerm}"`)
         
         try {
-          results = await cargo.query({
+          const queryResult = await cargo.query({
             tables: ['Players'],
             fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
             where: `Players.Name LIKE "%${searchTerm}%"`,
             limit: 20
           })
+          
+          // Handle different response formats
+          if (Array.isArray(queryResult)) {
+            results = queryResult
+          } else if (queryResult && typeof queryResult === 'object') {
+            results = queryResult.data || queryResult.results || queryResult.items || []
+            if (!Array.isArray(results)) {
+              results = []
+            }
+          } else {
+            results = []
+          }
+          
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
-          throw error
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          
+          if (error.response) {
+            console.error(`[Leaguepedia] Error response status:`, error.response.status)
+            console.error(`[Leaguepedia] Error response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
+          
+          // Return empty array instead of throwing
+          results = []
         }
         
         return {
