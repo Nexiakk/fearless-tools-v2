@@ -1,9 +1,9 @@
 const axios = require('axios')
 
 // Helper function to query Leaguepedia Cargo API directly
-// Bypasses poro library which has issues with response parsing
+// Uses api.php?action=cargoquery (same as the working example)
 async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_by, limit }) {
-  const baseUrl = 'https://lol.fandom.com/wiki/Special:CargoExport'
+  const baseUrl = 'https://lol.fandom.com/api.php'
   
   // Build tables parameter - handle both string and array formats
   let tablesParam = Array.isArray(tables) ? tables.join(',') : tables
@@ -36,11 +36,13 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
     }
   }
   
-  // Build query parameters
+  // Build query parameters - use api.php format like the working example
   const params = new URLSearchParams({
+    action: 'cargoquery',
+    format: 'json',
+    origin: '*', // Essential for CORS
     tables: tablesParam,
-    fields: fieldsParam,
-    format: 'json'
+    fields: fieldsParam
   })
   
   if (whereParam) params.append('where', whereParam)
@@ -57,46 +59,8 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
       'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)',
       'Accept': 'application/json'
     },
-    timeout: 30000,
-    responseType: 'json', // Explicitly request JSON
-    transformResponse: [(data) => {
-      // If axios didn't parse it, try to parse it ourselves
-      if (typeof data === 'string') {
-        try {
-          return JSON.parse(data)
-        } catch (e) {
-          // Return as string if not JSON
-          return data
-        }
-      }
-      return data
-    }]
+    timeout: 30000
   })
-  
-  // Handle string responses (might be error messages or HTML)
-  if (typeof response.data === 'string') {
-    console.log(`[Leaguepedia] Response is string, first 500 chars:`, response.data.substring(0, 500))
-    
-    // Try to parse as JSON if it's a JSON string
-    try {
-      const parsed = JSON.parse(response.data)
-      if (parsed.cargoquery && Array.isArray(parsed.cargoquery)) {
-        return parsed.cargoquery.map(item => item.title || item)
-      }
-      if (Array.isArray(parsed)) {
-        return parsed
-      }
-    } catch (parseError) {
-      // Not JSON, might be HTML error page
-      console.error(`[Leaguepedia] Response is not JSON, might be error:`, response.data.substring(0, 200))
-      
-      // Check if it's an error message
-      if (response.data.includes('Error:') || response.data.includes('error')) {
-        console.error(`[Leaguepedia] API returned error:`, response.data.substring(0, 300))
-      }
-      return []
-    }
-  }
   
   // Parse Cargo API response
   // Format: { "cargoquery": [{ "title": { "field": "value" } }] }
@@ -104,17 +68,15 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
     return response.data.cargoquery.map(item => item.title || item)
   }
   
+  // Handle errors
+  if (response.data && response.data.error) {
+    console.error(`[Leaguepedia] API error:`, response.data.error)
+    return []
+  }
+  
   // Fallback: if response is already an array or different structure
   if (Array.isArray(response.data)) {
     return response.data
-  }
-  
-  // If response.data is an object but not cargoquery format, try to extract data
-  if (response.data && typeof response.data === 'object') {
-    // Try common property names
-    if (Array.isArray(response.data.data)) return response.data.data
-    if (Array.isArray(response.data.results)) return response.data.results
-    if (Array.isArray(response.data.items)) return response.data.items
   }
   
   console.warn(`[Leaguepedia] Unexpected response format:`, typeof response.data)
@@ -178,95 +140,59 @@ exports.handler = async (event, context) => {
           // and use proper field names from ScoreboardPlayers table
           console.log(`[Leaguepedia] Querying ScoreboardPlayers for champion pool data`)
           
-          // Query ScoreboardPlayers with PlayerRedirects join for name resolution
-          // Use direct Cargo API to bypass poro library issues
-          // Since Cargo API has issues with SQL functions and aliases, we'll query raw data and aggregate in JS
+          // Query using the working approach from the example
+          // Use ScoreboardGames join for date filtering, and SP.Link for player name
           try {
-            // First try a simple query to discover available fields
-            let testFields = ['Champion', 'Result', 'Win', 'W', 'Kills', 'Deaths', 'Assists', 'CS', 'Gold', 'VisionScore', 'DamageToChampions']
-            let rawResults = []
+            const startDate = `2025-01-01 00:00:00`
+            const endDate = `2026-01-01 00:00:00`
             
-            // Try with join first
-            for (const field of testFields) {
-              try {
-                rawResults = await queryCargoAPI({
-                  tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
-                  fields: [
-                    'SP.Champion',
-                    `SP.${field}`,
-                    'SP.Kills',
-                    'SP.Deaths',
-                    'SP.Assists',
-                    'SP.CS',
-                    'SP.Gold',
-                    'SP.VisionScore',
-                    'SP.DamageToChampions'
-                  ],
-                  where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
-                  join_on: 'SP.Player=PR.AllName',
-                  limit: 10 // Just test with 10 first
-                })
-                if (rawResults.length > 0) {
-                  console.log(`[Leaguepedia] Successfully found win field: ${field}, got ${rawResults.length} results`)
-                  console.log(`[Leaguepedia] Sample result fields:`, Object.keys(rawResults[0]))
-                  // Now query all data with correct field
-                  rawResults = await queryCargoAPI({
-                    tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
-                    fields: [
-                      'SP.Champion',
-                      `SP.${field}`,
-                      'SP.Kills',
-                      'SP.Deaths',
-                      'SP.Assists',
-                      'SP.CS',
-                      'SP.Gold',
-                      'SP.VisionScore',
-                      'SP.DamageToChampions'
-                    ],
-                    where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
-                    join_on: 'SP.Player=PR.AllName',
-                    limit: 1000
-                  })
-                  break
-                }
-              } catch (fieldError) {
-                // Try next field
-                continue
-              }
-            }
+            // Query using the same approach as the working example
+            // Join ScoreboardGames for date filtering, use SP.Link for player name
+            let rawResults = await queryCargoAPI({
+              tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP',
+              fields: [
+                'SP.Champion',
+                'SP.Result',
+                'SP.Kills',
+                'SP.Deaths',
+                'SP.Assists',
+                'SP.CS',
+                'SP.Gold',
+                'SP.VisionScore',
+                'SP.DamageToChampions',
+                'SG.DateTime_UTC'
+              ],
+              where: `SP.Link="${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
+              join_on: 'SG.GameId=SP.GameId',
+              order_by: 'SG.DateTime_UTC DESC',
+              limit: 1000
+            })
             
-            console.log(`[Leaguepedia] Join query successful, got ${rawResults.length} raw games`)
+            console.log(`[Leaguepedia] Query successful, got ${rawResults.length} raw games`)
             
-            // If join query returns no results, try direct query (player name might match exactly)
+            // If no results, try with PlayerRedirects join as fallback
             if (rawResults.length === 0) {
-              console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
-              for (const field of testFields) {
-                try {
-                  rawResults = await queryCargoAPI({
-                    tables: 'ScoreboardPlayers',
-                    fields: [
-                      'ScoreboardPlayers.Champion',
-                      `ScoreboardPlayers.${field}`,
-                      'ScoreboardPlayers.Kills',
-                      'ScoreboardPlayers.Deaths',
-                      'ScoreboardPlayers.Assists',
-                      'ScoreboardPlayers.CS',
-                      'ScoreboardPlayers.Gold',
-                      'ScoreboardPlayers.VisionScore',
-                      'ScoreboardPlayers.DamageToChampions'
-                    ],
-                    where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-                    limit: 1000
-                  })
-                  if (rawResults.length > 0) {
-                    console.log(`[Leaguepedia] Direct query successful with field: ${field}`)
-                    break
-                  }
-                } catch (fieldError) {
-                  continue
-                }
-              }
-              console.log(`[Leaguepedia] Direct query got ${rawResults.length} raw games`)
+              console.log(`[Leaguepedia] No results with Link field, trying PlayerRedirects join`)
+              rawResults = await queryCargoAPI({
+                tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP,PlayerRedirects=PR',
+                fields: [
+                  'SP.Champion',
+                  'SP.Result',
+                  'SP.Kills',
+                  'SP.Deaths',
+                  'SP.Assists',
+                  'SP.CS',
+                  'SP.Gold',
+                  'SP.VisionScore',
+                  'SP.DamageToChampions',
+                  'SG.DateTime_UTC'
+                ],
+                where: `PR.AllName = "${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
+                join_on: 'SG.GameId=SP.GameId,SP.Link=PR.AllName',
+                order_by: 'SG.DateTime_UTC DESC',
+                limit: 1000
+              })
+              console.log(`[Leaguepedia] PlayerRedirects query got ${rawResults.length} raw games`)
             }
             
             // Aggregate by champion in JavaScript
@@ -293,12 +219,10 @@ exports.handler = async (event, context) => {
               const stats = championMap[champ]
               stats.games++
               
-              // Check if win - try multiple possible field names and formats
-              // Result field: "1" = win, "0" = loss (or "W"/"L" in some cases)
-              const result = game.Result || game.result || game.Win || game.win || game.W || game.w || ''
-              const win = result === '1' || result === 1 || result === 'W' || result === 'Win' || 
-                         result === true || result === 'true' ||
-                         game.Win === '1' || game.Win === 1 || game.win === '1' || game.win === 1
+              // Check if win - Result field returns "Win" or "Loss" (as shown in working example)
+              const result = game.Result || game.result || ''
+              const win = result === 'Win' || result === 'win' || result === 'W' || 
+                         result === '1' || result === 1 || result === true
               if (win) stats.wins++
               
               // Collect stats for averaging
@@ -521,15 +445,18 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] getRecentMatches query for player: "${playerName3}"`)
         
         try {
-          // Query recent matches with detailed stats
-          // Use direct Cargo API to bypass poro library issues
+          // Query recent matches using the working approach
+          const startDate = `2025-01-01 00:00:00`
+          const endDate = `2026-01-01 00:00:00`
+          
           try {
+            // Use ScoreboardGames join for date filtering, SP.Link for player name
             results = await queryCargoAPI({
-              tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
+              tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP',
               fields: [
                 'SP.Champion',
                 'SP.Result',
-                'SP.Date',
+                'SG.DateTime_UTC',
                 'SP.Opponent',
                 'SP.Team',
                 'SP.Tournament',
@@ -541,34 +468,35 @@ exports.handler = async (event, context) => {
                 'SP.VisionScore',
                 'SP.DamageToChampions'
               ],
-              where: `PR.AllName = "${playerName3}" AND SP.Date >= "2025-01-01"`,
-              join_on: 'SP.Player=PR.AllName',
-              order_by: 'SP.Date DESC',
+              where: `SP.Link="${playerName3}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
+              join_on: 'SG.GameId=SP.GameId',
+              order_by: 'SG.DateTime_UTC DESC',
               limit: limit
             })
             
-            // If join query returns no results, try direct query
+            // If no results, try with PlayerRedirects join
             if (results.length === 0) {
-              console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
+              console.log(`[Leaguepedia] No results with Link field, trying PlayerRedirects join`)
               results = await queryCargoAPI({
-                tables: 'ScoreboardPlayers',
+                tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP,PlayerRedirects=PR',
                 fields: [
-                  'ScoreboardPlayers.Champion',
-                  'ScoreboardPlayers.Result',
-                  'ScoreboardPlayers.Date',
-                  'ScoreboardPlayers.Opponent',
-                  'ScoreboardPlayers.Team',
-                  'ScoreboardPlayers.Tournament',
-                  'ScoreboardPlayers.Kills',
-                  'ScoreboardPlayers.Deaths',
-                  'ScoreboardPlayers.Assists',
-                  'ScoreboardPlayers.CS',
-                  'ScoreboardPlayers.Gold',
-                  'ScoreboardPlayers.VisionScore',
-                  'ScoreboardPlayers.DamageToChampions'
+                  'SP.Champion',
+                  'SP.Result',
+                  'SG.DateTime_UTC',
+                  'SP.Opponent',
+                  'SP.Team',
+                  'SP.Tournament',
+                  'SP.Kills',
+                  'SP.Deaths',
+                  'SP.Assists',
+                  'SP.CS',
+                  'SP.Gold',
+                  'SP.VisionScore',
+                  'SP.DamageToChampions'
                 ],
-                where: `ScoreboardPlayers.Player = "${playerName3}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-                order_by: 'ScoreboardPlayers.Date DESC',
+                where: `PR.AllName = "${playerName3}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
+                join_on: 'SG.GameId=SP.GameId,SP.Link=PR.AllName',
+                order_by: 'SG.DateTime_UTC DESC',
                 limit: limit
               })
             }
@@ -591,15 +519,14 @@ exports.handler = async (event, context) => {
         }
         
         const transformedMatches = results.map(match => {
-          // Handle Result field: "1" = win, "0" = loss
-          const result = match.Result || match.result || match.Win || match.win || ''
-          const win = result === '1' || result === 1 || result === 'W' || result === 'Win' ||
-                     match.Win === '1' || match.Win === 1 || match.win === '1' || match.win === 1
+          // Handle Result field: "Win" or "Loss" (as shown in working example)
+          const result = match.Result || match.result || ''
+          const win = result === 'Win' || result === 'win' || result === 'W'
           
           return {
             champion: match.Champion || match.champion || '',
             win: win,
-            date: match.Date || match.date || '',
+            date: match.DateTime_UTC || match.Date || match.date || '',
             opponent: match.Opponent || match.opponent || '',
             team: match.Team || match.team || '',
             tournament: match.Tournament || match.tournament || '',
