@@ -110,34 +110,52 @@ exports.handler = async (event, context) => {
               html = unblockResponse.data
               usingHeadless = true
               console.log(`[Headless] ✅ Successfully fetched HTML via /unblock (${html.length} chars)`)
+            } else {
+              // /unblock succeeded but didn't return HTML in expected format
+              console.warn('[Headless] /unblock returned unexpected format:', typeof unblockResponse.data, Object.keys(unblockResponse.data || {}))
+              throw new Error('/unblock API returned unexpected response format')
             }
           } catch (unblockError) {
             console.log('[Headless] /unblock failed, trying /content:', unblockError.message)
+            if (unblockError.response) {
+              console.log('[Headless] /unblock response status:', unblockError.response.status)
+              console.log('[Headless] /unblock response data:', JSON.stringify(unblockError.response.data).substring(0, 200))
+            }
             
             // Fallback to /content API
             const contentUrl = `${baseUrlOnly}/content?token=${BROWSERLESS_API_KEY}`
             console.log('[Headless] Trying /content API')
             
-            const response = await axios.post(
-              contentUrl,
-              { url: url },
-              {
-                timeout: 30000,
-                headers: {
-                  'Cache-Control': 'no-cache',
-                  'Content-Type': 'application/json'
-                },
-                responseType: 'text'
+            try {
+              const response = await axios.post(
+                contentUrl,
+                { url: url },
+                {
+                  timeout: 30000,
+                  headers: {
+                    'Cache-Control': 'no-cache',
+                    'Content-Type': 'application/json'
+                  },
+                  responseType: 'text'
+                }
+              )
+              
+              // Response is raw HTML text (not JSON)
+              if (typeof response.data === 'string' && response.data.length > 0) {
+                html = response.data
+                usingHeadless = true
+                console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
+              } else {
+                throw new Error('Empty or invalid response from Browserless.io /content')
               }
-            )
-            
-            // Response is raw HTML text (not JSON)
-            if (typeof response.data === 'string' && response.data.length > 0) {
-              html = response.data
-              usingHeadless = true
-              console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
-            } else {
-              throw new Error('Empty or invalid response from Browserless.io')
+            } catch (contentError) {
+              console.error('[Headless] /content also failed:', contentError.message)
+              if (contentError.response) {
+                console.error('[Headless] /content response status:', contentError.response.status)
+                console.error('[Headless] /content response data:', JSON.stringify(contentError.response.data).substring(0, 500))
+              }
+              // Re-throw the original unblock error if content also fails, or the content error
+              throw new Error(`Both /unblock and /content failed. Last error: ${contentError.message}`)
             }
           }
           
@@ -198,12 +216,18 @@ exports.handler = async (event, context) => {
     // NO FALLBACK - If headless browser fails, we fail
     // The whole point is to get properly rendered HTML, not to guess with templates
     if (!html || !usingHeadless) {
+      console.error('[Headless] Validation failed: html=', !!html, 'usingHeadless=', usingHeadless)
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({
           error: 'Headless browser failed',
-          message: 'Could not fetch rendered HTML. This endpoint requires a working headless browser service.'
+          message: 'Could not fetch rendered HTML. This endpoint requires a working headless browser service.',
+          debug: {
+            hasHtml: !!html,
+            htmlLength: html ? html.length : 0,
+            usingHeadless: usingHeadless
+          }
         })
       }
     }
