@@ -51,6 +51,8 @@ exports.handler = async (event, context) => {
       url = url.replace(/\/$/, '') + '/champions'
     }
     
+    console.log(`[Backend] Fetching URL: ${url}`)
+    
     // Fetch the page with timeout (8 seconds to leave buffer for processing)
     const response = await axios.get(url, {
       headers: {
@@ -59,7 +61,14 @@ exports.handler = async (event, context) => {
       timeout: 8000
     })
 
+    console.log(`[Backend] Response status: ${response.status}`)
+    console.log(`[Backend] Response data length: ${response.data?.length || 0}`)
+    
     const $ = cheerio.load(response.data)
+    
+    // Debug: Check if we can find any tables
+    const allTables = $('table')
+    console.log(`[Backend] Found ${allTables.length} tables in HTML`)
 
     // Extract champion stats from the main champion list
     // CRITICAL: Only get stats from top-level champion items, NOT from expanded matchup sections
@@ -436,6 +445,21 @@ exports.handler = async (event, context) => {
     // Sort by games descending (most played first)
     uniqueChampions.sort((a, b) => b.games - a.games)
 
+    console.log(`[Backend] Processed ${champions.length} champions, ${uniqueChampions.length} unique`)
+    console.log(`[Backend] First 3 champions:`, uniqueChampions.slice(0, 3))
+    
+    // If no champions found, log HTML structure for debugging
+    if (uniqueChampions.length === 0) {
+      console.log(`[Backend] WARNING: No champions found!`)
+      console.log(`[Backend] HTML sample (first 2000 chars):`, response.data.substring(0, 2000))
+      console.log(`[Backend] All table elements:`, $('table').length)
+      console.log(`[Backend] All tr elements:`, $('tr').length)
+      console.log(`[Backend] All img elements with alt:`, $('img[alt]').length)
+      // Try to find any champion-related content
+      const championImages = $('img[alt]').toArray().slice(0, 10).map(img => $(img).attr('alt'))
+      console.log(`[Backend] First 10 image alt texts:`, championImages)
+    }
+
     // Extract rank info - adjust selectors based on actual structure
     const rankText = $('.tier-rank').text().trim() || 
                      $('.summoner-tier-rank').text().trim() || 
@@ -448,15 +472,20 @@ exports.handler = async (event, context) => {
                    ''
     const lp = parseInt(lpText.replace(/[^0-9]/g, '')) || 0
 
+    const responseData = {
+      champions: uniqueChampions,
+      rank: rankText,
+      lp,
+      lastUpdated: new Date().toISOString()
+    }
+    
+    console.log(`[Backend] Response data:`, JSON.stringify(responseData, null, 2))
+    console.log(`[Backend] Champions count in response:`, uniqueChampions.length)
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        champions: uniqueChampions,
-        rank: rankText,
-        lp,
-        lastUpdated: new Date().toISOString()
-      })
+      body: JSON.stringify(responseData)
     }
   } catch (error) {
     console.error('Scraping error:', error)

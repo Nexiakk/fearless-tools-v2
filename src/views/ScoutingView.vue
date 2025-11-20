@@ -351,19 +351,34 @@ const getScoutingStatus = (playerId) => {
   const data = scoutingStore.scoutingData[playerId]
   if (!data) return 'Not scouted'
   
+  // Check for champion data
+  const soloqChampions = data.soloq?.currentSeason?.champions?.length || 0
+  const proplayChampions = data.proplay?.championPool?.length || 0
+  const totalChampions = soloqChampions + proplayChampions
+  
+  let status = ''
   if (data.lastUpdated) {
     const lastUpdated = data.lastUpdated.toDate ? data.lastUpdated.toDate() : new Date(data.lastUpdated)
     const hoursSinceUpdate = (new Date() - lastUpdated) / (1000 * 60 * 60)
     
     if (hoursSinceUpdate < 24) {
-      return `Updated ${Math.round(hoursSinceUpdate)}h ago`
+      status = `Updated ${Math.round(hoursSinceUpdate)}h ago`
     } else {
       const daysSinceUpdate = Math.floor(hoursSinceUpdate / 24)
-      return `Updated ${daysSinceUpdate}d ago`
+      status = `Updated ${daysSinceUpdate}d ago`
     }
+  } else {
+    status = 'Scouted'
   }
   
-  return 'Scouted'
+  // Add champion count to status
+  if (totalChampions > 0) {
+    status += ` • ${totalChampions} champions`
+  } else {
+    status += ' • 0 champions ⚠️'
+  }
+  
+  return status
 }
 
 const deletePlayer = async (playerId) => {

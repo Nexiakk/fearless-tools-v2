@@ -59,6 +59,9 @@ export const opggService = {
 
       const data = await response.json()
       console.log('[op.gg] Success, received data:', data)
+      console.log('[op.gg] Champions array:', data.champions)
+      console.log('[op.gg] Champions count:', data.champions?.length || 0)
+      console.log('[op.gg] Full response structure:', JSON.stringify(data, null, 2))
       return data
     } catch (error) {
       console.error('Error scraping op.gg:', error)

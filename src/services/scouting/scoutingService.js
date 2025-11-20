@@ -34,7 +34,12 @@ export const scoutingService = {
       // 1. Try to get SoloQ data from op.gg (via backend)
       try {
         if (player.opggUrl) {
+          console.log('[ScoutingService] Scraping op.gg for player:', player.name, 'URL:', player.opggUrl)
           const soloqData = await opggService.scrapePlayerChampions(player.opggUrl)
+          console.log('[ScoutingService] Received soloqData:', soloqData)
+          console.log('[ScoutingService] Champions from soloqData:', soloqData.champions)
+          console.log('[ScoutingService] Champions count:', soloqData.champions?.length || 0)
+          
           scoutingData.soloq = {
             currentSeason: {
               champions: soloqData.champions || [],
@@ -43,13 +48,22 @@ export const scoutingService = {
             },
             lastUpdated: new Date()
           }
+          console.log('[ScoutingService] Created soloq object:', scoutingData.soloq)
+          console.log('[ScoutingService] Champions in soloq object:', scoutingData.soloq.currentSeason.champions)
+          console.log('[ScoutingService] Champions count in soloq:', scoutingData.soloq.currentSeason.champions.length)
+        } else {
+          console.warn('[ScoutingService] No op.gg URL for player:', player.name)
         }
       } catch (error) {
-        console.warn('Failed to scrape op.gg:', error)
+        console.error('[ScoutingService] Failed to scrape op.gg:', error)
+        console.error('[ScoutingService] Error details:', error.message, error.stack)
         // Fallback to manual entry if available
         const existingData = scoutingStore.scoutingData[playerId]
         if (existingData?.soloq) {
+          console.log('[ScoutingService] Using existing soloq data as fallback')
           scoutingData.soloq = existingData.soloq
+        } else {
+          console.warn('[ScoutingService] No existing soloq data to fallback to')
         }
       }
       
@@ -79,10 +93,15 @@ export const scoutingService = {
       }
       
       // 3. Compute analytics
+      console.log('[ScoutingService] Computing analytics with data:', scoutingData)
       scoutingData.analytics = this.computeAnalytics(scoutingData)
+      console.log('[ScoutingService] Analytics computed:', scoutingData.analytics)
       
       // 4. Save to Firestore
+      console.log('[ScoutingService] Saving to Firestore, final scoutingData:', scoutingData)
+      console.log('[ScoutingService] SoloQ champions before save:', scoutingData.soloq?.currentSeason?.champions?.length || 0)
       await scoutingStore.saveScoutingData(playerId, scoutingData)
+      console.log('[ScoutingService] Data saved to Firestore')
       
       return scoutingData
     } catch (error) {

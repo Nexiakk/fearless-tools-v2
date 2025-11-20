@@ -206,33 +206,74 @@ export const useScoutingStore = defineStore('scouting', () => {
   
   async function loadScoutingData(playerId) {
     try {
+      console.log('[ScoutingStore] Loading scouting data for player:', playerId)
       const dataRef = getScoutingDoc('data', playerId)
       const dataSnap = await getDoc(dataRef)
       
       if (dataSnap.exists()) {
-        scoutingData.value[playerId] = dataSnap.data()
+        const loadedData = dataSnap.data()
+        console.log('[ScoutingStore] Loaded data from Firestore:', loadedData)
+        console.log('[ScoutingStore] SoloQ champions in loaded data:', loadedData.soloq?.currentSeason?.champions)
+        console.log('[ScoutingStore] SoloQ champions count:', loadedData.soloq?.currentSeason?.champions?.length || 0)
+        scoutingData.value[playerId] = loadedData
+        console.log('[ScoutingStore] Data loaded into local state')
+      } else {
+        console.log('[ScoutingStore] No data found in Firestore for player:', playerId)
       }
     } catch (err) {
-      console.error('Error loading scouting data:', err)
+      console.error('[ScoutingStore] Error loading scouting data:', err)
+      console.error('[ScoutingStore] Error details:', err.message, err.stack)
       throw err
     }
   }
   
   async function saveScoutingData(playerId, data) {
     try {
+      console.log('[ScoutingStore] Saving scouting data for player:', playerId)
+      console.log('[ScoutingStore] Data to save:', data)
+      console.log('[ScoutingStore] SoloQ champions in data:', data.soloq?.currentSeason?.champions)
+      console.log('[ScoutingStore] SoloQ champions count:', data.soloq?.currentSeason?.champions?.length || 0)
+      
       const dataRef = getScoutingDoc('data', playerId)
-      await setDoc(dataRef, {
+      
+      // Prepare data for Firestore (convert Date objects to timestamps)
+      const firestoreData = {
         ...data,
         lastUpdated: serverTimestamp()
-      }, { merge: true })
+      }
       
+      // Handle nested Date objects
+      if (data.soloq?.lastUpdated) {
+        firestoreData.soloq = {
+          ...data.soloq,
+          lastUpdated: serverTimestamp()
+        }
+      }
+      if (data.proplay?.lastUpdated) {
+        firestoreData.proplay = {
+          ...data.proplay,
+          lastUpdated: serverTimestamp()
+        }
+      }
+      
+      console.log('[ScoutingStore] Firestore data to save:', firestoreData)
+      console.log('[ScoutingStore] SoloQ champions in Firestore data:', firestoreData.soloq?.currentSeason?.champions)
+      
+      await setDoc(dataRef, firestoreData, { merge: true })
+      console.log('[ScoutingStore] Data saved to Firestore successfully')
+      
+      // Update local state
       scoutingData.value[playerId] = {
         ...scoutingData.value[playerId],
         ...data,
         lastUpdated: new Date()
       }
+      console.log('[ScoutingStore] Local state updated')
+      console.log('[ScoutingStore] Local state champions:', scoutingData.value[playerId].soloq?.currentSeason?.champions)
+      console.log('[ScoutingStore] Local state champions count:', scoutingData.value[playerId].soloq?.currentSeason?.champions?.length || 0)
     } catch (err) {
-      console.error('Error saving scouting data:', err)
+      console.error('[ScoutingStore] Error saving scouting data:', err)
+      console.error('[ScoutingStore] Error details:', err.message, err.stack)
       throw err
     }
   }

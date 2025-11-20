@@ -53,7 +53,9 @@
                 </span>
               </div>
               <div v-if="scoutingData.soloq.currentSeason.champions && scoutingData.soloq.currentSeason.champions.length > 0">
-                <h4 class="text-md font-medium text-white mb-2">Champion Pool</h4>
+                <h4 class="text-md font-medium text-white mb-2">
+                  Champion Pool ({{ scoutingData.soloq.currentSeason.champions.length }} champions)
+                </h4>
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   <div
                     v-for="champ in scoutingData.soloq.currentSeason.champions.slice(0, 12)"
@@ -66,6 +68,9 @@
                     </p>
                   </div>
                 </div>
+              </div>
+              <div v-else-if="scoutingData.soloq.currentSeason" class="text-yellow-400 text-sm">
+                ⚠️ No champion data found. Check browser console for debugging information.
               </div>
             </div>
             <p v-else class="text-gray-400 text-sm">No SoloQ data available</p>
