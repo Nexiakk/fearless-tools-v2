@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20.18.1"
+  NODE_VERSION = "20.17.0"
 
 # Function configuration
 [functions]
