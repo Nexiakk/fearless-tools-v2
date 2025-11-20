@@ -14,7 +14,9 @@ const cheerio = require('cheerio')
 // Get API key from environment variable (set in Netlify dashboard)
 // For Browserless.io: Sign up at https://www.browserless.io/ (free tier available)
 const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY || ''
-const BROWSERLESS_URL = process.env.BROWSERLESS_URL || 'https://chrome.browserless.io/content'
+// Updated endpoint: Browserless.io now uses /scrape for REST API (as of Nov 2025)
+// Alternative: Use WebSocket endpoints for Puppeteer/Playwright (wss://production-<region>.browserless.io)
+const BROWSERLESS_URL = process.env.BROWSERLESS_URL || 'https://chrome.browserless.io/scrape'
 
 // Alternative: ScrapingBee (uncomment to use instead)
 // const SCRAPINGBEE_API_KEY = process.env.SCRAPINGBEE_API_KEY || ''
@@ -58,25 +60,75 @@ exports.handler = async (event, context) => {
     if (BROWSERLESS_API_KEY) {
       try {
         console.log('[Headless] Using Browserless.io')
-        const response = await axios.post(
-          `${BROWSERLESS_URL}?token=${BROWSERLESS_API_KEY}`,
-          {
-            url: url,
-            waitFor: 2000, // Wait 2 seconds for page to load
-            gotoOptions: {
-              waitUntil: 'networkidle2', // Wait until network is idle
-              timeout: 10000
+        console.log('[Headless] Endpoint:', BROWSERLESS_URL)
+        
+        // Try /scrape endpoint first (newer API format)
+        // If that doesn't work, fall back to /content (older format)
+        let response
+        try {
+          // New format: /scrape endpoint (as of Nov 2025)
+          // Note: This endpoint might return structured data, not raw HTML
+          // If it doesn't work, we'll try the old /content endpoint
+          response = await axios.post(
+            `${BROWSERLESS_URL}?token=${BROWSERLESS_API_KEY}`,
+            {
+              url: url,
+              waitFor: 2000,
+              gotoOptions: {
+                waitUntil: 'networkidle2',
+                timeout: 10000
+              }
+            },
+            {
+              timeout: 15000,
+              headers: {
+                'Content-Type': 'application/json'
+              }
             }
-          },
-          {
-            timeout: 15000,
-            headers: {
-              'Content-Type': 'application/json'
-            }
+          )
+          
+          // Check if response is HTML string or structured data
+          if (typeof response.data === 'string') {
+            html = response.data
+            console.log(`[Headless] Successfully fetched HTML (${html.length} chars)`)
+          } else {
+            // If it's structured data, we might need to extract HTML differently
+            // For now, try the old /content endpoint
+            console.log('[Headless] /scrape returned structured data, trying /content endpoint')
+            throw new Error('Structured data returned, need raw HTML')
           }
-        )
-        html = response.data
-        console.log(`[Headless] Successfully fetched HTML (${html.length} chars)`)
+        } catch (error) {
+          // Fallback to old /content endpoint if /scrape doesn't work
+          if (BROWSERLESS_URL.includes('/scrape')) {
+            const oldUrl = BROWSERLESS_URL.replace('/scrape', '/content')
+            console.log('[Headless] Trying fallback endpoint:', oldUrl)
+            try {
+              response = await axios.post(
+                `${oldUrl}?token=${BROWSERLESS_API_KEY}`,
+                {
+                  url: url,
+                  waitFor: 2000,
+                  gotoOptions: {
+                    waitUntil: 'networkidle2',
+                    timeout: 10000
+                  }
+                },
+                {
+                  timeout: 15000,
+                  headers: {
+                    'Content-Type': 'application/json'
+                  }
+                }
+              )
+              html = response.data
+              console.log(`[Headless] Successfully fetched HTML via /content (${html.length} chars)`)
+            } catch (fallbackError) {
+              throw error // Throw original error
+            }
+          } else {
+            throw error
+          }
+        }
       } catch (error) {
         console.error('[Headless] Browserless.io error:', error.message)
         // Fall through to alternative methods
