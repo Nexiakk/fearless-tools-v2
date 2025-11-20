@@ -489,19 +489,30 @@ exports.handler = async (event, context) => {
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 3 (KDA) text: "${cellText}"`)
             // Extract KDA ratio (e.g., "2.12:1") - must be before the KDA stats
-            const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1/)
-            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4") - must have two slashes
-            // Match pattern: number / number / number (not matching the ratio which has a colon)
-            // Look for the pattern that comes after the ratio (if present)
-            let kdaMatch = null
-            if (ratioMatch) {
-              // If ratio exists, match KDA after it
-              const afterRatio = cellText.substring(cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length)
-              kdaMatch = afterRatio.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
-            } else {
-              // No ratio, match anywhere
-              kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1\b/)
+            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4" or "19 / 5 / 12")
+            // Handle cases where ratio might be merged: "4.20:19" should be "4.20:1" + "9" or "4.20:1" + "19"
+            // Look for pattern: number / number / number (with two slashes)
+            let kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            
+            // If we found a match, check if it might be part of the ratio
+            if (kdaMatch && ratioMatch) {
+              // Check if the first number of KDA match is actually part of the ratio
+              const ratioEnd = cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length
+              const kdaStart = cellText.indexOf(kdaMatch[0])
+              // If KDA starts right after ratio (or very close), it's correct
+              if (kdaStart < ratioEnd + 2) {
+                // KDA is correct, use it
+              } else {
+                // Might be wrong match, try to find KDA after ratio
+                const afterRatio = cellText.substring(ratioEnd).trim()
+                const betterMatch = afterRatio.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+                if (betterMatch) {
+                  kdaMatch = betterMatch
+                }
+              }
             }
+            
             // Extract kill participation (e.g., "(44%)") - must be in parentheses
             const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
             
@@ -559,7 +570,7 @@ exports.handler = async (event, context) => {
           }
         }
         
-        // Cell 7 (index 7): Wards - "14 1 (7/2)" (vision score, control wards, placed, killed)
+        // Cell 7 (index 7): Wards - "244 (16/4)" (vision score, placed, killed) OR "14 1 (7/2)" (vision score, control wards, placed, killed)
         if (directCells.length > 7 && !wards) {
           const $cell = $(directCells[7])
           const $cellClone = $cell.clone()
@@ -568,18 +579,30 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 7 (wards) text: "${cellText}"`)
-            // Pattern: "14 1 (7/2)" = vision score, control wards, (placed/killed)
-            const wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            // Pattern 1: "244 (16/4)" = vision score, (placed/killed) - no control wards
+            let wardsMatch = cellText.match(/(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
             if (wardsMatch) {
               wards = {
                 visionScore: parseFloat(wardsMatch[1]),
-                controlWards: parseFloat(wardsMatch[2]),
-                placed: parseFloat(wardsMatch[3]),
-                killed: parseFloat(wardsMatch[4])
+                controlWards: 0, // Not provided in this format
+                placed: parseFloat(wardsMatch[2]),
+                killed: parseFloat(wardsMatch[3])
               }
-              console.log(`[DEBUG] Extracted wards from cell 7:`, wards)
+              console.log(`[DEBUG] Extracted wards from cell 7 (format 1):`, wards)
             } else {
-              console.log(`[DEBUG] Wards pattern did not match cell 7 text: "${cellText}"`)
+              // Pattern 2: "14 1 (7/2)" = vision score, control wards, (placed/killed)
+              wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+              if (wardsMatch) {
+                wards = {
+                  visionScore: parseFloat(wardsMatch[1]),
+                  controlWards: parseFloat(wardsMatch[2]),
+                  placed: parseFloat(wardsMatch[3]),
+                  killed: parseFloat(wardsMatch[4])
+                }
+                console.log(`[DEBUG] Extracted wards from cell 7 (format 2):`, wards)
+              } else {
+                console.log(`[DEBUG] Wards pattern did not match cell 7 text: "${cellText}"`)
+              }
             }
           } else {
             console.log(`[DEBUG] Cell 7 is empty for champion: ${championName}`)
@@ -588,7 +611,7 @@ exports.handler = async (event, context) => {
           console.log(`[DEBUG] Cannot extract wards - directCells.length: ${directCells.length}, already extracted: ${!!wards}`)
         }
         
-        // Cell 8 (index 8): CS - "226 8.6/m"
+        // Cell 8 (index 8): CS - "2686.8/m" (only per minute) OR "226 8.6/m" (total and per minute)
         if (directCells.length > 8 && !cs) {
           const $cell = $(directCells[8])
           const $cellClone = $cell.clone()
@@ -597,15 +620,26 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 8 (CS) text: "${cellText}"`)
-            const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+            // Pattern 1: "226 8.6/m" = total and per minute
+            let csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
             if (csMatch) {
               cs = {
                 total: parseFloat(csMatch[1].replace(/,/g, '')),
                 perMinute: parseFloat(csMatch[2])
               }
-              console.log(`[DEBUG] Extracted CS from cell 8:`, cs)
+              console.log(`[DEBUG] Extracted CS from cell 8 (format 1):`, cs)
             } else {
-              console.log(`[DEBUG] CS pattern did not match cell 8 text: "${cellText}"`)
+              // Pattern 2: "2686.8/m" = only per minute (no total)
+              csMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m/i)
+              if (csMatch) {
+                cs = {
+                  total: 0, // Not provided
+                  perMinute: parseFloat(csMatch[1])
+                }
+                console.log(`[DEBUG] Extracted CS from cell 8 (format 2, per minute only):`, cs)
+              } else {
+                console.log(`[DEBUG] CS pattern did not match cell 8 text: "${cellText}"`)
+              }
             }
           } else {
             console.log(`[DEBUG] Cell 8 is empty for champion: ${championName}`)
@@ -614,7 +648,7 @@ exports.handler = async (event, context) => {
           console.log(`[DEBUG] Cannot extract CS - directCells.length: ${directCells.length}, already extracted: ${!!cs}`)
         }
         
-        // Cell 9 (index 9): Gold - "12,898 489.1/m"
+        // Cell 9 (index 9): Gold - "16,384418.1/m" (malformed, missing space) OR "12,898 489.1/m" (correct format)
         if (directCells.length > 9 && !gold) {
           const $cell = $(directCells[9])
           const $cellClone = $cell.clone()
@@ -623,15 +657,51 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 9 (gold) text: "${cellText}"`)
-            const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+            // Pattern 1: "12,898 489.1/m" = total and per minute (correct format)
+            let goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
             if (goldMatch) {
               gold = {
                 total: parseFloat(goldMatch[1].replace(/,/g, '')),
                 perMinute: parseFloat(goldMatch[2])
               }
-              console.log(`[DEBUG] Extracted gold from cell 9:`, gold)
+              console.log(`[DEBUG] Extracted gold from cell 9 (format 1):`, gold)
             } else {
-              console.log(`[DEBUG] Gold pattern did not match cell 9 text: "${cellText}"`)
+              // Pattern 2: "16,384418.1/m" = malformed, missing space between total and per minute
+              // Need to intelligently split: "16,384" (total) + "418.1" (per minute)
+              // Strategy: Find decimal point, work backwards to find reasonable split
+              // Per minute usually has decimal (e.g., "418.1"), total is integer
+              const malformedMatch = cellText.match(/(\d+),(\d+)(\d*\.\d+)\s*\/\s*m/i)
+              if (malformedMatch) {
+                const beforeComma = malformedMatch[1] // "16"
+                const afterCommaAll = malformedMatch[2] // "384418" (all digits after comma before decimal)
+                const decimalPart = malformedMatch[3] // ".1" or "418.1"
+                
+                // Try different splits: per minute should be 100-1000, total should be 5000-50000
+                // Try splitting afterCommaAll at different points
+                for (let splitPoint = 3; splitPoint <= Math.min(6, afterCommaAll.length); splitPoint++) {
+                  const totalPart = afterCommaAll.substring(0, splitPoint) // First N digits after comma
+                  const perMinPart = afterCommaAll.substring(splitPoint) + decimalPart // Rest + decimal
+                  
+                  const total = parseFloat(beforeComma + totalPart)
+                  const perMin = parseFloat(perMinPart)
+                  
+                  // Check if values are reasonable
+                  if (perMin >= 100 && perMin <= 1000 && total >= 5000 && total <= 50000) {
+                    gold = {
+                      total: total,
+                      perMinute: perMin
+                    }
+                    console.log(`[DEBUG] Extracted gold from cell 9 (format 2, split at position ${splitPoint}):`, gold)
+                    break
+                  }
+                }
+                
+                if (!gold) {
+                  console.log(`[DEBUG] Gold pattern matched but couldn't find reasonable split: "${cellText}"`)
+                }
+              } else {
+                console.log(`[DEBUG] Gold pattern did not match cell 9 text: "${cellText}"`)
+              }
             }
           } else {
             console.log(`[DEBUG] Cell 9 is empty for champion: ${championName}`)
@@ -659,24 +729,36 @@ exports.handler = async (event, context) => {
           
           // Try from full row text first - be more flexible with spacing
           if (fullRowText) {
-            // Pattern: "14 1 (7/2)" - try multiple variations
-            const patterns = [
-              /(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/,  // Standard: "14 1 (7/2)"
-              /(\d+)\s+(\d+)\s*\((\d+)\/(\d+)\)/,         // No spaces: "14 1(7/2)"
-              /(\d+)\s+(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/     // Flexible spacing
-            ]
-            
-            for (const pattern of patterns) {
-              const wardsMatch = fullRowText.match(pattern)
-              if (wardsMatch) {
-                wards = {
-                  visionScore: parseFloat(wardsMatch[1]),
-                  controlWards: parseFloat(wardsMatch[2]),
-                  placed: parseFloat(wardsMatch[3]),
-                  killed: parseFloat(wardsMatch[4])
+            // Pattern 1: "244 (16/4)" = vision score, (placed/killed) - no control wards
+            let wardsMatch = fullRowText.match(/(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            if (wardsMatch) {
+              wards = {
+                visionScore: parseFloat(wardsMatch[1]),
+                controlWards: 0,
+                placed: parseFloat(wardsMatch[2]),
+                killed: parseFloat(wardsMatch[3])
+              }
+              console.log(`[DEBUG] Extracted wards from full row text (format 1):`, wards)
+            } else {
+              // Pattern 2: "14 1 (7/2)" = vision score, control wards, (placed/killed)
+              const patterns = [
+                /(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/,  // Standard: "14 1 (7/2)"
+                /(\d+)\s+(\d+)\s*\((\d+)\/(\d+)\)/,         // No spaces: "14 1(7/2)"
+                /(\d+)\s+(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/     // Flexible spacing
+              ]
+              
+              for (const pattern of patterns) {
+                wardsMatch = fullRowText.match(pattern)
+                if (wardsMatch) {
+                  wards = {
+                    visionScore: parseFloat(wardsMatch[1]),
+                    controlWards: parseFloat(wardsMatch[2]),
+                    placed: parseFloat(wardsMatch[3]),
+                    killed: parseFloat(wardsMatch[4])
+                  }
+                  console.log(`[DEBUG] Extracted wards from full row text (format 2):`, wards)
+                  break
                 }
-                console.log(`[DEBUG] Extracted wards from full row text using pattern:`, wards)
-                break
               }
             }
           }
@@ -714,24 +796,29 @@ exports.handler = async (event, context) => {
         if (!cs) {
           console.log(`[DEBUG] CS not found in cell 8, trying fallback extraction for ${championName}`)
           
-          // Try from full row text first - look for pattern like "226 8.6/m"
+          // Try from full row text first - look for pattern like "226 8.6/m" or "2686.8/m"
           if (fullRowText) {
-            // Try multiple patterns - CS is usually 3 digits followed by space and decimal/m
-            const patterns = [
-              /(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i,           // "226 8.6/m"
-              /(\d{2,})\s+(\d+\.?\d*)\/m/i,                 // "226 8.6/m" (no space before /m)
-              /(\d{3,})\s+(\d+\.?\d*)\s*\/\s*m/i            // At least 3 digits for total
-            ]
-            
-            for (const pattern of patterns) {
-              const csMatch = fullRowText.match(pattern)
-              if (csMatch && parseFloat(csMatch[1]) < 10000) { // CS total should be reasonable (< 10000)
-                cs = {
-                  total: parseFloat(csMatch[1].replace(/,/g, '')),
-                  perMinute: parseFloat(csMatch[2])
+            // Pattern 1: "226 8.6/m" = total and per minute
+            let csMatch = fullRowText.match(/(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (csMatch && parseFloat(csMatch[1]) < 10000) { // CS total should be reasonable (< 10000)
+              cs = {
+                total: parseFloat(csMatch[1].replace(/,/g, '')),
+                perMinute: parseFloat(csMatch[2])
+              }
+              console.log(`[DEBUG] Extracted CS from full row text (format 1):`, cs)
+            } else {
+              // Pattern 2: "2686.8/m" = only per minute (no total, might be very high per minute)
+              csMatch = fullRowText.match(/(\d{3,}\.?\d*)\s*\/\s*m/i)
+              if (csMatch) {
+                const perMin = parseFloat(csMatch[1])
+                // If per minute is > 100, it's probably just per minute (not total)
+                if (perMin > 100) {
+                  cs = {
+                    total: 0,
+                    perMinute: perMin
+                  }
+                  console.log(`[DEBUG] Extracted CS from full row text (format 2, per minute only):`, cs)
                 }
-                console.log(`[DEBUG] Extracted CS from full row text using pattern:`, cs)
-                break
               }
             }
           }
@@ -767,27 +854,45 @@ exports.handler = async (event, context) => {
         if (!gold) {
           console.log(`[DEBUG] Gold not found in cell 9, trying fallback extraction for ${championName}`)
           
-          // Try from full row text first - gold usually has comma (e.g., "12,898 489.1/m")
+          // Try from full row text first - gold usually has comma (e.g., "12,898 489.1/m" or malformed "16,384418.1/m")
           if (fullRowText) {
-            // Try multiple patterns - gold usually has comma and is 4+ digits
-            const patterns = [
-              /([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i,        // "12,898 489.1/m" (with comma)
-              /(\d{4,})\s+(\d+\.?\d*)\s*\/\s*m/i,           // "12898 489.1/m" (no comma, 4+ digits)
-              /([\d,]{5,})\s+(\d+\.?\d*)\/m/i               // At least 5 chars (with or without comma)
-            ]
-            
-            for (const pattern of patterns) {
-              const goldMatch = fullRowText.match(pattern)
-              if (goldMatch) {
-                const total = parseFloat(goldMatch[1].replace(/,/g, ''))
-                // Gold should be reasonable (between 5000 and 50000 typically)
-                if (total >= 5000 && total <= 50000) {
-                  gold = {
-                    total: total,
-                    perMinute: parseFloat(goldMatch[2])
+            // Pattern 1: "12,898 489.1/m" = total and per minute (correct format)
+            let goldMatch = fullRowText.match(/([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (goldMatch) {
+              const total = parseFloat(goldMatch[1].replace(/,/g, ''))
+              // Gold should be reasonable (between 5000 and 50000 typically)
+              if (total >= 5000 && total <= 50000) {
+                gold = {
+                  total: total,
+                  perMinute: parseFloat(goldMatch[2])
+                }
+                console.log(`[DEBUG] Extracted gold from full row text (format 1):`, gold)
+              }
+            } else {
+              // Pattern 2: "16,384418.1/m" = malformed, missing space
+              // Strategy: Find decimal point, work backwards to find reasonable split
+              const malformedMatch = fullRowText.match(/(\d+),(\d+)(\d*\.\d+)\s*\/\s*m/i)
+              if (malformedMatch) {
+                const beforeComma = malformedMatch[1]
+                const afterCommaAll = malformedMatch[2]
+                const decimalPart = malformedMatch[3]
+                
+                // Try different splits
+                for (let splitPoint = 3; splitPoint <= Math.min(6, afterCommaAll.length); splitPoint++) {
+                  const totalPart = afterCommaAll.substring(0, splitPoint)
+                  const perMinPart = afterCommaAll.substring(splitPoint) + decimalPart
+                  
+                  const total = parseFloat(beforeComma + totalPart)
+                  const perMin = parseFloat(perMinPart)
+                  
+                  if (perMin >= 100 && perMin <= 1000 && total >= 5000 && total <= 50000) {
+                    gold = {
+                      total: total,
+                      perMinute: perMin
+                    }
+                    console.log(`[DEBUG] Extracted gold from full row text (format 2, split at ${splitPoint}):`, gold)
+                    break
                   }
-                  console.log(`[DEBUG] Extracted gold from full row text using pattern:`, gold)
-                  break
                 }
               }
             }
