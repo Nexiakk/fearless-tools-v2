@@ -33,7 +33,8 @@ export const scoutingService = {
         lastUpdated: new Date()
       }
       
-      // 1. Try to get SoloQ data from op.gg (via backend)
+      // 1. DISABLED: op.gg scraping (temporarily disabled for Leaguepedia testing)
+      /*
       try {
         if (player.opggUrl) {
           console.log('[ScoutingService] Scraping op.gg for player:', player.name, 'URL:', player.opggUrl)
@@ -71,43 +72,53 @@ export const scoutingService = {
           console.warn('[ScoutingService] No existing soloq data to fallback to')
         }
       }
+      */
       
-      // 2. Try to get Pro play data from Leaguepedia API
-      // TEMPORARILY DISABLED - Focusing on op.gg scraping fix
-      /*
+      // Keep existing soloq data if available, otherwise set to null
+      const existingData = scoutingStore.scoutingData[playerId]
+      if (existingData?.soloq) {
+        scoutingData.soloq = existingData.soloq
+        console.log('[ScoutingService] Using existing soloq data (op.gg scraping disabled for testing)')
+      } else {
+        scoutingData.soloq = null
+        console.log('[ScoutingService] op.gg scraping disabled for testing - no existing soloq data')
+      }
+      
+      // 2. Try to get Pro play data from Leaguepedia API (ENABLED for testing)
       try {
         // Extract player name from op.gg URL or use player name
         const playerName = this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
+        console.log('[ScoutingService] Fetching Leaguepedia data for player:', playerName)
         
         const championPool = await leaguepediaService.getPlayerChampionPool(playerName)
+        console.log('[ScoutingService] Leaguepedia champion pool:', championPool)
+        
         const playerInfo = await leaguepediaService.getPlayerInfo(playerName)
+        console.log('[ScoutingService] Leaguepedia player info:', playerInfo)
+        
         const recentMatches = await leaguepediaService.getRecentMatches(playerName, 20)
+        console.log('[ScoutingService] Leaguepedia recent matches:', recentMatches)
         
         scoutingData.proplay = {
-          championPool,
-          playerInfo,
-          recentMatches,
+          championPool: championPool || [],
+          playerInfo: playerInfo || null,
+          recentMatches: recentMatches || [],
           teams: playerInfo?.Team ? [playerInfo.Team] : [],
           lastUpdated: new Date()
         }
+        console.log('[ScoutingService] Created proplay object:', scoutingData.proplay)
       } catch (error) {
-        console.warn('Failed to fetch Leaguepedia data:', error)
+        console.error('[ScoutingService] Failed to fetch Leaguepedia data:', error)
+        console.error('[ScoutingService] Leaguepedia error details:', error.message, error.stack)
         // Fallback to manual entry if available
         const existingData = scoutingStore.scoutingData[playerId]
         if (existingData?.proplay) {
           scoutingData.proplay = existingData.proplay
+          console.log('[ScoutingService] Using existing proplay data as fallback')
+        } else {
+          scoutingData.proplay = null
+          console.warn('[ScoutingService] No existing proplay data to fallback to')
         }
-      }
-      */
-      
-      // Keep existing proplay data if available, otherwise set to null
-      const existingData = scoutingStore.scoutingData[playerId]
-      if (existingData?.proplay) {
-        scoutingData.proplay = existingData.proplay
-        console.log('[ScoutingService] Using existing proplay data (Leaguepedia disabled)')
-      } else {
-        scoutingData.proplay = null
-        console.log('[ScoutingService] Leaguepedia scouting disabled - no existing proplay data')
       }
       
       // 3. Compute analytics

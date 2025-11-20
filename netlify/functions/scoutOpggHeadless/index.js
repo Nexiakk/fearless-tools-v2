@@ -56,12 +56,24 @@ exports.handler = async (event, context) => {
 
     console.log(`[Headless] Fetching URL: ${url}`)
 
-    // Method 1: Browserless.io (recommended - free tier available)
-    // If this fails, we should NOT fall back to direct HTTP - that defeats the purpose
+    // Browserless.io is currently disabled due to op.gg bot detection blocking
+    // op.gg returns 403 errors for Browserless.io requests
+    // Use the regular scraper (scoutOpgg) instead
+    return {
+      statusCode: 503,
+      headers,
+      body: JSON.stringify({
+        error: 'Headless browser scraping is currently disabled',
+        message: 'Browserless.io is being blocked by op.gg (403 errors). Please use the regular scraper instead by disabling "Use Headless Browser" in the admin panel.',
+        hint: 'Toggle off "Use Headless Browser for Scraping" in the Admin Panel settings'
+      })
+    }
+
+    /* DISABLED: All Browserless.io code below
     let html = null
     let usingHeadless = false
     
-    if (BROWSERLESS_API_KEY) {
+    if (false && BROWSERLESS_API_KEY) {
       try {
         console.log('[Headless] Using Browserless.io')
         console.log('[Headless] Endpoint:', BROWSERLESS_URL)
@@ -181,7 +193,10 @@ exports.handler = async (event, context) => {
         })
       }
     }
+    */
 
+    // DISABLED: Validation code below
+    /*
     // NO FALLBACK - If headless browser fails, we fail
     // The whole point is to get properly rendered HTML, not to guess with templates
     if (!html || !usingHeadless) {
@@ -200,9 +215,7 @@ exports.handler = async (event, context) => {
         })
       }
     }
-
-    // Parse HTML with cheerio (same as regular scraper)
-    const $ = cheerio.load(html)
+    */
 
     // Try to extract from __NEXT_DATA__ first (most reliable)
     let nextData = null
@@ -639,6 +652,7 @@ exports.handler = async (event, context) => {
         _source: 'html_parsing'
       })
     }
+    */
 
   } catch (error) {
     console.error('[Headless] Scraping error:', error)
