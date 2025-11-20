@@ -12,3 +12,9 @@
   # Node version for functions
   node_bundler = "esbuild"
 
+# SPA redirect rule - redirect all routes to index.html for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
