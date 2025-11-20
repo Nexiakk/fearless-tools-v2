@@ -182,46 +182,90 @@ exports.handler = async (event, context) => {
           // Use direct Cargo API to bypass poro library issues
           // Since Cargo API has issues with SQL functions and aliases, we'll query raw data and aggregate in JS
           try {
-            // Query all individual games first, then aggregate by champion
-            let rawResults = await queryCargoAPI({
-              tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
-              fields: [
-                'SP.Champion',
-                'SP.Win',
-                'SP.Kills',
-                'SP.Deaths',
-                'SP.Assists',
-                'SP.CS',
-                'SP.Gold',
-                'SP.VisionScore',
-                'SP.DamageToChampions'
-              ],
-              where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
-              join_on: 'SP.Player=PR.AllName',
-              limit: 1000 // Get up to 1000 games
-            })
+            // First try a simple query to discover available fields
+            let testFields = ['Champion', 'Result', 'Win', 'W', 'Kills', 'Deaths', 'Assists', 'CS', 'Gold', 'VisionScore', 'DamageToChampions']
+            let rawResults = []
+            
+            // Try with join first
+            for (const field of testFields) {
+              try {
+                rawResults = await queryCargoAPI({
+                  tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
+                  fields: [
+                    'SP.Champion',
+                    `SP.${field}`,
+                    'SP.Kills',
+                    'SP.Deaths',
+                    'SP.Assists',
+                    'SP.CS',
+                    'SP.Gold',
+                    'SP.VisionScore',
+                    'SP.DamageToChampions'
+                  ],
+                  where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
+                  join_on: 'SP.Player=PR.AllName',
+                  limit: 10 // Just test with 10 first
+                })
+                if (rawResults.length > 0) {
+                  console.log(`[Leaguepedia] Successfully found win field: ${field}, got ${rawResults.length} results`)
+                  console.log(`[Leaguepedia] Sample result fields:`, Object.keys(rawResults[0]))
+                  // Now query all data with correct field
+                  rawResults = await queryCargoAPI({
+                    tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
+                    fields: [
+                      'SP.Champion',
+                      `SP.${field}`,
+                      'SP.Kills',
+                      'SP.Deaths',
+                      'SP.Assists',
+                      'SP.CS',
+                      'SP.Gold',
+                      'SP.VisionScore',
+                      'SP.DamageToChampions'
+                    ],
+                    where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
+                    join_on: 'SP.Player=PR.AllName',
+                    limit: 1000
+                  })
+                  break
+                }
+              } catch (fieldError) {
+                // Try next field
+                continue
+              }
+            }
             
             console.log(`[Leaguepedia] Join query successful, got ${rawResults.length} raw games`)
             
             // If join query returns no results, try direct query (player name might match exactly)
             if (rawResults.length === 0) {
               console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
-              rawResults = await queryCargoAPI({
-                tables: 'ScoreboardPlayers',
-                fields: [
-                  'ScoreboardPlayers.Champion',
-                  'ScoreboardPlayers.Win',
-                  'ScoreboardPlayers.Kills',
-                  'ScoreboardPlayers.Deaths',
-                  'ScoreboardPlayers.Assists',
-                  'ScoreboardPlayers.CS',
-                  'ScoreboardPlayers.Gold',
-                  'ScoreboardPlayers.VisionScore',
-                  'ScoreboardPlayers.DamageToChampions'
-                ],
-                where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-                limit: 1000
-              })
+              for (const field of testFields) {
+                try {
+                  rawResults = await queryCargoAPI({
+                    tables: 'ScoreboardPlayers',
+                    fields: [
+                      'ScoreboardPlayers.Champion',
+                      `ScoreboardPlayers.${field}`,
+                      'ScoreboardPlayers.Kills',
+                      'ScoreboardPlayers.Deaths',
+                      'ScoreboardPlayers.Assists',
+                      'ScoreboardPlayers.CS',
+                      'ScoreboardPlayers.Gold',
+                      'ScoreboardPlayers.VisionScore',
+                      'ScoreboardPlayers.DamageToChampions'
+                    ],
+                    where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
+                    limit: 1000
+                  })
+                  if (rawResults.length > 0) {
+                    console.log(`[Leaguepedia] Direct query successful with field: ${field}`)
+                    break
+                  }
+                } catch (fieldError) {
+                  continue
+                }
+              }
               console.log(`[Leaguepedia] Direct query got ${rawResults.length} raw games`)
             }
             
@@ -249,8 +293,12 @@ exports.handler = async (event, context) => {
               const stats = championMap[champ]
               stats.games++
               
-              // Check if win (Win can be "1", 1, or true)
-              const win = game.Win === '1' || game.Win === 1 || game.win === '1' || game.win === 1
+              // Check if win - try multiple possible field names and formats
+              // Result field: "1" = win, "0" = loss (or "W"/"L" in some cases)
+              const result = game.Result || game.result || game.Win || game.win || game.W || game.w || ''
+              const win = result === '1' || result === 1 || result === 'W' || result === 'Win' || 
+                         result === true || result === 'true' ||
+                         game.Win === '1' || game.Win === 1 || game.win === '1' || game.win === 1
               if (win) stats.wins++
               
               // Collect stats for averaging
@@ -302,6 +350,23 @@ exports.handler = async (event, context) => {
                 ? error.response.data.substring(0, 500) 
                 : JSON.stringify(error.response.data).substring(0, 500))
             }
+            
+            // Try a minimal query to see what fields actually exist
+            try {
+              console.log(`[Leaguepedia] Trying minimal query to discover available fields`)
+              const testResult = await queryCargoAPI({
+                tables: 'ScoreboardPlayers',
+                fields: ['ScoreboardPlayers.Champion', 'ScoreboardPlayers.Player'],
+                where: `ScoreboardPlayers.Player = "${playerName1}"`,
+                limit: 1
+              })
+              if (testResult.length > 0) {
+                console.log(`[Leaguepedia] Test query successful, available fields in result:`, Object.keys(testResult[0]))
+              }
+            } catch (testError) {
+              console.error(`[Leaguepedia] Test query also failed:`, testError.message)
+            }
+            
             results = []
           }
         } catch (error) {
@@ -463,7 +528,7 @@ exports.handler = async (event, context) => {
               tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
               fields: [
                 'SP.Champion',
-                'SP.Win',
+                'SP.Result',
                 'SP.Date',
                 'SP.Opponent',
                 'SP.Team',
@@ -489,7 +554,7 @@ exports.handler = async (event, context) => {
                 tables: 'ScoreboardPlayers',
                 fields: [
                   'ScoreboardPlayers.Champion',
-                  'ScoreboardPlayers.Win',
+                  'ScoreboardPlayers.Result',
                   'ScoreboardPlayers.Date',
                   'ScoreboardPlayers.Opponent',
                   'ScoreboardPlayers.Team',
@@ -525,13 +590,19 @@ exports.handler = async (event, context) => {
           results = []
         }
         
-        const transformedMatches = results.map(match => ({
-          champion: match.Champion || match.champion || '',
-          win: match.Win === '1' || match.Win === 1 || match.win === '1' || match.win === 1,
-          date: match.Date || match.date || '',
-          opponent: match.Opponent || match.opponent || '',
-          team: match.Team || match.team || '',
-          tournament: match.Tournament || match.tournament || '',
+        const transformedMatches = results.map(match => {
+          // Handle Result field: "1" = win, "0" = loss
+          const result = match.Result || match.result || match.Win || match.win || ''
+          const win = result === '1' || result === 1 || result === 'W' || result === 'Win' ||
+                     match.Win === '1' || match.Win === 1 || match.win === '1' || match.win === 1
+          
+          return {
+            champion: match.Champion || match.champion || '',
+            win: win,
+            date: match.Date || match.date || '',
+            opponent: match.Opponent || match.opponent || '',
+            team: match.Team || match.team || '',
+            tournament: match.Tournament || match.tournament || '',
           kda: {
             kills: parseFloat(match.Kills || match.kills || 0) || 0,
             deaths: parseFloat(match.Deaths || match.deaths || 0) || 0,
@@ -541,7 +612,8 @@ exports.handler = async (event, context) => {
           gold: parseFloat(match.Gold || match.gold || 0) || 0,
           visionScore: parseFloat(match.VisionScore || match.visionScore || 0) || 0,
           damage: parseFloat(match.DamageToChampions || match.damageToChampions || 0) || 0
-        }))
+          }
+        })
         
         return {
           statusCode: 200,
