@@ -62,72 +62,118 @@ exports.handler = async (event, context) => {
         console.log('[Headless] Using Browserless.io')
         console.log('[Headless] Endpoint:', BROWSERLESS_URL)
         
-        // Try /scrape endpoint first (newer API format)
-        // If that doesn't work, fall back to /content (older format)
+        // Try multiple endpoints in order: /unblock (best for bot detection), /content, /scrape
         let response
+        let lastError = null
+        
+        // Method 1: Try /unblock endpoint (bypasses bot detection)
+        const unblockUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/unblock').replace(/\/content$/, '/unblock')
         try {
-          // New format: /scrape endpoint (as of Nov 2025)
-          // Note: This endpoint might return structured data, not raw HTML
-          // If it doesn't work, we'll try the old /content endpoint
+          console.log('[Headless] Trying /unblock endpoint (bypasses bot detection)')
           response = await axios.post(
-            `${BROWSERLESS_URL}?token=${BROWSERLESS_API_KEY}`,
+            `${unblockUrl}?token=${BROWSERLESS_API_KEY}`,
             {
               url: url,
               waitFor: 2000,
               gotoOptions: {
                 waitUntil: 'networkidle2',
-                timeout: 10000
+                timeout: 15000
               }
             },
             {
-              timeout: 15000,
+              timeout: 20000,
               headers: {
                 'Content-Type': 'application/json'
               }
             }
           )
-          
-          // Check if response is HTML string or structured data
           if (typeof response.data === 'string') {
             html = response.data
-            console.log(`[Headless] Successfully fetched HTML (${html.length} chars)`)
-          } else {
-            // If it's structured data, we might need to extract HTML differently
-            // For now, try the old /content endpoint
-            console.log('[Headless] /scrape returned structured data, trying /content endpoint')
-            throw new Error('Structured data returned, need raw HTML')
+            console.log(`[Headless] Successfully fetched HTML via /unblock (${html.length} chars)`)
+          } else if (response.data && response.data.html) {
+            html = response.data.html
+            console.log(`[Headless] Successfully fetched HTML via /unblock (${html.length} chars)`)
           }
         } catch (error) {
-          // Fallback to old /content endpoint if /scrape doesn't work
-          if (BROWSERLESS_URL.includes('/scrape')) {
-            const oldUrl = BROWSERLESS_URL.replace('/scrape', '/content')
-            console.log('[Headless] Trying fallback endpoint:', oldUrl)
-            try {
-              response = await axios.post(
-                `${oldUrl}?token=${BROWSERLESS_API_KEY}`,
-                {
-                  url: url,
-                  waitFor: 2000,
-                  gotoOptions: {
-                    waitUntil: 'networkidle2',
-                    timeout: 10000
-                  }
-                },
-                {
-                  timeout: 15000,
-                  headers: {
-                    'Content-Type': 'application/json'
-                  }
+          console.log('[Headless] /unblock failed:', error.message)
+          lastError = error
+        }
+        
+        // Method 2: Try /content endpoint if /unblock failed
+        if (!html) {
+          const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
+          try {
+            console.log('[Headless] Trying /content endpoint')
+            response = await axios.post(
+              `${contentUrl}?token=${BROWSERLESS_API_KEY}`,
+              {
+                url: url,
+                waitFor: 2000,
+                gotoOptions: {
+                  waitUntil: 'networkidle2',
+                  timeout: 15000
                 }
-              )
+              },
+              {
+                timeout: 20000,
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            if (typeof response.data === 'string') {
               html = response.data
               console.log(`[Headless] Successfully fetched HTML via /content (${html.length} chars)`)
-            } catch (fallbackError) {
-              throw error // Throw original error
+            } else if (response.data && response.data.html) {
+              html = response.data.html
+              console.log(`[Headless] Successfully fetched HTML via /content (${html.length} chars)`)
             }
-          } else {
-            throw error
+          } catch (error) {
+            console.log('[Headless] /content failed:', error.message)
+            if (error.response) {
+              console.log('[Headless] Response status:', error.response.status)
+              console.log('[Headless] Response data:', error.response.data)
+            }
+            lastError = error
           }
+        }
+        
+        // Method 3: Try /scrape endpoint if both failed
+        if (!html && BROWSERLESS_URL.includes('/scrape')) {
+          try {
+            console.log('[Headless] Trying /scrape endpoint')
+            response = await axios.post(
+              `${BROWSERLESS_URL}?token=${BROWSERLESS_API_KEY}`,
+              {
+                url: url,
+                waitFor: 2000,
+                gotoOptions: {
+                  waitUntil: 'networkidle2',
+                  timeout: 15000
+                }
+              },
+              {
+                timeout: 20000,
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            if (typeof response.data === 'string') {
+              html = response.data
+              console.log(`[Headless] Successfully fetched HTML via /scrape (${html.length} chars)`)
+            } else if (response.data && response.data.html) {
+              html = response.data.html
+              console.log(`[Headless] Successfully fetched HTML via /scrape (${html.length} chars)`)
+            }
+          } catch (error) {
+            console.log('[Headless] /scrape failed:', error.message)
+            lastError = error
+          }
+        }
+        
+        if (!html && lastError) {
+          throw lastError
         }
       } catch (error) {
         console.error('[Headless] Browserless.io error:', error.message)
@@ -328,64 +374,97 @@ exports.handler = async (event, context) => {
     
     console.log(`[Headless] Found ${championRows.length} champion rows to process`)
     
-    // Process each champion row (using the same extraction logic as regular scraper)
-    championRows.each((i, elem) => {
-      const $row = $(elem)
-      const fullRowText = $row.text()
-      
-      let championName = ''
-      let games = 0
-      let wins = 0
-      let losses = 0
-      let winrate = 0
-      let kda = null
-      let damage = null
-      let wards = null
-      let cs = null
-      let gold = null
-      
-      if ($row.is('tr')) {
-        const directCells = $row.children('td')
+     // Process each champion row - SIMPLIFIED for headless browser
+     // Add debug logging to understand why extraction fails
+     championRows.each((i, elem) => {
+       const $row = $(elem)
+       
+       let championName = ''
+       let games = 0
+       let wins = 0
+       let losses = 0
+       let winrate = 0
+       let kda = null
+       let damage = null
+       let wards = null
+       let cs = null
+       let gold = null
+       
+       if ($row.is('tr')) {
+         const directCells = $row.children('td')
+         
+         // Debug: Log first few rows to understand structure
+         if (i < 3) {
+           console.log(`[Headless] Row ${i}: ${directCells.length} cells`)
+           directCells.each((j, cell) => {
+             const cellText = $(cell).text().trim().substring(0, 50)
+             console.log(`[Headless] Row ${i}, Cell ${j}: "${cellText}"`)
+           })
+         }
+         
+         // Extract champion name from cell 1
+         if (directCells.length > 1) {
+           const nameCell = $(directCells[1])
+           const imgAlt = nameCell.find('img[alt]').first().attr('alt') || ''
+           if (imgAlt) {
+             championName = imgAlt.trim()
+           }
+           if (!championName) {
+             championName = nameCell.find('strong').first().text().trim()
+           }
+           if (!championName) {
+             const $cellClone = nameCell.clone()
+             $cellClone.find('table, [class*="matchup"]').remove()
+             championName = $cellClone.text().trim()
+           }
+           championName = championName.replace(/['"]/g, '').trim()
+         }
+         
+         if (!championName || championName.length < 2) {
+           if (i < 3) {
+             console.log(`[Headless] Row ${i} skipped - no valid champion name (got: "${championName}")`)
+           }
+           return
+         }
         
-        // Extract champion name from cell 1
-        if (directCells.length > 1) {
-          const nameCell = $(directCells[1])
-          const imgAlt = nameCell.find('img[alt]').first().attr('alt') || ''
-          if (imgAlt) {
-            championName = imgAlt.trim()
-          }
-          if (!championName) {
-            championName = nameCell.find('strong').first().text().trim()
-          }
-          if (!championName) {
-            const $cellClone = nameCell.clone()
-            $cellClone.find('table, [class*="matchup"]').remove()
-            championName = $cellClone.text().trim()
-          }
-          championName = championName.replace(/['"]/g, '').trim()
-        }
-        
-        if (!championName || championName.length < 2) {
-          return
-        }
-        
-        // Extract wins/losses from cell 2
-        if (directCells.length > 2) {
-          const $cell = $(directCells[2])
-          const $cellClone = $cell.clone()
-          $cellClone.find('table').remove()
-          const cellText = $cellClone.text().trim()
-          const winsLossesMatch = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i)
-          if (winsLossesMatch) {
-            wins = parseInt(winsLossesMatch[1])
-            losses = parseInt(winsLossesMatch[2])
-            games = wins + losses
-          }
-          const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
-          if (winrateMatch) {
-            winrate = parseFloat(winrateMatch[1])
-          }
-        }
+         // Extract wins/losses from cell 2
+         if (directCells.length > 2) {
+           const $cell = $(directCells[2])
+           const $cellClone = $cell.clone()
+           $cellClone.find('table').remove()
+           const cellText = $cellClone.text().trim()
+           
+           if (i < 3) {
+             console.log(`[Headless] Row ${i} (${championName}) cell 2 text: "${cellText}"`)
+           }
+           
+           const winsLossesMatch = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i)
+           if (winsLossesMatch) {
+             wins = parseInt(winsLossesMatch[1])
+             losses = parseInt(winsLossesMatch[2])
+             games = wins + losses
+           } else {
+             // Try alternative pattern: "60W 41L" or "60 W 41 L"
+             const altMatch = cellText.match(/(\d+)\s*[Ww]\s*(\d+)\s*[Ll]/)
+             if (altMatch) {
+               wins = parseInt(altMatch[1])
+               losses = parseInt(altMatch[2])
+               games = wins + losses
+             }
+           }
+           const winrateMatch = cellText.match(/(\d+\.?\d*)\s*%/)
+           if (winrateMatch) {
+             winrate = parseFloat(winrateMatch[1])
+           }
+           
+           if (i < 3) {
+             console.log(`[Headless] Row ${i} (${championName}) extracted: ${wins}W ${losses}L = ${games} games`)
+           }
+         } else {
+           if (i < 3) {
+             console.log(`[Headless] Row ${i} (${championName}) - not enough cells (${directCells.length})`)
+           }
+         }
         
         // Extract KDA from cell 3
         if (directCells.length > 3) {
@@ -515,23 +594,31 @@ exports.handler = async (event, context) => {
         }
       }
       
-      // Add champion if valid
-      if (games > 0 && championName && championName.length >= 2) {
-        const championData = {
-          championName,
-          games,
-          wins,
-          losses,
-          winrate: winrate || (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
-        }
-        if (kda) championData.kda = kda
-        if (damage) championData.damage = damage
-        if (wards) championData.wards = wards
-        if (cs) championData.cs = cs
-        if (gold) championData.gold = gold
-        champions.push(championData)
-      }
-    })
+       // Add champion if valid
+       if (games > 0 && championName && championName.length >= 2) {
+         const championData = {
+           championName,
+           games,
+           wins,
+           losses,
+           winrate: winrate || (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
+         }
+         if (kda) championData.kda = kda
+         if (damage) championData.damage = damage
+         if (wards) championData.wards = wards
+         if (cs) championData.cs = cs
+         if (gold) championData.gold = gold
+         champions.push(championData)
+         
+         if (i < 3) {
+           console.log(`[Headless] Added champion: ${championName} - ${games} games (${wins}W ${losses}L)`)
+         }
+       } else {
+         if (i < 3) {
+           console.log(`[Headless] Row ${i} (${championName}) skipped - games: ${games}, name length: ${championName.length}`)
+         }
+       }
+     })
     
     // Remove duplicates and sort
     const uniqueChampions = []
