@@ -488,27 +488,28 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 3 (KDA) text: "${cellText}"`)
-            // Extract KDA ratio (e.g., "2.12:1") - must be before the KDA stats
-            const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1\b/)
-            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4" or "19 / 5 / 12")
-            // Handle cases where ratio might be merged: "4.20:19" should be "4.20:1" + "9" or "4.20:1" + "19"
-            // Look for pattern: number / number / number (with two slashes)
-            let kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            // Extract KDA ratio (e.g., "2.12:1") - must end with ":1" and be followed by space or KDA
+            const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1(?:\s|$)/)
             
-            // If we found a match, check if it might be part of the ratio
-            if (kdaMatch && ratioMatch) {
-              // Check if the first number of KDA match is actually part of the ratio
+            // Extract KDA stats - must come AFTER the ratio (if present)
+            // Pattern: number / number / number (with two slashes)
+            let kdaMatch = null
+            if (ratioMatch) {
+              // Find KDA after the ratio
               const ratioEnd = cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length
-              const kdaStart = cellText.indexOf(kdaMatch[0])
-              // If KDA starts right after ratio (or very close), it's correct
-              if (kdaStart < ratioEnd + 2) {
-                // KDA is correct, use it
-              } else {
-                // Might be wrong match, try to find KDA after ratio
-                const afterRatio = cellText.substring(ratioEnd).trim()
-                const betterMatch = afterRatio.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
-                if (betterMatch) {
-                  kdaMatch = betterMatch
+              const afterRatio = cellText.substring(ratioEnd).trim()
+              // Match KDA pattern in the text after ratio
+              kdaMatch = afterRatio.match(/^(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            } else {
+              // No ratio found, try to match KDA anywhere (but be careful not to match ratio)
+              kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+              // If match starts with a number that looks like it could be part of a ratio (e.g., "2.12"), skip it
+              if (kdaMatch && cellText.indexOf(kdaMatch[0]) < 10) {
+                // Check if there's a colon nearby that might indicate this is part of a ratio
+                const beforeMatch = cellText.substring(0, cellText.indexOf(kdaMatch[0]))
+                if (beforeMatch.match(/:\s*1/)) {
+                  // This is likely part of a ratio, skip it
+                  kdaMatch = null
                 }
               }
             }
@@ -579,27 +580,73 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 7 (wards) text: "${cellText}"`)
-            // Pattern 1: "244 (16/4)" = vision score, (placed/killed) - no control wards
-            let wardsMatch = cellText.match(/(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            // Try Pattern 2 FIRST: "15 1 (16/4)" = vision score, control wards, (placed/killed)
+            let wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
             if (wardsMatch) {
               wards = {
                 visionScore: parseFloat(wardsMatch[1]),
-                controlWards: 0, // Not provided in this format
-                placed: parseFloat(wardsMatch[2]),
-                killed: parseFloat(wardsMatch[3])
+                controlWards: parseFloat(wardsMatch[2]),
+                placed: parseFloat(wardsMatch[3]),
+                killed: parseFloat(wardsMatch[4])
               }
-              console.log(`[DEBUG] Extracted wards from cell 7 (format 1):`, wards)
+              console.log(`[DEBUG] Extracted wards from cell 7 (format 2):`, wards)
             } else {
-              // Pattern 2: "14 1 (7/2)" = vision score, control wards, (placed/killed)
-              wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+              // Pattern 1: "244 (16/4)" or "151 (16/4)" = vision score, (placed/killed)
+              // Check if the number might be two concatenated numbers (e.g., "151" = "15" + "1")
+              wardsMatch = cellText.match(/(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/)
               if (wardsMatch) {
-                wards = {
-                  visionScore: parseFloat(wardsMatch[1]),
-                  controlWards: parseFloat(wardsMatch[2]),
-                  placed: parseFloat(wardsMatch[3]),
-                  killed: parseFloat(wardsMatch[4])
+                const visionScoreStr = wardsMatch[1]
+                // If vision score is 3+ digits and ends with a single digit (0-9), it might be two numbers
+                // Example: "151" -> "15" (vision) + "1" (control wards)
+                // But "244" is probably just one number (vision score can be 200+)
+                if (visionScoreStr.length >= 3) {
+                  // Try splitting: last digit might be control wards
+                  const lastDigit = parseInt(visionScoreStr[visionScoreStr.length - 1])
+                  const visionScoreNum = parseInt(visionScoreStr.substring(0, visionScoreStr.length - 1))
+                  // Control wards are typically 0-10, vision score is typically 5-400 (wider range)
+                  // Only split if both parts are reasonable
+                  if (lastDigit >= 0 && lastDigit <= 10 && visionScoreNum >= 5 && visionScoreNum <= 400) {
+                    // Additional check: if the original number is very high (e.g., 244), it's probably just vision score
+                    const originalNum = parseFloat(visionScoreStr)
+                    if (originalNum > 200) {
+                      // High numbers are likely just vision score, not concatenated
+                      wards = {
+                        visionScore: originalNum,
+                        controlWards: 0,
+                        placed: parseFloat(wardsMatch[2]),
+                        killed: parseFloat(wardsMatch[3])
+                      }
+                      console.log(`[DEBUG] Extracted wards from cell 7 (format 1, high vision score):`, wards)
+                    } else {
+                      // Lower numbers might be concatenated
+                      wards = {
+                        visionScore: visionScoreNum,
+                        controlWards: lastDigit,
+                        placed: parseFloat(wardsMatch[2]),
+                        killed: parseFloat(wardsMatch[3])
+                      }
+                      console.log(`[DEBUG] Extracted wards from cell 7 (format 1, split concatenated):`, wards)
+                    }
+                  } else {
+                    // Use as single number
+                    wards = {
+                      visionScore: parseFloat(visionScoreStr),
+                      controlWards: 0,
+                      placed: parseFloat(wardsMatch[2]),
+                      killed: parseFloat(wardsMatch[3])
+                    }
+                    console.log(`[DEBUG] Extracted wards from cell 7 (format 1):`, wards)
+                  }
+                } else {
+                  // Single number format (1-2 digits)
+                  wards = {
+                    visionScore: parseFloat(visionScoreStr),
+                    controlWards: 0,
+                    placed: parseFloat(wardsMatch[2]),
+                    killed: parseFloat(wardsMatch[3])
+                  }
+                  console.log(`[DEBUG] Extracted wards from cell 7 (format 1):`, wards)
                 }
-                console.log(`[DEBUG] Extracted wards from cell 7 (format 2):`, wards)
               } else {
                 console.log(`[DEBUG] Wards pattern did not match cell 7 text: "${cellText}"`)
               }
@@ -620,7 +667,7 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 8 (CS) text: "${cellText}"`)
-            // Pattern 1: "226 8.6/m" = total and per minute
+            // Pattern 1: "226 8.6/m" = total and per minute (correct format)
             let csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
             if (csMatch) {
               cs = {
@@ -629,14 +676,73 @@ exports.handler = async (event, context) => {
               }
               console.log(`[DEBUG] Extracted CS from cell 8 (format 1):`, cs)
             } else {
-              // Pattern 2: "2686.8/m" = only per minute (no total)
+              // Pattern 2: "988.6/m", "2198.2/m", or "2686.8/m" = might be concatenated or only per minute
               csMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m/i)
               if (csMatch) {
-                cs = {
-                  total: 0, // Not provided
-                  perMinute: parseFloat(csMatch[1])
+                const valueStr = csMatch[1]
+                // Check if this might be two concatenated numbers
+                // CS total can be 2-3 digits (50-600), per minute is typically 5-15
+                // If the number has a decimal and is 3+ digits, try to split it
+                if (valueStr.includes('.') && valueStr.length >= 3) {
+                  const decimalIndex = valueStr.indexOf('.')
+                  // Try different split points: 2, 3, or 4 digits for total
+                  // Start from 2 (for "988.6" = "98" + "8.6") up to 4 (for "12349.2" = "1234" + "9.2")
+                  for (let splitPoint = 2; splitPoint <= Math.min(4, decimalIndex); splitPoint++) {
+                    const totalPart = valueStr.substring(0, splitPoint)
+                    const perMinPart = valueStr.substring(splitPoint)
+                    
+                    const total = parseFloat(totalPart)
+                    const perMin = parseFloat(perMinPart)
+                    
+                    // Check if values are reasonable
+                    // CS total: 50-600 (handles 2-digit like 98, 3-digit like 219, even 4-digit like 1234)
+                    // Per minute: 4-20 (slightly wider range to be safe)
+                    if (total >= 50 && total <= 600 && perMin >= 4 && perMin <= 20) {
+                      cs = {
+                        total: total,
+                        perMinute: perMin
+                      }
+                      console.log(`[DEBUG] Extracted CS from cell 8 (format 2, split concatenated at ${splitPoint}):`, cs)
+                      break
+                    }
+                  }
                 }
-                console.log(`[DEBUG] Extracted CS from cell 8 (format 2, per minute only):`, cs)
+                
+                // If we didn't find a good split, treat as per minute only
+                if (!cs) {
+                  const perMin = parseFloat(valueStr)
+                  // If per minute is very high (>100), it's probably concatenated but we couldn't split it
+                  // Try one more time with heuristic: if it's 3+ digits, try common split points
+                  if (perMin > 100 && valueStr.length >= 3) {
+                    console.log(`[DEBUG] CS value ${perMin} seems too high for per minute only, trying heuristic split`)
+                    // Try splitting at 2, 3, or 4 digits
+                    for (let splitPoint = 2; splitPoint <= Math.min(4, valueStr.length - 2); splitPoint++) {
+                      const totalGuess = parseFloat(valueStr.substring(0, splitPoint))
+                      const perMinGuess = parseFloat(valueStr.substring(splitPoint))
+                      if (totalGuess >= 50 && totalGuess <= 600 && perMinGuess >= 4 && perMinGuess <= 20) {
+                        cs = {
+                          total: totalGuess,
+                          perMinute: perMinGuess
+                        }
+                        console.log(`[DEBUG] Extracted CS from cell 8 (format 2, heuristic split at ${splitPoint}):`, cs)
+                        break
+                      }
+                    }
+                  }
+                  
+                  if (!cs) {
+                    // Only use as per minute if it's reasonable (< 30)
+                    if (perMin <= 30) {
+                      cs = {
+                        total: 0, // Not provided
+                        perMinute: perMin
+                      }
+                      console.log(`[DEBUG] Extracted CS from cell 8 (format 2, per minute only):`, cs)
+                    } else {
+                      console.log(`[DEBUG] CS value ${perMin} is too high and couldn't be split, skipping`)
+                    }
+                  }
+                }
               } else {
                 console.log(`[DEBUG] CS pattern did not match cell 8 text: "${cellText}"`)
               }
@@ -729,35 +835,64 @@ exports.handler = async (event, context) => {
           
           // Try from full row text first - be more flexible with spacing
           if (fullRowText) {
-            // Pattern 1: "244 (16/4)" = vision score, (placed/killed) - no control wards
-            let wardsMatch = fullRowText.match(/(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            // Try Pattern 2 FIRST: "15 1 (16/4)" = vision score, control wards, (placed/killed)
+            let wardsMatch = fullRowText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
             if (wardsMatch) {
               wards = {
                 visionScore: parseFloat(wardsMatch[1]),
-                controlWards: 0,
-                placed: parseFloat(wardsMatch[2]),
-                killed: parseFloat(wardsMatch[3])
+                controlWards: parseFloat(wardsMatch[2]),
+                placed: parseFloat(wardsMatch[3]),
+                killed: parseFloat(wardsMatch[4])
               }
-              console.log(`[DEBUG] Extracted wards from full row text (format 1):`, wards)
+              console.log(`[DEBUG] Extracted wards from full row text (format 2):`, wards)
             } else {
-              // Pattern 2: "14 1 (7/2)" = vision score, control wards, (placed/killed)
-              const patterns = [
-                /(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/,  // Standard: "14 1 (7/2)"
-                /(\d+)\s+(\d+)\s*\((\d+)\/(\d+)\)/,         // No spaces: "14 1(7/2)"
-                /(\d+)\s+(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/     // Flexible spacing
-              ]
-              
-              for (const pattern of patterns) {
-                wardsMatch = fullRowText.match(pattern)
-                if (wardsMatch) {
-                  wards = {
-                    visionScore: parseFloat(wardsMatch[1]),
-                    controlWards: parseFloat(wardsMatch[2]),
-                    placed: parseFloat(wardsMatch[3]),
-                    killed: parseFloat(wardsMatch[4])
+              // Pattern 1: "244 (16/4)" or "151 (16/4)" = vision score, (placed/killed)
+              wardsMatch = fullRowText.match(/(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/)
+              if (wardsMatch) {
+                const visionScoreStr = wardsMatch[1]
+                // Check if vision score might be two concatenated numbers
+                if (visionScoreStr.length >= 3) {
+                  const lastDigit = parseInt(visionScoreStr[visionScoreStr.length - 1])
+                  const visionScoreNum = parseInt(visionScoreStr.substring(0, visionScoreStr.length - 1))
+                  const originalNum = parseFloat(visionScoreStr)
+                  
+                  // Control wards: 0-10, vision score: 5-400
+                  if (lastDigit >= 0 && lastDigit <= 10 && visionScoreNum >= 5 && visionScoreNum <= 400) {
+                    // High numbers (>200) are likely just vision score
+                    if (originalNum > 200) {
+                      wards = {
+                        visionScore: originalNum,
+                        controlWards: 0,
+                        placed: parseFloat(wardsMatch[2]),
+                        killed: parseFloat(wardsMatch[3])
+                      }
+                      console.log(`[DEBUG] Extracted wards from full row text (format 1, high vision score):`, wards)
+                    } else {
+                      wards = {
+                        visionScore: visionScoreNum,
+                        controlWards: lastDigit,
+                        placed: parseFloat(wardsMatch[2]),
+                        killed: parseFloat(wardsMatch[3])
+                      }
+                      console.log(`[DEBUG] Extracted wards from full row text (format 1, split concatenated):`, wards)
+                    }
+                  } else {
+                    wards = {
+                      visionScore: originalNum,
+                      controlWards: 0,
+                      placed: parseFloat(wardsMatch[2]),
+                      killed: parseFloat(wardsMatch[3])
+                    }
+                    console.log(`[DEBUG] Extracted wards from full row text (format 1):`, wards)
                   }
-                  console.log(`[DEBUG] Extracted wards from full row text (format 2):`, wards)
-                  break
+                } else {
+                  wards = {
+                    visionScore: parseFloat(visionScoreStr),
+                    controlWards: 0,
+                    placed: parseFloat(wardsMatch[2]),
+                    killed: parseFloat(wardsMatch[3])
+                  }
+                  console.log(`[DEBUG] Extracted wards from full row text (format 1):`, wards)
                 }
               }
             }
@@ -807,17 +942,65 @@ exports.handler = async (event, context) => {
               }
               console.log(`[DEBUG] Extracted CS from full row text (format 1):`, cs)
             } else {
-              // Pattern 2: "2686.8/m" = only per minute (no total, might be very high per minute)
-              csMatch = fullRowText.match(/(\d{3,}\.?\d*)\s*\/\s*m/i)
+              // Pattern 2: "988.6/m", "2198.2/m", or "2686.8/m" = might be concatenated or only per minute
+              csMatch = fullRowText.match(/(\d+\.?\d*)\s*\/\s*m/i)
               if (csMatch) {
-                const perMin = parseFloat(csMatch[1])
-                // If per minute is > 100, it's probably just per minute (not total)
-                if (perMin > 100) {
-                  cs = {
-                    total: 0,
-                    perMinute: perMin
+                const valueStr = csMatch[1]
+                // Check if this might be two concatenated numbers
+                // CS total can be 2-3 digits (50-600), per minute is typically 5-15
+                if (valueStr.includes('.') && valueStr.length >= 3) {
+                  const decimalIndex = valueStr.indexOf('.')
+                  // Try different split points: 2, 3, or 4 digits for total
+                  for (let splitPoint = 2; splitPoint <= Math.min(4, decimalIndex); splitPoint++) {
+                    const totalPart = valueStr.substring(0, splitPoint)
+                    const perMinPart = valueStr.substring(splitPoint)
+                    
+                    const total = parseFloat(totalPart)
+                    const perMin = parseFloat(perMinPart)
+                    
+                    // CS total: 50-600, per minute: 4-20
+                    if (total >= 50 && total <= 600 && perMin >= 4 && perMin <= 20) {
+                      cs = {
+                        total: total,
+                        perMinute: perMin
+                      }
+                      console.log(`[DEBUG] Extracted CS from full row text (format 2, split concatenated at ${splitPoint}):`, cs)
+                      break
+                    }
                   }
-                  console.log(`[DEBUG] Extracted CS from full row text (format 2, per minute only):`, cs)
+                }
+                
+                // If we didn't find a good split, check if it's just per minute
+                if (!cs) {
+                  const perMin = parseFloat(valueStr)
+                  if (perMin > 100) {
+                    // Too high for per minute, try heuristic split
+                    if (valueStr.length >= 3) {
+                      for (let splitPoint = 2; splitPoint <= Math.min(4, valueStr.length - 2); splitPoint++) {
+                        const totalGuess = parseFloat(valueStr.substring(0, splitPoint))
+                        const perMinGuess = parseFloat(valueStr.substring(splitPoint))
+                        if (totalGuess >= 50 && totalGuess <= 600 && perMinGuess >= 4 && perMinGuess <= 20) {
+                          cs = {
+                            total: totalGuess,
+                            perMinute: perMinGuess
+                          }
+                          console.log(`[DEBUG] Extracted CS from full row text (format 2, heuristic split at ${splitPoint}):`, cs)
+                          break
+                        }
+                      }
+                    }
+                  }
+                  
+                  if (!cs) {
+                    // Only use as per minute if it's reasonable
+                    if (perMin <= 30) {
+                      cs = {
+                        total: 0,
+                        perMinute: perMin
+                      }
+                      console.log(`[DEBUG] Extracted CS from full row text (format 2, per minute only):`, cs)
+                    }
+                  }
                 }
               }
             }
