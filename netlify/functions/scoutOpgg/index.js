@@ -439,26 +439,18 @@ exports.handler = async (event, context) => {
         const directCells = $row.children('td')
         console.log(`[DEBUG] Champion: ${championName}, Number of cells: ${directCells.length}`)
         
-        // Extract from specific cells
-        for (let cellIdx = 0; cellIdx < directCells.length; cellIdx++) {
-          const $cell = $(directCells[cellIdx])
-          
-          // Skip cells with nested tables (matchup data)
-          if ($cell.find('table').length > 0 && $cell.find('table').length > 2) {
-            continue
-          }
-          
-          // Get cell text, removing nested table content
+        // Extract from specific cells by index
+        // Structure: [0: rank, 1: name, 2: wins/losses, 3: KDA, 4: skip, 5: skip, 6: damage, 7: wards, 8: CS, 9: gold]
+        
+        // Cell 2 (index 2): Wins/Losses/Winrate - "60 W 41 L 59%"
+        if (directCells.length > 2) {
+          const $cell = $(directCells[2])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
           
-          if (!cellText) continue
-          
-          console.log(`[DEBUG] Champion: ${championName}, Cell ${cellIdx} text: "${cellText}"`)
-          
-          // Cell 2 (index 2): Wins/Losses/Winrate - "60 W 41 L 59%"
-          if (cellIdx === 2) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 2 (wins/losses) text: "${cellText}"`)
             const winsLossesMatch = cellText.match(/(\d+)\s*W\s+(\d+)\s*[LP]\b/i) || 
                                     cellText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i)
             if (winsLossesMatch) {
@@ -474,9 +466,17 @@ exports.handler = async (event, context) => {
               console.log(`[DEBUG] Extracted winrate: ${winrate}%`)
             }
           }
+        }
+        
+        // Cell 3 (index 3): KDA - "2.12:1 6.9 / 5.8 / 5.4 (44%)"
+        if (directCells.length > 3 && !kda) {
+          const $cell = $(directCells[3])
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
           
-          // Cell 3 (index 3): KDA - "2.12:1 6.9 / 5.8 / 5.4 (44%)"
-          if (cellIdx === 3 && !kda) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 3 (KDA) text: "${cellText}"`)
             // Extract KDA ratio (e.g., "2.12:1")
             const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1/)
             // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4")
@@ -499,9 +499,17 @@ exports.handler = async (event, context) => {
               console.log(`[DEBUG] Extracted KDA:`, kda)
             }
           }
+        }
+        
+        // Cell 6 (index 6): Damage - "1087.2/m 29.7%"
+        if (directCells.length > 6 && !damage) {
+          const $cell = $(directCells[6])
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
           
-          // Cell 6 (index 6): Damage - "1087.2/m 29.7%"
-          if (cellIdx === 6 && !damage) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 6 (damage) text: "${cellText}"`)
             // Match pattern: "1087.2/m 29.7%" - damage per minute and damage percentage
             const dmgMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m\s+(\d+\.?\d*)\s*%/i)
             if (dmgMatch) {
@@ -526,9 +534,17 @@ exports.handler = async (event, context) => {
               }
             }
           }
+        }
+        
+        // Cell 7 (index 7): Wards - "14 1 (7/2)" (vision score, control wards, placed, killed)
+        if (directCells.length > 7 && !wards) {
+          const $cell = $(directCells[7])
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
           
-          // Cell 7 (index 7): Wards - "14 1 (7/2)" (vision score, control wards, placed, killed)
-          if (cellIdx === 7 && !wards) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 7 (wards) text: "${cellText}"`)
             // Pattern: "14 1 (7/2)" = vision score, control wards, (placed/killed)
             const wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
             if (wardsMatch) {
@@ -541,9 +557,17 @@ exports.handler = async (event, context) => {
               console.log(`[DEBUG] Extracted wards:`, wards)
             }
           }
+        }
+        
+        // Cell 8 (index 8): CS - "226 8.6/m"
+        if (directCells.length > 8 && !cs) {
+          const $cell = $(directCells[8])
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
           
-          // Cell 8 (index 8): CS - "226 8.6/m"
-          if (cellIdx === 8 && !cs) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 8 (CS) text: "${cellText}"`)
             const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
             if (csMatch) {
               cs = {
@@ -553,9 +577,17 @@ exports.handler = async (event, context) => {
               console.log(`[DEBUG] Extracted CS:`, cs)
             }
           }
+        }
+        
+        // Cell 9 (index 9): Gold - "12,898 489.1/m"
+        if (directCells.length > 9 && !gold) {
+          const $cell = $(directCells[9])
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
           
-          // Cell 9 (index 9): Gold - "12,898 489.1/m"
-          if (cellIdx === 9 && !gold) {
+          if (cellText) {
+            console.log(`[DEBUG] Champion: ${championName}, Cell 9 (gold) text: "${cellText}"`)
             const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
             if (goldMatch) {
               gold = {
@@ -567,19 +599,13 @@ exports.handler = async (event, context) => {
           }
         }
         
-        // Fallback: If we still don't have wins/losses, try extracting from full row text
-        if (!wins && !losses) {
-          const fullMatch = fullRowText.match(/(\d+)\s*W\s*(\d+)\s*[LP]/i) || 
-                           fullRowText.match(/(\d+)\s*W\s*(\d+)\s*L/i)
-          if (fullMatch) {
-            wins = parseInt(fullMatch[1])
-            losses = parseInt(fullMatch[2])
-            games = wins + losses
-            console.log(`[DEBUG] Extracted from full row: ${wins}W ${losses}L`)
-          }
+        // Calculate games from wins + losses if we have them
+        if ((wins > 0 || losses > 0) && games === 0) {
+          games = wins + losses
+          console.log(`[DEBUG] Calculated games from wins/losses: ${games}`)
         }
         
-        // Calculate winrate if we have games but no winrate
+        // Calculate winrate if we have games but no winrate was extracted
         if (winrate === 0 && games > 0 && wins > 0) {
           winrate = (wins / games) * 100
           console.log(`[DEBUG] Calculated winrate: ${winrate}%`)
