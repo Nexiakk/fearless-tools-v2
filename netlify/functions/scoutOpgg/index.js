@@ -438,12 +438,17 @@ exports.handler = async (event, context) => {
       if ($row.is('tr')) {
         const directCells = $row.children('td')
         console.log(`[DEBUG] Champion: ${championName}, Number of cells: ${directCells.length}`)
-        // Log all cell contents for debugging
+        // Log all cell contents for debugging - this is critical for understanding the structure
+        console.log(`[DEBUG] === CELL STRUCTURE FOR ${championName} ===`)
         directCells.each((idx, cell) => {
           const $cell = $(cell)
-          const cellText = $cell.clone().find('table').remove().end().text().trim()
-          console.log(`[DEBUG] Champion: ${championName}, Cell ${idx} content: "${cellText.substring(0, 50)}"`)
+          const $cellClone = $cell.clone()
+          $cellClone.find('table').remove()
+          const cellText = $cellClone.text().trim()
+          const cellHtml = $cell.html().substring(0, 100)
+          console.log(`[DEBUG] Cell ${idx}: text="${cellText}", html="${cellHtml}"`)
         })
+        console.log(`[DEBUG] === END CELL STRUCTURE ===`)
         
         // Extract from specific cells by index
         // Structure: [0: rank, 1: name, 2: wins/losses, 3: KDA, 4: skip, 5: skip, 6: damage, 7: wards, 8: CS, 9: gold]
@@ -486,8 +491,17 @@ exports.handler = async (event, context) => {
             // Extract KDA ratio (e.g., "2.12:1") - must be before the KDA stats
             const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1/)
             // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4") - must have two slashes
-            // Be more specific: look for pattern with exactly two slashes, not matching ratio
-            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)(?!\s*:)/)
+            // Match pattern: number / number / number (not matching the ratio which has a colon)
+            // Look for the pattern that comes after the ratio (if present)
+            let kdaMatch = null
+            if (ratioMatch) {
+              // If ratio exists, match KDA after it
+              const afterRatio = cellText.substring(cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length)
+              kdaMatch = afterRatio.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            } else {
+              // No ratio, match anywhere
+              kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
+            }
             // Extract kill participation (e.g., "(44%)") - must be in parentheses
             const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
             
@@ -641,22 +655,35 @@ exports.handler = async (event, context) => {
         // Fallback: Try to extract missing stats from full row text if cell extraction failed
         // Also try searching all cells if specific cell extraction failed
         if (!wards) {
-          // Try from full row text first
+          console.log(`[DEBUG] Wards not found in cell 7, trying fallback extraction for ${championName}`)
+          
+          // Try from full row text first - be more flexible with spacing
           if (fullRowText) {
-            const wardsMatch = fullRowText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
-            if (wardsMatch) {
-              wards = {
-                visionScore: parseFloat(wardsMatch[1]),
-                controlWards: parseFloat(wardsMatch[2]),
-                placed: parseFloat(wardsMatch[3]),
-                killed: parseFloat(wardsMatch[4])
+            // Pattern: "14 1 (7/2)" - try multiple variations
+            const patterns = [
+              /(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/,  // Standard: "14 1 (7/2)"
+              /(\d+)\s+(\d+)\s*\((\d+)\/(\d+)\)/,         // No spaces: "14 1(7/2)"
+              /(\d+)\s+(\d+)\s*\((\d+)\s*\/\s*(\d+)\)/     // Flexible spacing
+            ]
+            
+            for (const pattern of patterns) {
+              const wardsMatch = fullRowText.match(pattern)
+              if (wardsMatch) {
+                wards = {
+                  visionScore: parseFloat(wardsMatch[1]),
+                  controlWards: parseFloat(wardsMatch[2]),
+                  placed: parseFloat(wardsMatch[3]),
+                  killed: parseFloat(wardsMatch[4])
+                }
+                console.log(`[DEBUG] Extracted wards from full row text using pattern:`, wards)
+                break
               }
-              console.log(`[DEBUG] Extracted wards from full row text:`, wards)
             }
           }
           
           // If still not found, search all cells
           if (!wards && directCells.length > 0) {
+            console.log(`[DEBUG] Searching all ${directCells.length} cells for wards pattern`)
             for (let i = 0; i < directCells.length; i++) {
               const $cell = $(directCells[i])
               const $cellClone = $cell.clone()
@@ -678,24 +705,40 @@ exports.handler = async (event, context) => {
               }
             }
           }
+          
+          if (!wards) {
+            console.log(`[DEBUG] WARNING: Could not extract wards for ${championName}. Full row text: "${fullRowText.substring(0, 300)}"`)
+          }
         }
         
         if (!cs) {
-          // Try from full row text first
+          console.log(`[DEBUG] CS not found in cell 8, trying fallback extraction for ${championName}`)
+          
+          // Try from full row text first - look for pattern like "226 8.6/m"
           if (fullRowText) {
-            // Pattern: number followed by space and number/m (e.g., "226 8.6/m")
-            const csMatch = fullRowText.match(/(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i)
-            if (csMatch) {
-              cs = {
-                total: parseFloat(csMatch[1].replace(/,/g, '')),
-                perMinute: parseFloat(csMatch[2])
+            // Try multiple patterns - CS is usually 3 digits followed by space and decimal/m
+            const patterns = [
+              /(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i,           // "226 8.6/m"
+              /(\d{2,})\s+(\d+\.?\d*)\/m/i,                 // "226 8.6/m" (no space before /m)
+              /(\d{3,})\s+(\d+\.?\d*)\s*\/\s*m/i            // At least 3 digits for total
+            ]
+            
+            for (const pattern of patterns) {
+              const csMatch = fullRowText.match(pattern)
+              if (csMatch && parseFloat(csMatch[1]) < 10000) { // CS total should be reasonable (< 10000)
+                cs = {
+                  total: parseFloat(csMatch[1].replace(/,/g, '')),
+                  perMinute: parseFloat(csMatch[2])
+                }
+                console.log(`[DEBUG] Extracted CS from full row text using pattern:`, cs)
+                break
               }
-              console.log(`[DEBUG] Extracted CS from full row text:`, cs)
             }
           }
           
           // If still not found, search all cells
           if (!cs && directCells.length > 0) {
+            console.log(`[DEBUG] Searching all ${directCells.length} cells for CS pattern`)
             for (let i = 0; i < directCells.length; i++) {
               const $cell = $(directCells[i])
               const $cellClone = $cell.clone()
@@ -704,7 +747,7 @@ exports.handler = async (event, context) => {
               
               if (cellText && /\d+\s+\d+\.?\d*\s*\/\s*m/i.test(cellText)) {
                 const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
-                if (csMatch) {
+                if (csMatch && parseFloat(csMatch[1].replace(/,/g, '')) < 10000) {
                   cs = {
                     total: parseFloat(csMatch[1].replace(/,/g, '')),
                     perMinute: parseFloat(csMatch[2])
@@ -715,43 +758,71 @@ exports.handler = async (event, context) => {
               }
             }
           }
+          
+          if (!cs) {
+            console.log(`[DEBUG] WARNING: Could not extract CS for ${championName}. Full row text: "${fullRowText.substring(0, 300)}"`)
+          }
         }
         
         if (!gold) {
-          // Try from full row text first
+          console.log(`[DEBUG] Gold not found in cell 9, trying fallback extraction for ${championName}`)
+          
+          // Try from full row text first - gold usually has comma (e.g., "12,898 489.1/m")
           if (fullRowText) {
-            // Pattern: number with comma followed by space and number/m (e.g., "12,898 489.1/m")
-            const goldMatch = fullRowText.match(/([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i)
-            if (goldMatch) {
-              gold = {
-                total: parseFloat(goldMatch[1].replace(/,/g, '')),
-                perMinute: parseFloat(goldMatch[2])
+            // Try multiple patterns - gold usually has comma and is 4+ digits
+            const patterns = [
+              /([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i,        // "12,898 489.1/m" (with comma)
+              /(\d{4,})\s+(\d+\.?\d*)\s*\/\s*m/i,           // "12898 489.1/m" (no comma, 4+ digits)
+              /([\d,]{5,})\s+(\d+\.?\d*)\/m/i               // At least 5 chars (with or without comma)
+            ]
+            
+            for (const pattern of patterns) {
+              const goldMatch = fullRowText.match(pattern)
+              if (goldMatch) {
+                const total = parseFloat(goldMatch[1].replace(/,/g, ''))
+                // Gold should be reasonable (between 5000 and 50000 typically)
+                if (total >= 5000 && total <= 50000) {
+                  gold = {
+                    total: total,
+                    perMinute: parseFloat(goldMatch[2])
+                  }
+                  console.log(`[DEBUG] Extracted gold from full row text using pattern:`, gold)
+                  break
+                }
               }
-              console.log(`[DEBUG] Extracted gold from full row text:`, gold)
             }
           }
           
           // If still not found, search all cells
           if (!gold && directCells.length > 0) {
+            console.log(`[DEBUG] Searching all ${directCells.length} cells for gold pattern`)
             for (let i = 0; i < directCells.length; i++) {
               const $cell = $(directCells[i])
               const $cellClone = $cell.clone()
               $cellClone.find('table').remove()
               const cellText = $cellClone.text().trim()
               
-              // Look for pattern with comma (gold usually has comma separator)
-              if (cellText && /[\d,]+\s+\d+\.?\d*\s*\/\s*m/i.test(cellText) && cellText.includes(',')) {
+              // Look for pattern with comma (gold usually has comma separator) or large number
+              if (cellText && /[\d,]+\s+\d+\.?\d*\s*\/\s*m/i.test(cellText)) {
                 const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
                 if (goldMatch) {
-                  gold = {
-                    total: parseFloat(goldMatch[1].replace(/,/g, '')),
-                    perMinute: parseFloat(goldMatch[2])
+                  const total = parseFloat(goldMatch[1].replace(/,/g, ''))
+                  // Gold should be reasonable (between 5000 and 50000 typically)
+                  if (total >= 5000 && total <= 50000) {
+                    gold = {
+                      total: total,
+                      perMinute: parseFloat(goldMatch[2])
+                    }
+                    console.log(`[DEBUG] Extracted gold from cell ${i}:`, gold)
+                    break
                   }
-                  console.log(`[DEBUG] Extracted gold from cell ${i}:`, gold)
-                  break
                 }
               }
             }
+          }
+          
+          if (!gold) {
+            console.log(`[DEBUG] WARNING: Could not extract gold for ${championName}. Full row text: "${fullRowText.substring(0, 300)}"`)
           }
         }
       }
