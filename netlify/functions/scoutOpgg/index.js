@@ -518,8 +518,23 @@ exports.handler = async (event, context) => {
             const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
             
             if (kdaMatch) {
+              // Validate kills - should be reasonable (0-30 typically)
+              const killsValue = parseFloat(kdaMatch[1])
+              let finalKills = killsValue
+              
+              // Fix: If kills is > 30, it might be "1" + actual kills (e.g., "12.4" should be "2.4")
+              // This happens when the "1" from ":1" ratio gets captured
+              if (killsValue > 10 && killsValue < 20) {
+                // Remove leading "1" if it looks like it's from the ratio
+                const fixedKills = parseFloat(kdaMatch[1].toString().replace(/^1/, ''))
+                if (fixedKills > 0 && fixedKills <= 30) {
+                  finalKills = fixedKills
+                  console.log(`[DEBUG] Fixed kills: ${killsValue} -> ${finalKills}`)
+                }
+              }
+              
               kda = {
-                kills: parseFloat(kdaMatch[1]),
+                kills: finalKills,
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }

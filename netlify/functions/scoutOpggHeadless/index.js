@@ -56,168 +56,91 @@ exports.handler = async (event, context) => {
     console.log(`[Headless] Fetching URL: ${url}`)
 
     // Method 1: Browserless.io (recommended - free tier available)
+    // If this fails, we should NOT fall back to direct HTTP - that defeats the purpose
     let html = null
+    let usingHeadless = false
+    
     if (BROWSERLESS_API_KEY) {
       try {
         console.log('[Headless] Using Browserless.io')
         console.log('[Headless] Endpoint:', BROWSERLESS_URL)
         
-        // Try multiple endpoints in order: /unblock (best for bot detection), /content, /scrape
-        let response
-        let lastError = null
+        // Try /content endpoint (standard REST API)
+        // Token can be in query string OR headers - try both
+        const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
         
-        // Method 1: Try /unblock endpoint (bypasses bot detection)
-        const unblockUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/unblock').replace(/\/content$/, '/unblock')
         try {
-          console.log('[Headless] Trying /unblock endpoint (bypasses bot detection)')
-          response = await axios.post(
-            `${unblockUrl}?token=${BROWSERLESS_API_KEY}`,
+          console.log('[Headless] Trying /content endpoint with token in query string')
+          const response = await axios.post(
+            `${contentUrl}?token=${BROWSERLESS_API_KEY}`,
             {
               url: url,
-              waitFor: 2000,
+              waitFor: 3000, // Wait longer for JS to render
               gotoOptions: {
                 waitUntil: 'networkidle2',
-                timeout: 15000
+                timeout: 20000
               }
             },
             {
-              timeout: 20000,
+              timeout: 30000,
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${BROWSERLESS_API_KEY}` // Also try in headers
               }
             }
           )
+          
           if (typeof response.data === 'string') {
             html = response.data
-            console.log(`[Headless] Successfully fetched HTML via /unblock (${html.length} chars)`)
+            usingHeadless = true
+            console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
           } else if (response.data && response.data.html) {
             html = response.data.html
-            console.log(`[Headless] Successfully fetched HTML via /unblock (${html.length} chars)`)
+            usingHeadless = true
+            console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
           }
         } catch (error) {
-          console.log('[Headless] /unblock failed:', error.message)
-          lastError = error
-        }
-        
-        // Method 2: Try /content endpoint if /unblock failed
-        if (!html) {
-          const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
-          try {
-            console.log('[Headless] Trying /content endpoint')
-            response = await axios.post(
-              `${contentUrl}?token=${BROWSERLESS_API_KEY}`,
-              {
-                url: url,
-                waitFor: 2000,
-                gotoOptions: {
-                  waitUntil: 'networkidle2',
-                  timeout: 15000
-                }
-              },
-              {
-                timeout: 20000,
-                headers: {
-                  'Content-Type': 'application/json'
-                }
-              }
-            )
-            if (typeof response.data === 'string') {
-              html = response.data
-              console.log(`[Headless] Successfully fetched HTML via /content (${html.length} chars)`)
-            } else if (response.data && response.data.html) {
-              html = response.data.html
-              console.log(`[Headless] Successfully fetched HTML via /content (${html.length} chars)`)
-            }
-          } catch (error) {
-            console.log('[Headless] /content failed:', error.message)
-            if (error.response) {
-              console.log('[Headless] Response status:', error.response.status)
-              console.log('[Headless] Response data:', error.response.data)
-            }
-            lastError = error
+          console.error('[Headless] /content failed:', error.message)
+          if (error.response) {
+            console.error('[Headless] Response status:', error.response.status)
+            console.error('[Headless] Response data:', JSON.stringify(error.response.data))
           }
-        }
-        
-        // Method 3: Try /scrape endpoint if both failed
-        if (!html && BROWSERLESS_URL.includes('/scrape')) {
-          try {
-            console.log('[Headless] Trying /scrape endpoint')
-            response = await axios.post(
-              `${BROWSERLESS_URL}?token=${BROWSERLESS_API_KEY}`,
-              {
-                url: url,
-                waitFor: 2000,
-                gotoOptions: {
-                  waitUntil: 'networkidle2',
-                  timeout: 15000
-                }
-              },
-              {
-                timeout: 20000,
-                headers: {
-                  'Content-Type': 'application/json'
-                }
-              }
-            )
-            if (typeof response.data === 'string') {
-              html = response.data
-              console.log(`[Headless] Successfully fetched HTML via /scrape (${html.length} chars)`)
-            } else if (response.data && response.data.html) {
-              html = response.data.html
-              console.log(`[Headless] Successfully fetched HTML via /scrape (${html.length} chars)`)
-            }
-          } catch (error) {
-            console.log('[Headless] /scrape failed:', error.message)
-            lastError = error
-          }
-        }
-        
-        if (!html && lastError) {
-          throw lastError
+          // Don't fall back - if headless fails, return error
+          throw new Error(`Browserless.io failed: ${error.message}. Check API key and endpoint.`)
         }
       } catch (error) {
         console.error('[Headless] Browserless.io error:', error.message)
-        // Fall through to alternative methods
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            error: 'Failed to fetch with headless browser',
+            message: error.message,
+            hint: 'Check BROWSERLESS_API_KEY and BROWSERLESS_URL environment variables'
+          })
+        }
+      }
+    } else {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'Browserless.io API key not configured',
+          message: 'BROWSERLESS_API_KEY environment variable is required for headless scraping'
+        })
       }
     }
 
-    // Method 2: ScrapingBee (alternative - uncomment to use)
-    /*
-    if (!html && SCRAPINGBEE_API_KEY) {
-      try {
-        console.log('[Headless] Using ScrapingBee')
-        const response = await axios.get(SCRAPINGBEE_URL, {
-          params: {
-            api_key: SCRAPINGBEE_API_KEY,
-            url: url,
-            render_js: 'true', // Enable JavaScript rendering
-            wait: 2000 // Wait 2 seconds
-          },
-          timeout: 15000
+    // NO FALLBACK - If headless browser fails, we fail
+    // The whole point is to get properly rendered HTML, not to guess with templates
+    if (!html || !usingHeadless) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'Headless browser failed',
+          message: 'Could not fetch rendered HTML. This endpoint requires a working headless browser service.'
         })
-        html = response.data
-        console.log(`[Headless] Successfully fetched HTML via ScrapingBee (${html.length} chars)`)
-      } catch (error) {
-        console.error('[Headless] ScrapingBee error:', error.message)
-      }
-    }
-    */
-
-    // Method 3: Direct axios (fallback - no JavaScript rendering)
-    if (!html) {
-      console.log('[Headless] Falling back to direct HTTP request (no JS rendering)')
-      try {
-        const response = await axios.get(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          },
-          timeout: 8000
-        })
-        html = response.data
-        console.log(`[Headless] Fallback HTML fetched (${html.length} chars)`)
-      } catch (error) {
-        console.error('[Headless] Fallback error:', error.message)
-        throw new Error(`Failed to fetch page: ${error.message}`)
       }
     }
 
@@ -467,21 +390,30 @@ exports.handler = async (event, context) => {
          }
         
         // Extract KDA from cell 3
+        // Headless browser gives us clean HTML, so we can trust the structure
+        // Format: "2.12:1 6.9 / 5.8 / 5.4 (44%)"
         if (directCells.length > 3) {
           const $cell = $(directCells[3])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
-          const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1(?:\s|$)/)
+          
+          // Simple extraction - headless browser should have proper spacing
+          // Ratio: "2.12:1"
+          const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1\b/)
+          
+          // KDA: "6.9 / 5.8 / 5.4" - comes after ratio
           let kdaMatch = null
           if (ratioMatch) {
-            const ratioEnd = cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length
-            const afterRatio = cellText.substring(ratioEnd).trim()
+            const afterRatio = cellText.substring(cellText.indexOf(ratioMatch[0]) + ratioMatch[0].length).trim()
             kdaMatch = afterRatio.match(/^(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
           } else {
             kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
           }
+          
+          // Kill participation: "(44%)"
           const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
+          
           if (kdaMatch) {
             kda = {
               kills: parseFloat(kdaMatch[1]),
@@ -494,11 +426,14 @@ exports.handler = async (event, context) => {
         }
         
         // Extract damage from cell 6
+        // Headless browser format: "1087.2/m 29.7%" (clean spacing)
         if (directCells.length > 6) {
           const $cell = $(directCells[6])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
+          
+          // Simple pattern - headless browser has proper spacing
           const dmgMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m\s+(\d+\.?\d*)\s*%/i)
           if (dmgMatch) {
             damage = {
@@ -509,12 +444,13 @@ exports.handler = async (event, context) => {
         }
         
         // Extract wards from cell 7
-        // Headless browser should have proper spacing, so simpler patterns work
+        // Headless browser format: "15 1 (16/4)" or "244 (16/4)" (clean spacing)
         if (directCells.length > 7) {
           const $cell = $(directCells[7])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
+          
           // Pattern 1: "15 1 (16/4)" = vision score, control wards, (placed/killed)
           let wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
           if (wardsMatch) {
@@ -539,48 +475,37 @@ exports.handler = async (event, context) => {
         }
         
         // Extract CS from cell 8
-        // Headless browser should have proper spacing: "226 8.6/m" or "98 8.6/m"
+        // Headless browser format: "226 8.6/m" (clean spacing, total and per minute)
         if (directCells.length > 8) {
           const $cell = $(directCells[8])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
-          // Standard format: "226 8.6/m" = total and per minute
+          
+          // Simple pattern - headless browser has proper spacing
           const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
           if (csMatch) {
             cs = {
               total: parseFloat(csMatch[1].replace(/,/g, '')),
               perMinute: parseFloat(csMatch[2])
             }
-          } else {
-            // Fallback: only per minute "8.6/m" (no total)
-            const perMinMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*m/i)
-            if (perMinMatch) {
-              const perMin = parseFloat(perMinMatch[1])
-              if (perMin <= 30) { // Reasonable per minute value
-                cs = { total: 0, perMinute: perMin }
-              }
-            }
           }
         }
         
         // Extract gold from cell 9
-        // Headless browser should have proper spacing: "12,898 489.1/m"
+        // Headless browser format: "12,898 489.1/m" (clean spacing, total and per minute)
         if (directCells.length > 9) {
           const $cell = $(directCells[9])
           const $cellClone = $cell.clone()
           $cellClone.find('table').remove()
           const cellText = $cellClone.text().trim()
-          // Standard format: "12,898 489.1/m" = total and per minute
+          
+          // Simple pattern - headless browser has proper spacing
           const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
           if (goldMatch) {
-            const total = parseFloat(goldMatch[1].replace(/,/g, ''))
-            // Validate: gold should be reasonable (5000-50000)
-            if (total >= 5000 && total <= 50000) {
-              gold = {
-                total: total,
-                perMinute: parseFloat(goldMatch[2])
-              }
+            gold = {
+              total: parseFloat(goldMatch[1].replace(/,/g, '')),
+              perMinute: parseFloat(goldMatch[2])
             }
           }
         }
