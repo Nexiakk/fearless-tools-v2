@@ -618,38 +618,119 @@ exports.handler = async (event, context) => {
         }
         
         // Fallback: Try to extract missing stats from full row text if cell extraction failed
-        if (!wards && fullRowText) {
-          const wardsMatch = fullRowText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
-          if (wardsMatch) {
-            wards = {
-              visionScore: parseFloat(wardsMatch[1]),
-              controlWards: parseFloat(wardsMatch[2]),
-              placed: parseFloat(wardsMatch[3]),
-              killed: parseFloat(wardsMatch[4])
+        // Also try searching all cells if specific cell extraction failed
+        if (!wards) {
+          // Try from full row text first
+          if (fullRowText) {
+            const wardsMatch = fullRowText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+            if (wardsMatch) {
+              wards = {
+                visionScore: parseFloat(wardsMatch[1]),
+                controlWards: parseFloat(wardsMatch[2]),
+                placed: parseFloat(wardsMatch[3]),
+                killed: parseFloat(wardsMatch[4])
+              }
+              console.log(`[DEBUG] Extracted wards from full row text:`, wards)
             }
-            console.log(`[DEBUG] Extracted wards from full row text:`, wards)
+          }
+          
+          // If still not found, search all cells
+          if (!wards && directCells.length > 0) {
+            for (let i = 0; i < directCells.length; i++) {
+              const $cell = $(directCells[i])
+              const $cellClone = $cell.clone()
+              $cellClone.find('table').remove()
+              const cellText = $cellClone.text().trim()
+              
+              if (cellText && /\(\d+\s*\/\s*\d+\)/.test(cellText)) {
+                const wardsMatch = cellText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+                if (wardsMatch) {
+                  wards = {
+                    visionScore: parseFloat(wardsMatch[1]),
+                    controlWards: parseFloat(wardsMatch[2]),
+                    placed: parseFloat(wardsMatch[3]),
+                    killed: parseFloat(wardsMatch[4])
+                  }
+                  console.log(`[DEBUG] Extracted wards from cell ${i}:`, wards)
+                  break
+                }
+              }
+            }
           }
         }
         
-        if (!cs && fullRowText) {
-          const csMatch = fullRowText.match(/(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i)
-          if (csMatch) {
-            cs = {
-              total: parseFloat(csMatch[1].replace(/,/g, '')),
-              perMinute: parseFloat(csMatch[2])
+        if (!cs) {
+          // Try from full row text first
+          if (fullRowText) {
+            // Pattern: number followed by space and number/m (e.g., "226 8.6/m")
+            const csMatch = fullRowText.match(/(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (csMatch) {
+              cs = {
+                total: parseFloat(csMatch[1].replace(/,/g, '')),
+                perMinute: parseFloat(csMatch[2])
+              }
+              console.log(`[DEBUG] Extracted CS from full row text:`, cs)
             }
-            console.log(`[DEBUG] Extracted CS from full row text:`, cs)
+          }
+          
+          // If still not found, search all cells
+          if (!cs && directCells.length > 0) {
+            for (let i = 0; i < directCells.length; i++) {
+              const $cell = $(directCells[i])
+              const $cellClone = $cell.clone()
+              $cellClone.find('table').remove()
+              const cellText = $cellClone.text().trim()
+              
+              if (cellText && /\d+\s+\d+\.?\d*\s*\/\s*m/i.test(cellText)) {
+                const csMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+                if (csMatch) {
+                  cs = {
+                    total: parseFloat(csMatch[1].replace(/,/g, '')),
+                    perMinute: parseFloat(csMatch[2])
+                  }
+                  console.log(`[DEBUG] Extracted CS from cell ${i}:`, cs)
+                  break
+                }
+              }
+            }
           }
         }
         
-        if (!gold && fullRowText) {
-          const goldMatch = fullRowText.match(/([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i)
-          if (goldMatch) {
-            gold = {
-              total: parseFloat(goldMatch[1].replace(/,/g, '')),
-              perMinute: parseFloat(goldMatch[2])
+        if (!gold) {
+          // Try from full row text first
+          if (fullRowText) {
+            // Pattern: number with comma followed by space and number/m (e.g., "12,898 489.1/m")
+            const goldMatch = fullRowText.match(/([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+            if (goldMatch) {
+              gold = {
+                total: parseFloat(goldMatch[1].replace(/,/g, '')),
+                perMinute: parseFloat(goldMatch[2])
+              }
+              console.log(`[DEBUG] Extracted gold from full row text:`, gold)
             }
-            console.log(`[DEBUG] Extracted gold from full row text:`, gold)
+          }
+          
+          // If still not found, search all cells
+          if (!gold && directCells.length > 0) {
+            for (let i = 0; i < directCells.length; i++) {
+              const $cell = $(directCells[i])
+              const $cellClone = $cell.clone()
+              $cellClone.find('table').remove()
+              const cellText = $cellClone.text().trim()
+              
+              // Look for pattern with comma (gold usually has comma separator)
+              if (cellText && /[\d,]+\s+\d+\.?\d*\s*\/\s*m/i.test(cellText) && cellText.includes(',')) {
+                const goldMatch = cellText.match(/([\d,]+)\s+(\d+\.?\d*)\s*\/\s*m/i)
+                if (goldMatch) {
+                  gold = {
+                    total: parseFloat(goldMatch[1].replace(/,/g, '')),
+                    perMinute: parseFloat(goldMatch[2])
+                  }
+                  console.log(`[DEBUG] Extracted gold from cell ${i}:`, gold)
+                  break
+                }
+              }
+            }
           }
         }
       }
