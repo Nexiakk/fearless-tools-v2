@@ -199,6 +199,10 @@ exports.handler = async (event, context) => {
             }
             results = []
           }
+        } catch (error) {
+          console.error(`[Leaguepedia] Outer try block error:`, error.message)
+          results = []
+        }
         
         // Transform results to match op.gg data structure
         // Handle both camelCase and PascalCase field names from API
