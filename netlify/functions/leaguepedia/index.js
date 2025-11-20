@@ -56,36 +56,90 @@ exports.handler = async (event, context) => {
         
         try {
           // Query champion pool with aggregated stats from ScoreboardPlayers
-          // This table should have per-game player stats including champion, KDA, CS, gold, etc.
-          // We'll aggregate by champion to get totals and averages
+          // According to Leaguepedia API docs, we need to join PlayerRedirects for name resolution
+          // and use proper field names from ScoreboardPlayers table
           console.log(`[Leaguepedia] Querying ScoreboardPlayers for champion pool data`)
           
-          const queryResult = await cargo.query({
-            tables: ['ScoreboardPlayers'],
-            fields: [
-              'ScoreboardPlayers.Champion',
-              'COUNT(*) as Games',
-              'SUM(CASE WHEN ScoreboardPlayers.Win="1" THEN 1 ELSE 0 END) as Wins',
-              'AVG(ScoreboardPlayers.Kills) as AvgKills',
-              'AVG(ScoreboardPlayers.Deaths) as AvgDeaths',
-              'AVG(ScoreboardPlayers.Assists) as AvgAssists',
-              'AVG(ScoreboardPlayers.CS) as AvgCS',
-              'AVG(ScoreboardPlayers.Gold) as AvgGold',
-              'AVG(ScoreboardPlayers.VisionScore) as AvgVisionScore',
-              'AVG(ScoreboardPlayers.DamageToChampions) as AvgDamage'
-            ],
-            where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-            groupBy: ['ScoreboardPlayers.Champion'],
-            orderBy: [{ field: 'Games', desc: true }],
-            limit: 50
-          })
+          // Query ScoreboardPlayers with PlayerRedirects join for name resolution
+          // Try both array and string formats - poro might support either
+          let queryResult
+          try {
+            // Try with string format for joins (Cargo API style)
+            queryResult = await cargo.query({
+              tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
+              fields: [
+                'SP.Champion',
+                'COUNT(*) as Games',
+                'SUM(CASE WHEN SP.Win="1" THEN 1 ELSE 0 END) as Wins',
+                'AVG(SP.Kills) as AvgKills',
+                'AVG(SP.Deaths) as AvgDeaths',
+                'AVG(SP.Assists) as AvgAssists',
+                'AVG(SP.CS) as AvgCS',
+                'AVG(SP.Gold) as AvgGold',
+                'AVG(SP.VisionScore) as AvgVisionScore',
+                'AVG(SP.DamageToChampions) as AvgDamage'
+              ],
+              where: `PR.AllName = "${playerName1}" AND SP.Date >= "2025-01-01"`,
+              join_on: 'SP.Player=PR.AllName',
+              group_by: 'SP.Champion',
+              order_by: 'Games DESC',
+              limit: 50
+            })
+          } catch (joinError) {
+            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
+            // Fallback to direct query without join (might work if player name matches exactly)
+            queryResult = await cargo.query({
+              tables: ['ScoreboardPlayers'],
+              fields: [
+                'ScoreboardPlayers.Champion',
+                'COUNT(*) as Games',
+                'SUM(CASE WHEN ScoreboardPlayers.Win="1" THEN 1 ELSE 0 END) as Wins',
+                'AVG(ScoreboardPlayers.Kills) as AvgKills',
+                'AVG(ScoreboardPlayers.Deaths) as AvgDeaths',
+                'AVG(ScoreboardPlayers.Assists) as AvgAssists',
+                'AVG(ScoreboardPlayers.CS) as AvgCS',
+                'AVG(ScoreboardPlayers.Gold) as AvgGold',
+                'AVG(ScoreboardPlayers.VisionScore) as AvgVisionScore',
+                'AVG(ScoreboardPlayers.DamageToChampions) as AvgDamage'
+              ],
+              where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
+              groupBy: ['ScoreboardPlayers.Champion'],
+              orderBy: [{ field: 'Games', desc: true }],
+              limit: 50
+            })
+          }
           
-          // Handle response
+          // Log the raw response structure for debugging
+          console.log(`[Leaguepedia] Raw query result type:`, typeof queryResult)
+          console.log(`[Leaguepedia] Raw query result is array:`, Array.isArray(queryResult))
+          if (queryResult) {
+            console.log(`[Leaguepedia] Raw query result keys:`, Object.keys(queryResult))
+            console.log(`[Leaguepedia] Raw query result sample:`, JSON.stringify(queryResult).substring(0, 500))
+          }
+          
+          // Handle response - poro library may return data in different formats
+          // Try multiple possible structures
           if (Array.isArray(queryResult)) {
             results = queryResult
           } else if (queryResult && typeof queryResult === 'object') {
-            results = queryResult.data || queryResult.results || queryResult.items || []
-            if (!Array.isArray(results)) {
+            // Check for common response structures
+            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
+              // Raw Cargo API format - extract title objects
+              results = queryResult.cargoquery.map(item => item.title || item)
+            } else if (queryResult.data) {
+              if (Array.isArray(queryResult.data)) {
+                results = queryResult.data
+              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
+                results = queryResult.data.cargoquery.map(item => item.title || item)
+              } else {
+                results = []
+              }
+            } else if (queryResult.results && Array.isArray(queryResult.results)) {
+              results = queryResult.results
+            } else if (queryResult.items && Array.isArray(queryResult.items)) {
+              results = queryResult.items
+            } else {
+              // If it's an object but not an array, try to extract values
               results = []
             }
           } else {
@@ -94,35 +148,41 @@ exports.handler = async (event, context) => {
           
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
           if (results.length > 0) {
-            console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 200))
+            console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
           }
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          
           // Try simpler query to see what fields actually exist
           try {
             const simpleTest = await cargo.query({
-              tables: ['ScoreboardPlayers'],
-              fields: ['ScoreboardPlayers.Player', 'ScoreboardPlayers.Champion'],
-              where: `ScoreboardPlayers.Player = "${playerName1}"`,
+              tables: 'ScoreboardPlayers=SP',
+              fields: ['SP.Player', 'SP.Champion'],
+              where: `SP.Player = "${playerName1}"`,
               limit: 1
             })
-            console.log(`[Leaguepedia] Simple test query result:`, JSON.stringify(simpleTest).substring(0, 300))
+            console.log(`[Leaguepedia] Simple test query result type:`, typeof simpleTest)
+            console.log(`[Leaguepedia] Simple test query result:`, JSON.stringify(simpleTest).substring(0, 500))
           } catch (testError) {
             console.error(`[Leaguepedia] Simple test also failed:`, testError.message)
+            console.error(`[Leaguepedia] Simple test error stack:`, testError.stack)
           }
           results = []
         }
         
         // Transform results to match op.gg data structure
+        // Handle both camelCase and PascalCase field names from API
         const transformedChampionPool = results.map(match => {
+          // Handle field name variations (API might return different casing)
           const games = parseInt(match.Games || match.games || 0) || 0
           const wins = parseInt(match.Wins || match.wins || 0) || 0
           const losses = games - wins
           const winrate = games > 0 ? (wins / games) * 100 : 0
           
-          const avgKills = parseFloat(match.AvgKills || match.avgKills || match.Kills || 0) || 0
-          const avgDeaths = parseFloat(match.AvgDeaths || match.avgDeaths || match.Deaths || 0) || 0
-          const avgAssists = parseFloat(match.AvgAssists || match.avgAssists || match.Assists || 0) || 0
+          const avgKills = parseFloat(match.AvgKills || match.avgKills || match.Kills || match.kills || 0) || 0
+          const avgDeaths = parseFloat(match.AvgDeaths || match.avgDeaths || match.Deaths || match.deaths || 0) || 0
+          const avgAssists = parseFloat(match.AvgAssists || match.avgAssists || match.Assists || match.assists || 0) || 0
           const kdaRatio = avgDeaths > 0 ? (avgKills + avgAssists) / avgDeaths : (avgKills + avgAssists)
           
           const championData = {
@@ -145,7 +205,7 @@ exports.handler = async (event, context) => {
           }
           
           // Add CS if available
-          const avgCS = parseFloat(match.AvgCS || match.avgCS || match.CS || 0) || 0
+          const avgCS = parseFloat(match.AvgCS || match.avgCS || match.CS || match.cs || 0) || 0
           if (avgCS > 0) {
             championData.cs = {
               total: Math.round(avgCS), // Average CS per game
@@ -154,7 +214,7 @@ exports.handler = async (event, context) => {
           }
           
           // Add Gold if available
-          const avgGold = parseFloat(match.AvgGold || match.avgGold || match.Gold || 0) || 0
+          const avgGold = parseFloat(match.AvgGold || match.avgGold || match.Gold || match.gold || 0) || 0
           if (avgGold > 0) {
             championData.gold = {
               total: Math.round(avgGold), // Average gold per game
@@ -163,7 +223,7 @@ exports.handler = async (event, context) => {
           }
           
           // Add Vision Score if available
-          const avgVision = parseFloat(match.AvgVisionScore || match.avgVisionScore || match.VisionScore || 0) || 0
+          const avgVision = parseFloat(match.AvgVisionScore || match.avgVisionScore || match.VisionScore || match.visionScore || 0) || 0
           if (avgVision > 0) {
             championData.wards = {
               visionScore: Math.round(avgVision * 10) / 10,
@@ -174,9 +234,10 @@ exports.handler = async (event, context) => {
           }
           
           // Add Damage if available
-          const avgDamage = parseFloat(match.AvgDamage || match.avgDamage || match.DamageToChampions || 0) || 0
+          const avgDamage = parseFloat(match.AvgDamage || match.avgDamage || match.DamageToChampions || match.damageToChampions || 0) || 0
           if (avgDamage > 0) {
             championData.damage = {
+              total: Math.round(avgDamage), // Average damage per game
               perMinute: 0, // Would need game duration
               percentage: 0 // Would need team total damage
             }
@@ -195,51 +256,73 @@ exports.handler = async (event, context) => {
         }
 
       case 'getPlayerInfo':
-        // Query player info from Players table (this one should work)
+        // Query player info from Players table
+        // According to Leaguepedia API docs, should join PlayerRedirects for name resolution
         const playerName2 = params.playerName
         console.log(`[Leaguepedia] getPlayerInfo query for player: "${playerName2}"`)
         
         try {
-          // First test with direct axios to see response
-          const testUrl = `https://lol.fandom.com/wiki/Special:CargoExport?tables=Players&fields=Players.Name&where=Players.Name = "${playerName2}"&limit=1&format=json`
-          const testResponse = await axios.get(testUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-          })
-          
-          console.log(`[Leaguepedia] Players table test response:`, typeof testResponse.data === 'string' 
-            ? testResponse.data.substring(0, 200) 
-            : 'JSON response')
-          
-          // If test works, use Poro
-          if (typeof testResponse.data === 'string' && testResponse.data.startsWith('Error:')) {
-            console.error(`[Leaguepedia] Players table also has issues:`, testResponse.data)
-            results = []
-          } else {
-            const queryResult = await cargo.query({
-              tables: ['Players'],
-              fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
-              where: `Players.Name = "${playerName2}"`,
-              orderBy: [{ field: 'Players._pageName' }],
+          // Use PlayerRedirects join as recommended in Leaguepedia API docs
+          // Try both formats to see which one works
+          let queryResult
+          try {
+            queryResult = await cargo.query({
+              tables: 'Players=P, PlayerRedirects=PR',
+              fields: ['P.ID', 'P.Name', 'P.Team', 'P.Role', 'P.Region', 'P.Country', 'P.Birthdate'],
+              where: `PR.AllName = "${playerName2}"`,
+              join_on: 'PR.OverviewPage=P.OverviewPage',
               limit: 1
             })
-            
-            // Handle response
-            if (Array.isArray(queryResult)) {
-              results = queryResult
-            } else if (queryResult && typeof queryResult === 'object') {
-              results = queryResult.data || queryResult.results || queryResult.items || []
-              if (!Array.isArray(results)) {
+          } catch (joinError) {
+            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
+            // Fallback to direct query
+            queryResult = await cargo.query({
+              tables: ['Players'],
+              fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region', 'Players.Country', 'Players.Birthdate'],
+              where: `Players.Name = "${playerName2}"`,
+              limit: 1
+            })
+          }
+          
+          // Log the raw response structure for debugging
+          console.log(`[Leaguepedia] Players query result type:`, typeof queryResult)
+          console.log(`[Leaguepedia] Players query result is array:`, Array.isArray(queryResult))
+          if (queryResult) {
+            console.log(`[Leaguepedia] Players query result keys:`, Object.keys(queryResult))
+            console.log(`[Leaguepedia] Players query result sample:`, JSON.stringify(queryResult).substring(0, 500))
+          }
+          
+          // Handle response - poro library may return data in different formats
+          if (Array.isArray(queryResult)) {
+            results = queryResult
+          } else if (queryResult && typeof queryResult === 'object') {
+            // Check for common response structures
+            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
+              // Raw Cargo API format - extract title objects
+              results = queryResult.cargoquery.map(item => item.title || item)
+            } else if (queryResult.data) {
+              if (Array.isArray(queryResult.data)) {
+                results = queryResult.data
+              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
+                results = queryResult.data.cargoquery.map(item => item.title || item)
+              } else {
                 results = []
               }
+            } else if (queryResult.results && Array.isArray(queryResult.results)) {
+              results = queryResult.results
+            } else if (queryResult.items && Array.isArray(queryResult.items)) {
+              results = queryResult.items
             } else {
               results = []
             }
-            
-            console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
+          } else {
+            results = []
           }
+          
+          console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
           results = []
         }
         
@@ -255,40 +338,93 @@ exports.handler = async (event, context) => {
         }
 
       case 'getRecentMatches':
-        // Query recent matches - use ScoreboardPlayers (plural)
+        // Query recent matches - use ScoreboardPlayers with PlayerRedirects join
         const limit = params.limit || 20
         const playerName3 = params.playerName
         console.log(`[Leaguepedia] getRecentMatches query for player: "${playerName3}"`)
         
         try {
           // Query recent matches with detailed stats
-          const queryResult = await cargo.query({
-            tables: ['ScoreboardPlayers'],
-            fields: [
-              'ScoreboardPlayers.Champion',
-              'ScoreboardPlayers.Win',
-              'ScoreboardPlayers.Date',
-              'ScoreboardPlayers.Opponent',
-              'ScoreboardPlayers.Team',
-              'ScoreboardPlayers.Tournament',
-              'ScoreboardPlayers.Kills',
-              'ScoreboardPlayers.Deaths',
-              'ScoreboardPlayers.Assists',
-              'ScoreboardPlayers.CS',
-              'ScoreboardPlayers.Gold',
-              'ScoreboardPlayers.VisionScore'
-            ],
-            where: `ScoreboardPlayers.Player = "${playerName3}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-            orderBy: [{ field: 'ScoreboardPlayers.Date', desc: true }],
-            limit: limit
-          })
+          // Try with join first, fallback to direct query
+          let queryResult
+          try {
+            queryResult = await cargo.query({
+              tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
+              fields: [
+                'SP.Champion',
+                'SP.Win',
+                'SP.Date',
+                'SP.Opponent',
+                'SP.Team',
+                'SP.Tournament',
+                'SP.Kills',
+                'SP.Deaths',
+                'SP.Assists',
+                'SP.CS',
+                'SP.Gold',
+                'SP.VisionScore',
+                'SP.DamageToChampions'
+              ],
+              where: `PR.AllName = "${playerName3}" AND SP.Date >= "2025-01-01"`,
+              join_on: 'SP.Player=PR.AllName',
+              order_by: 'SP.Date DESC',
+              limit: limit
+            })
+          } catch (joinError) {
+            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
+            // Fallback to direct query
+            queryResult = await cargo.query({
+              tables: ['ScoreboardPlayers'],
+              fields: [
+                'ScoreboardPlayers.Champion',
+                'ScoreboardPlayers.Win',
+                'ScoreboardPlayers.Date',
+                'ScoreboardPlayers.Opponent',
+                'ScoreboardPlayers.Team',
+                'ScoreboardPlayers.Tournament',
+                'ScoreboardPlayers.Kills',
+                'ScoreboardPlayers.Deaths',
+                'ScoreboardPlayers.Assists',
+                'ScoreboardPlayers.CS',
+                'ScoreboardPlayers.Gold',
+                'ScoreboardPlayers.VisionScore',
+                'ScoreboardPlayers.DamageToChampions'
+              ],
+              where: `ScoreboardPlayers.Player = "${playerName3}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
+              orderBy: [{ field: 'ScoreboardPlayers.Date', desc: true }],
+              limit: limit
+            })
+          }
           
-          // Handle response
+          // Log the raw response structure for debugging
+          console.log(`[Leaguepedia] Matches query result type:`, typeof queryResult)
+          console.log(`[Leaguepedia] Matches query result is array:`, Array.isArray(queryResult))
+          if (queryResult) {
+            console.log(`[Leaguepedia] Matches query result keys:`, Object.keys(queryResult))
+            console.log(`[Leaguepedia] Matches query result sample:`, JSON.stringify(queryResult).substring(0, 500))
+          }
+          
+          // Handle response - poro library may return data in different formats
           if (Array.isArray(queryResult)) {
             results = queryResult
           } else if (queryResult && typeof queryResult === 'object') {
-            results = queryResult.data || queryResult.results || queryResult.items || []
-            if (!Array.isArray(results)) {
+            // Check for common response structures
+            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
+              // Raw Cargo API format - extract title objects
+              results = queryResult.cargoquery.map(item => item.title || item)
+            } else if (queryResult.data) {
+              if (Array.isArray(queryResult.data)) {
+                results = queryResult.data
+              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
+                results = queryResult.data.cargoquery.map(item => item.title || item)
+              } else {
+                results = []
+              }
+            } else if (queryResult.results && Array.isArray(queryResult.results)) {
+              results = queryResult.results
+            } else if (queryResult.items && Array.isArray(queryResult.items)) {
+              results = queryResult.items
+            } else {
               results = []
             }
           } else {
@@ -298,24 +434,26 @@ exports.handler = async (event, context) => {
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
           results = []
         }
         
         const transformedMatches = results.map(match => ({
-          champion: match.Champion || '',
-          win: match.Win === '1' || match.Win === 1,
-          date: match.Date,
-          opponent: match.Opponent,
-          team: match.Team,
-          tournament: match.Tournament,
+          champion: match.Champion || match.champion || '',
+          win: match.Win === '1' || match.Win === 1 || match.win === '1' || match.win === 1,
+          date: match.Date || match.date || '',
+          opponent: match.Opponent || match.opponent || '',
+          team: match.Team || match.team || '',
+          tournament: match.Tournament || match.tournament || '',
           kda: {
-            kills: parseFloat(match.Kills || 0) || 0,
-            deaths: parseFloat(match.Deaths || 0) || 0,
-            assists: parseFloat(match.Assists || 0) || 0
+            kills: parseFloat(match.Kills || match.kills || 0) || 0,
+            deaths: parseFloat(match.Deaths || match.deaths || 0) || 0,
+            assists: parseFloat(match.Assists || match.assists || 0) || 0
           },
-          cs: parseFloat(match.CS || 0) || 0,
-          gold: parseFloat(match.Gold || 0) || 0,
-          visionScore: parseFloat(match.VisionScore || 0) || 0
+          cs: parseFloat(match.CS || match.cs || 0) || 0,
+          gold: parseFloat(match.Gold || match.gold || 0) || 0,
+          visionScore: parseFloat(match.VisionScore || match.visionScore || 0) || 0,
+          damage: parseFloat(match.DamageToChampions || match.damageToChampions || 0) || 0
         }))
         
         return {
@@ -333,19 +471,50 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] searchPlayers query for: "${searchTerm}"`)
         
         try {
-          const queryResult = await cargo.query({
-            tables: ['Players'],
-            fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
-            where: `Players.Name LIKE "%${searchTerm}%"`,
-            limit: 20
-          })
+          // Try both formats
+          let queryResult
+          try {
+            queryResult = await cargo.query({
+              tables: 'Players=P',
+              fields: ['P.ID', 'P.Name', 'P.Team', 'P.Role', 'P.Region'],
+              where: `P.Name LIKE "%${searchTerm}%"`,
+              limit: 20
+            })
+          } catch (formatError) {
+            console.log(`[Leaguepedia] String format failed, trying array format:`, formatError.message)
+            queryResult = await cargo.query({
+              tables: ['Players'],
+              fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
+              where: `Players.Name LIKE "%${searchTerm}%"`,
+              limit: 20
+            })
+          }
           
-          // Handle different response formats
+          // Log the raw response structure for debugging
+          console.log(`[Leaguepedia] Search query result type:`, typeof queryResult)
+          console.log(`[Leaguepedia] Search query result is array:`, Array.isArray(queryResult))
+          
+          // Handle response - poro library may return data in different formats
           if (Array.isArray(queryResult)) {
             results = queryResult
           } else if (queryResult && typeof queryResult === 'object') {
-            results = queryResult.data || queryResult.results || queryResult.items || []
-            if (!Array.isArray(results)) {
+            // Check for common response structures
+            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
+              // Raw Cargo API format - extract title objects
+              results = queryResult.cargoquery.map(item => item.title || item)
+            } else if (queryResult.data) {
+              if (Array.isArray(queryResult.data)) {
+                results = queryResult.data
+              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
+                results = queryResult.data.cargoquery.map(item => item.title || item)
+              } else {
+                results = []
+              }
+            } else if (queryResult.results && Array.isArray(queryResult.results)) {
+              results = queryResult.results
+            } else if (queryResult.items && Array.isArray(queryResult.items)) {
+              results = queryResult.items
+            } else {
               results = []
             }
           } else {
