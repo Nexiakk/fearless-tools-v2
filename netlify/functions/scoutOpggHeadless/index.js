@@ -67,56 +67,84 @@ exports.handler = async (event, context) => {
         console.log('[Headless] Endpoint:', BROWSERLESS_URL)
         
         try {
-          // Follow Browserless.io documentation exactly:
-          // https://docs.browserless.io/rest-apis/content
-          // URL format: https://production-<region>.browserless.io/content?token=TOKEN
-          // Body: { url: "https://example.com/" }
-          // Response: Raw HTML text
-          
           // Fix: chrome.browserless.io is deprecated - must use production-<region>.browserless.io
           // If user has old URL, convert it to regional format
-          let contentUrl = BROWSERLESS_URL
+          let baseUrl = BROWSERLESS_URL
           
           // Replace deprecated chrome.browserless.io with production-sfo
-          if (contentUrl.includes('chrome.browserless.io')) {
+          if (baseUrl.includes('chrome.browserless.io')) {
             console.warn('[Headless] Detected deprecated chrome.browserless.io endpoint, converting to production-sfo')
-            contentUrl = contentUrl.replace('chrome.browserless.io', 'production-sfo.browserless.io')
+            baseUrl = baseUrl.replace('chrome.browserless.io', 'production-sfo.browserless.io')
           }
           
-          // Ensure we're using /content endpoint (not /scrape or /unblock)
-          contentUrl = contentUrl.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
+          // Extract base URL (remove any path)
+          const baseUrlMatch = baseUrl.match(/https?:\/\/[^\/]+/)
+          const baseUrlOnly = baseUrlMatch ? baseUrlMatch[0] : baseUrl.replace(/\/.*$/, '')
           
-          // If URL doesn't end with /content, add it
-          if (!contentUrl.endsWith('/content')) {
-            contentUrl = contentUrl.replace(/\/$/, '') + '/content'
-          }
+          // Try /unblock API first (recommended for bot detection bypass)
+          // https://docs.browserless.io/rest-apis/content#bot-detection-troubleshooting
+          console.log('[Headless] Trying /unblock API (bypasses bot detection)')
+          const unblockUrl = `${baseUrlOnly}/unblock?token=${BROWSERLESS_API_KEY}&proxy=residential`
           
-          const apiUrl = `${contentUrl}?token=${BROWSERLESS_API_KEY}`
-          
-          console.log('[Headless] Calling Browserless.io /content API')
-          console.log('[Headless] Endpoint:', apiUrl)
-          console.log('[Headless] Target URL:', url)
-          
-          const response = await axios.post(
-            apiUrl,
-            { url: url }, // Simple body - just the URL
-            {
-              timeout: 30000,
-              headers: {
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'application/json'
+          try {
+            const unblockResponse = await axios.post(
+              unblockUrl,
+              {
+                url: url,
+                content: true // Return HTML content directly
               },
-              responseType: 'text' // Expect raw HTML text, not JSON
+              {
+                timeout: 45000, // Longer timeout for unblock
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            
+            // /unblock returns JSON with html property
+            if (unblockResponse.data && unblockResponse.data.html) {
+              html = unblockResponse.data.html
+              usingHeadless = true
+              console.log(`[Headless] ✅ Successfully fetched HTML via /unblock (${html.length} chars)`)
+            } else if (typeof unblockResponse.data === 'string' && unblockResponse.data.length > 0) {
+              html = unblockResponse.data
+              usingHeadless = true
+              console.log(`[Headless] ✅ Successfully fetched HTML via /unblock (${html.length} chars)`)
             }
-          )
+          } catch (unblockError) {
+            console.log('[Headless] /unblock failed, trying /content:', unblockError.message)
+            
+            // Fallback to /content API
+            const contentUrl = `${baseUrlOnly}/content?token=${BROWSERLESS_API_KEY}`
+            console.log('[Headless] Trying /content API')
+            
+            const response = await axios.post(
+              contentUrl,
+              { url: url },
+              {
+                timeout: 30000,
+                headers: {
+                  'Cache-Control': 'no-cache',
+                  'Content-Type': 'application/json'
+                },
+                responseType: 'text'
+              }
+            )
+            
+            // Response is raw HTML text (not JSON)
+            if (typeof response.data === 'string' && response.data.length > 0) {
+              html = response.data
+              usingHeadless = true
+              console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
+            } else {
+              throw new Error('Empty or invalid response from Browserless.io')
+            }
+          }
           
-          // Response is raw HTML text (not JSON)
-          if (typeof response.data === 'string' && response.data.length > 0) {
-            html = response.data
-            usingHeadless = true
-            console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
-          } else {
-            throw new Error('Empty or invalid response from Browserless.io')
+          // Validate HTML - if too small, likely bot detection page
+          if (html && html.length < 5000) {
+            console.warn(`[Headless] ⚠️ HTML response is very small (${html.length} chars) - might be bot detection page`)
+            console.warn(`[Headless] First 500 chars: ${html.substring(0, 500)}`)
           }
         } catch (error) {
           console.error('[Headless] /content failed:', error.message)
