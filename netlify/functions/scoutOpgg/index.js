@@ -438,6 +438,12 @@ exports.handler = async (event, context) => {
       if ($row.is('tr')) {
         const directCells = $row.children('td')
         console.log(`[DEBUG] Champion: ${championName}, Number of cells: ${directCells.length}`)
+        // Log all cell contents for debugging
+        directCells.each((idx, cell) => {
+          const $cell = $(cell)
+          const cellText = $cell.clone().find('table').remove().end().text().trim()
+          console.log(`[DEBUG] Champion: ${championName}, Cell ${idx} content: "${cellText.substring(0, 50)}"`)
+        })
         
         // Extract from specific cells by index
         // Structure: [0: rank, 1: name, 2: wins/losses, 3: KDA, 4: skip, 5: skip, 6: damage, 7: wards, 8: CS, 9: gold]
@@ -610,6 +616,42 @@ exports.handler = async (event, context) => {
           winrate = (wins / games) * 100
           console.log(`[DEBUG] Calculated winrate: ${winrate}%`)
         }
+        
+        // Fallback: Try to extract missing stats from full row text if cell extraction failed
+        if (!wards && fullRowText) {
+          const wardsMatch = fullRowText.match(/(\d+)\s+(\d+)\s+\((\d+)\s*\/\s*(\d+)\)/)
+          if (wardsMatch) {
+            wards = {
+              visionScore: parseFloat(wardsMatch[1]),
+              controlWards: parseFloat(wardsMatch[2]),
+              placed: parseFloat(wardsMatch[3]),
+              killed: parseFloat(wardsMatch[4])
+            }
+            console.log(`[DEBUG] Extracted wards from full row text:`, wards)
+          }
+        }
+        
+        if (!cs && fullRowText) {
+          const csMatch = fullRowText.match(/(\d{2,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+          if (csMatch) {
+            cs = {
+              total: parseFloat(csMatch[1].replace(/,/g, '')),
+              perMinute: parseFloat(csMatch[2])
+            }
+            console.log(`[DEBUG] Extracted CS from full row text:`, cs)
+          }
+        }
+        
+        if (!gold && fullRowText) {
+          const goldMatch = fullRowText.match(/([\d,]{4,})\s+(\d+\.?\d*)\s*\/\s*m/i)
+          if (goldMatch) {
+            gold = {
+              total: parseFloat(goldMatch[1].replace(/,/g, '')),
+              perMinute: parseFloat(goldMatch[2])
+            }
+            console.log(`[DEBUG] Extracted gold from full row text:`, gold)
+          }
+        }
       }
 
       // Only add if we have valid data
@@ -630,7 +672,15 @@ exports.handler = async (event, context) => {
         if (gold) championData.gold = gold
         
         champions.push(championData)
+        const fieldsPresent = []
+        if (championData.kda) fieldsPresent.push('kda')
+        if (championData.damage) fieldsPresent.push('damage')
+        if (championData.wards) fieldsPresent.push('wards')
+        if (championData.cs) fieldsPresent.push('cs')
+        if (championData.gold) fieldsPresent.push('gold')
         console.log(`[DEBUG] Added champion: ${championName} - ${games} games (${wins}W ${losses}L, ${winrate}%)`)
+        console.log(`[DEBUG] Champion ${championName} fields: ${fieldsPresent.join(', ') || 'none'}`)
+        console.log(`[DEBUG] Champion ${championName} full data:`, JSON.stringify(championData, null, 2))
       } else {
         console.log(`[DEBUG] Skipped champion: ${championName} - games: ${games}, name length: ${championName.length}`)
       }
@@ -660,6 +710,14 @@ exports.handler = async (event, context) => {
 
     console.log(`[Backend] After deduplication: ${uniqueChampions.length} unique champions`)
     console.log(`[Backend] Top 5 champions:`, uniqueChampions.slice(0, 5).map(c => `${c.championName}: ${c.games} games (${c.wins}W ${c.losses}L, ${c.winrate.toFixed(1)}%)`))
+    
+    // Log field presence for first champion to verify all fields are included
+    if (uniqueChampions.length > 0) {
+      const firstChamp = uniqueChampions[0]
+      const fieldsInFirst = Object.keys(firstChamp).filter(k => !['championName', 'games', 'wins', 'losses', 'winrate'].includes(k))
+      console.log(`[Backend] First champion (${firstChamp.championName}) has fields:`, fieldsInFirst)
+      console.log(`[Backend] First champion full structure:`, JSON.stringify(firstChamp, null, 2))
+    }
     
     // If no champions found, try alternative extraction methods
     if (uniqueChampions.length === 0) {
