@@ -53,9 +53,50 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
   console.log(`[Leaguepedia] Cargo API URL: ${url.substring(0, 200)}...`)
   
   const response = await axios.get(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)' },
-    timeout: 30000
+    headers: { 
+      'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)',
+      'Accept': 'application/json'
+    },
+    timeout: 30000,
+    responseType: 'json', // Explicitly request JSON
+    transformResponse: [(data) => {
+      // If axios didn't parse it, try to parse it ourselves
+      if (typeof data === 'string') {
+        try {
+          return JSON.parse(data)
+        } catch (e) {
+          // Return as string if not JSON
+          return data
+        }
+      }
+      return data
+    }]
   })
+  
+  // Handle string responses (might be error messages or HTML)
+  if (typeof response.data === 'string') {
+    console.log(`[Leaguepedia] Response is string, first 500 chars:`, response.data.substring(0, 500))
+    
+    // Try to parse as JSON if it's a JSON string
+    try {
+      const parsed = JSON.parse(response.data)
+      if (parsed.cargoquery && Array.isArray(parsed.cargoquery)) {
+        return parsed.cargoquery.map(item => item.title || item)
+      }
+      if (Array.isArray(parsed)) {
+        return parsed
+      }
+    } catch (parseError) {
+      // Not JSON, might be HTML error page
+      console.error(`[Leaguepedia] Response is not JSON, might be error:`, response.data.substring(0, 200))
+      
+      // Check if it's an error message
+      if (response.data.includes('Error:') || response.data.includes('error')) {
+        console.error(`[Leaguepedia] API returned error:`, response.data.substring(0, 300))
+      }
+      return []
+    }
+  }
   
   // Parse Cargo API response
   // Format: { "cargoquery": [{ "title": { "field": "value" } }] }
@@ -77,6 +118,10 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
   }
   
   console.warn(`[Leaguepedia] Unexpected response format:`, typeof response.data)
+  if (response.data && typeof response.data === 'object') {
+    console.warn(`[Leaguepedia] Response keys:`, Object.keys(response.data))
+    console.warn(`[Leaguepedia] Response sample:`, JSON.stringify(response.data).substring(0, 300))
+  }
   return []
 }
 
