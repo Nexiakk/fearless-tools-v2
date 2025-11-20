@@ -66,10 +66,6 @@ exports.handler = async (event, context) => {
         console.log('[Headless] Using Browserless.io')
         console.log('[Headless] Endpoint:', BROWSERLESS_URL)
         
-        // Try /content endpoint (standard REST API)
-        // Token can be in query string OR headers - try both
-        const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
-        
         try {
           // Follow Browserless.io documentation exactly:
           // https://docs.browserless.io/rest-apis/content
@@ -77,8 +73,24 @@ exports.handler = async (event, context) => {
           // Body: { url: "https://example.com/" }
           // Response: Raw HTML text
           
-          // Ensure we're using /content endpoint (not /scrape)
-          const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
+          // Fix: chrome.browserless.io is deprecated - must use production-<region>.browserless.io
+          // If user has old URL, convert it to regional format
+          let contentUrl = BROWSERLESS_URL
+          
+          // Replace deprecated chrome.browserless.io with production-sfo
+          if (contentUrl.includes('chrome.browserless.io')) {
+            console.warn('[Headless] Detected deprecated chrome.browserless.io endpoint, converting to production-sfo')
+            contentUrl = contentUrl.replace('chrome.browserless.io', 'production-sfo.browserless.io')
+          }
+          
+          // Ensure we're using /content endpoint (not /scrape or /unblock)
+          contentUrl = contentUrl.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
+          
+          // If URL doesn't end with /content, add it
+          if (!contentUrl.endsWith('/content')) {
+            contentUrl = contentUrl.replace(/\/$/, '') + '/content'
+          }
+          
           const apiUrl = `${contentUrl}?token=${BROWSERLESS_API_KEY}`
           
           console.log('[Headless] Calling Browserless.io /content API')
