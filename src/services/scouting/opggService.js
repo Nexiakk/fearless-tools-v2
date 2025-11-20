@@ -78,12 +78,15 @@ export const opggService = {
     if (!url) return null
 
     try {
-      // New op.gg URL format: https://op.gg/{language}/lol/summoners/{region}/{playerName}-{tag}
-      // or: https://op.gg/{language}/lol/summoners/{region}/{playerName}-{tag}/champions
-      // Old format (still supported): https://www.op.gg/summoners/{region}/{playerName}
+      // New op.gg URL formats:
+      // 1. https://op.gg/{language}/lol/summoners/{region}/{playerName}-{tag}
+      // 2. https://op.gg/lol/summoners/{region}/{playerName}-{tag} (no language code)
+      // 3. https://op.gg/summoners/{region}/{playerName} (old format)
+      // All can have /champions at the end
       
-      // Try new format first
-      const newFormatMatch = url.match(/op\.gg\/[^/]+\/lol\/summoners\/([^/]+)\/([^/?]+)/)
+      // Try new format with optional language code
+      // Pattern: op.gg/(optional language)/lol/summoners/(region)/(playerName-tag)
+      const newFormatMatch = url.match(/op\.gg\/(?:[^/]+\/)?lol\/summoners\/([^/]+)\/([^/?]+)/)
       if (newFormatMatch) {
         const fullName = decodeURIComponent(newFormatMatch[2])
         // Check if it has a tag (format: "playerName-tag")
@@ -102,7 +105,7 @@ export const opggService = {
         }
       }
       
-      // Fallback to old format
+      // Fallback to old format (www.op.gg/summoners/...)
       const oldFormatMatch = url.match(/op\.gg\/summoners\/([^/]+)\/([^/?]+)/)
       if (oldFormatMatch) {
         const playerName = decodeURIComponent(oldFormatMatch[2])
@@ -116,6 +119,7 @@ export const opggService = {
         }
       }
       
+      console.error('[op.gg] URL did not match any known format:', url)
       return null
     } catch (error) {
       console.error('Error parsing op.gg URL:', error)
