@@ -1,5 +1,84 @@
-const { CargoClient } = require('poro')
 const axios = require('axios')
+
+// Helper function to query Leaguepedia Cargo API directly
+// Bypasses poro library which has issues with response parsing
+async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_by, limit }) {
+  const baseUrl = 'https://lol.fandom.com/wiki/Special:CargoExport'
+  
+  // Build tables parameter - handle both string and array formats
+  let tablesParam = Array.isArray(tables) ? tables.join(',') : tables
+  
+  // Build fields parameter
+  const fieldsParam = Array.isArray(fields) ? fields.join(',') : fields
+  
+  // Build where clause
+  const whereParam = where || ''
+  
+  // Build group_by if provided
+  let groupByParam = ''
+  if (group_by) {
+    groupByParam = Array.isArray(group_by) ? group_by.join(',') : group_by
+  }
+  
+  // Build order_by if provided
+  let orderByParam = ''
+  if (order_by) {
+    if (typeof order_by === 'string') {
+      orderByParam = order_by
+    } else if (Array.isArray(order_by)) {
+      orderByParam = order_by.map(o => {
+        if (typeof o === 'string') return o
+        if (o.desc) return `${o.field} DESC`
+        return o.field
+      }).join(',')
+    } else if (order_by.field) {
+      orderByParam = order_by.desc ? `${order_by.field} DESC` : order_by.field
+    }
+  }
+  
+  // Build query parameters
+  const params = new URLSearchParams({
+    tables: tablesParam,
+    fields: fieldsParam,
+    format: 'json'
+  })
+  
+  if (whereParam) params.append('where', whereParam)
+  if (join_on) params.append('join_on', join_on)
+  if (groupByParam) params.append('group_by', groupByParam)
+  if (orderByParam) params.append('order_by', orderByParam)
+  if (limit) params.append('limit', limit.toString())
+  
+  const url = `${baseUrl}?${params.toString()}`
+  console.log(`[Leaguepedia] Cargo API URL: ${url.substring(0, 200)}...`)
+  
+  const response = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)' },
+    timeout: 30000
+  })
+  
+  // Parse Cargo API response
+  // Format: { "cargoquery": [{ "title": { "field": "value" } }] }
+  if (response.data && response.data.cargoquery && Array.isArray(response.data.cargoquery)) {
+    return response.data.cargoquery.map(item => item.title || item)
+  }
+  
+  // Fallback: if response is already an array or different structure
+  if (Array.isArray(response.data)) {
+    return response.data
+  }
+  
+  // If response.data is an object but not cargoquery format, try to extract data
+  if (response.data && typeof response.data === 'object') {
+    // Try common property names
+    if (Array.isArray(response.data.data)) return response.data.data
+    if (Array.isArray(response.data.results)) return response.data.results
+    if (Array.isArray(response.data.items)) return response.data.items
+  }
+  
+  console.warn(`[Leaguepedia] Unexpected response format:`, typeof response.data)
+  return []
+}
 
 exports.handler = async (event, context) => {
   // Enable CORS
@@ -38,12 +117,6 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Initialize Poro CargoClient
-    const cargo = new CargoClient()
-    
-    // Access Poro's axios instance to inspect raw responses if needed
-    // cargo.axiosInstance can be used for debugging
-    
     let results = []
     
     console.log(`[Leaguepedia] Action: ${action}, Params:`, JSON.stringify(params))
@@ -61,11 +134,10 @@ exports.handler = async (event, context) => {
           console.log(`[Leaguepedia] Querying ScoreboardPlayers for champion pool data`)
           
           // Query ScoreboardPlayers with PlayerRedirects join for name resolution
-          // Try both array and string formats - poro might support either
-          let queryResult
+          // Use direct Cargo API to bypass poro library issues
           try {
-            // Try with string format for joins (Cargo API style)
-            queryResult = await cargo.query({
+            // First try with join for proper name resolution
+            results = await queryCargoAPI({
               tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
               fields: [
                 'SP.Champion',
@@ -85,91 +157,48 @@ exports.handler = async (event, context) => {
               order_by: 'Games DESC',
               limit: 50
             })
-          } catch (joinError) {
-            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
-            // Fallback to direct query without join (might work if player name matches exactly)
-            queryResult = await cargo.query({
-              tables: ['ScoreboardPlayers'],
-              fields: [
-                'ScoreboardPlayers.Champion',
-                'COUNT(*) as Games',
-                'SUM(CASE WHEN ScoreboardPlayers.Win="1" THEN 1 ELSE 0 END) as Wins',
-                'AVG(ScoreboardPlayers.Kills) as AvgKills',
-                'AVG(ScoreboardPlayers.Deaths) as AvgDeaths',
-                'AVG(ScoreboardPlayers.Assists) as AvgAssists',
-                'AVG(ScoreboardPlayers.CS) as AvgCS',
-                'AVG(ScoreboardPlayers.Gold) as AvgGold',
-                'AVG(ScoreboardPlayers.VisionScore) as AvgVisionScore',
-                'AVG(ScoreboardPlayers.DamageToChampions) as AvgDamage'
-              ],
-              where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-              groupBy: ['ScoreboardPlayers.Champion'],
-              orderBy: [{ field: 'Games', desc: true }],
-              limit: 50
-            })
-          }
-          
-          // Log the raw response structure for debugging
-          console.log(`[Leaguepedia] Raw query result type:`, typeof queryResult)
-          console.log(`[Leaguepedia] Raw query result is array:`, Array.isArray(queryResult))
-          if (queryResult) {
-            console.log(`[Leaguepedia] Raw query result keys:`, Object.keys(queryResult))
-            console.log(`[Leaguepedia] Raw query result sample:`, JSON.stringify(queryResult).substring(0, 500))
-          }
-          
-          // Handle response - poro library may return data in different formats
-          // Try multiple possible structures
-          if (Array.isArray(queryResult)) {
-            results = queryResult
-          } else if (queryResult && typeof queryResult === 'object') {
-            // Check for common response structures
-            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
-              // Raw Cargo API format - extract title objects
-              results = queryResult.cargoquery.map(item => item.title || item)
-            } else if (queryResult.data) {
-              if (Array.isArray(queryResult.data)) {
-                results = queryResult.data
-              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
-                results = queryResult.data.cargoquery.map(item => item.title || item)
-              } else {
-                results = []
-              }
-            } else if (queryResult.results && Array.isArray(queryResult.results)) {
-              results = queryResult.results
-            } else if (queryResult.items && Array.isArray(queryResult.items)) {
-              results = queryResult.items
-            } else {
-              // If it's an object but not an array, try to extract values
-              results = []
+            
+            console.log(`[Leaguepedia] Join query successful, got ${results.length} results`)
+            
+            // If join query returns no results, try direct query (player name might match exactly)
+            if (results.length === 0) {
+              console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
+              results = await queryCargoAPI({
+                tables: 'ScoreboardPlayers',
+                fields: [
+                  'ScoreboardPlayers.Champion',
+                  'COUNT(*) as Games',
+                  'SUM(CASE WHEN ScoreboardPlayers.Win="1" THEN 1 ELSE 0 END) as Wins',
+                  'AVG(ScoreboardPlayers.Kills) as AvgKills',
+                  'AVG(ScoreboardPlayers.Deaths) as AvgDeaths',
+                  'AVG(ScoreboardPlayers.Assists) as AvgAssists',
+                  'AVG(ScoreboardPlayers.CS) as AvgCS',
+                  'AVG(ScoreboardPlayers.Gold) as AvgGold',
+                  'AVG(ScoreboardPlayers.VisionScore) as AvgVisionScore',
+                  'AVG(ScoreboardPlayers.DamageToChampions) as AvgDamage'
+                ],
+                where: `ScoreboardPlayers.Player = "${playerName1}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
+                group_by: 'ScoreboardPlayers.Champion',
+                order_by: 'Games DESC',
+                limit: 50
+              })
+              console.log(`[Leaguepedia] Direct query got ${results.length} results`)
             }
-          } else {
+            
+            if (results.length > 0) {
+              console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
+            }
+          } catch (error) {
+            console.error(`[Leaguepedia] Query failed:`, error.message)
+            console.error(`[Leaguepedia] Query error stack:`, error.stack)
+            if (error.response) {
+              console.error(`[Leaguepedia] Response status:`, error.response.status)
+              console.error(`[Leaguepedia] Response data:`, typeof error.response.data === 'string' 
+                ? error.response.data.substring(0, 500) 
+                : JSON.stringify(error.response.data).substring(0, 500))
+            }
             results = []
           }
-          
-          console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
-          if (results.length > 0) {
-            console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
-          }
-        } catch (error) {
-          console.error(`[Leaguepedia] Query failed:`, error.message)
-          console.error(`[Leaguepedia] Query error stack:`, error.stack)
-          
-          // Try simpler query to see what fields actually exist
-          try {
-            const simpleTest = await cargo.query({
-              tables: 'ScoreboardPlayers=SP',
-              fields: ['SP.Player', 'SP.Champion'],
-              where: `SP.Player = "${playerName1}"`,
-              limit: 1
-            })
-            console.log(`[Leaguepedia] Simple test query result type:`, typeof simpleTest)
-            console.log(`[Leaguepedia] Simple test query result:`, JSON.stringify(simpleTest).substring(0, 500))
-          } catch (testError) {
-            console.error(`[Leaguepedia] Simple test also failed:`, testError.message)
-            console.error(`[Leaguepedia] Simple test error stack:`, testError.stack)
-          }
-          results = []
-        }
         
         // Transform results to match op.gg data structure
         // Handle both camelCase and PascalCase field names from API
@@ -263,66 +292,41 @@ exports.handler = async (event, context) => {
         
         try {
           // Use PlayerRedirects join as recommended in Leaguepedia API docs
-          // Try both formats to see which one works
-          let queryResult
+          // Use direct Cargo API to bypass poro library issues
           try {
-            queryResult = await cargo.query({
+            results = await queryCargoAPI({
               tables: 'Players=P, PlayerRedirects=PR',
               fields: ['P.ID', 'P.Name', 'P.Team', 'P.Role', 'P.Region', 'P.Country', 'P.Birthdate'],
               where: `PR.AllName = "${playerName2}"`,
               join_on: 'PR.OverviewPage=P.OverviewPage',
               limit: 1
             })
-          } catch (joinError) {
-            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
-            // Fallback to direct query
-            queryResult = await cargo.query({
-              tables: ['Players'],
-              fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region', 'Players.Country', 'Players.Birthdate'],
-              where: `Players.Name = "${playerName2}"`,
-              limit: 1
-            })
-          }
-          
-          // Log the raw response structure for debugging
-          console.log(`[Leaguepedia] Players query result type:`, typeof queryResult)
-          console.log(`[Leaguepedia] Players query result is array:`, Array.isArray(queryResult))
-          if (queryResult) {
-            console.log(`[Leaguepedia] Players query result keys:`, Object.keys(queryResult))
-            console.log(`[Leaguepedia] Players query result sample:`, JSON.stringify(queryResult).substring(0, 500))
-          }
-          
-          // Handle response - poro library may return data in different formats
-          if (Array.isArray(queryResult)) {
-            results = queryResult
-          } else if (queryResult && typeof queryResult === 'object') {
-            // Check for common response structures
-            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
-              // Raw Cargo API format - extract title objects
-              results = queryResult.cargoquery.map(item => item.title || item)
-            } else if (queryResult.data) {
-              if (Array.isArray(queryResult.data)) {
-                results = queryResult.data
-              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
-                results = queryResult.data.cargoquery.map(item => item.title || item)
-              } else {
-                results = []
-              }
-            } else if (queryResult.results && Array.isArray(queryResult.results)) {
-              results = queryResult.results
-            } else if (queryResult.items && Array.isArray(queryResult.items)) {
-              results = queryResult.items
-            } else {
-              results = []
+            
+            // If join query returns no results, try direct query
+            if (results.length === 0) {
+              console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
+              results = await queryCargoAPI({
+                tables: 'Players',
+                fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region', 'Players.Country', 'Players.Birthdate'],
+                where: `Players.Name = "${playerName2}"`,
+                limit: 1
+              })
             }
-          } else {
-            results = []
+            
+            console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
+          } catch (apiError) {
+            console.error(`[Leaguepedia] Cargo API error:`, apiError.message)
+            throw apiError
           }
-          
-          console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
           console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          if (error.response) {
+            console.error(`[Leaguepedia] Response status:`, error.response.status)
+            console.error(`[Leaguepedia] Response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
           results = []
         }
         
@@ -345,10 +349,9 @@ exports.handler = async (event, context) => {
         
         try {
           // Query recent matches with detailed stats
-          // Try with join first, fallback to direct query
-          let queryResult
+          // Use direct Cargo API to bypass poro library issues
           try {
-            queryResult = await cargo.query({
+            results = await queryCargoAPI({
               tables: 'ScoreboardPlayers=SP, PlayerRedirects=PR',
               fields: [
                 'SP.Champion',
@@ -370,71 +373,47 @@ exports.handler = async (event, context) => {
               order_by: 'SP.Date DESC',
               limit: limit
             })
-          } catch (joinError) {
-            console.log(`[Leaguepedia] Join query failed, trying direct query:`, joinError.message)
-            // Fallback to direct query
-            queryResult = await cargo.query({
-              tables: ['ScoreboardPlayers'],
-              fields: [
-                'ScoreboardPlayers.Champion',
-                'ScoreboardPlayers.Win',
-                'ScoreboardPlayers.Date',
-                'ScoreboardPlayers.Opponent',
-                'ScoreboardPlayers.Team',
-                'ScoreboardPlayers.Tournament',
-                'ScoreboardPlayers.Kills',
-                'ScoreboardPlayers.Deaths',
-                'ScoreboardPlayers.Assists',
-                'ScoreboardPlayers.CS',
-                'ScoreboardPlayers.Gold',
-                'ScoreboardPlayers.VisionScore',
-                'ScoreboardPlayers.DamageToChampions'
-              ],
-              where: `ScoreboardPlayers.Player = "${playerName3}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
-              orderBy: [{ field: 'ScoreboardPlayers.Date', desc: true }],
-              limit: limit
-            })
-          }
-          
-          // Log the raw response structure for debugging
-          console.log(`[Leaguepedia] Matches query result type:`, typeof queryResult)
-          console.log(`[Leaguepedia] Matches query result is array:`, Array.isArray(queryResult))
-          if (queryResult) {
-            console.log(`[Leaguepedia] Matches query result keys:`, Object.keys(queryResult))
-            console.log(`[Leaguepedia] Matches query result sample:`, JSON.stringify(queryResult).substring(0, 500))
-          }
-          
-          // Handle response - poro library may return data in different formats
-          if (Array.isArray(queryResult)) {
-            results = queryResult
-          } else if (queryResult && typeof queryResult === 'object') {
-            // Check for common response structures
-            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
-              // Raw Cargo API format - extract title objects
-              results = queryResult.cargoquery.map(item => item.title || item)
-            } else if (queryResult.data) {
-              if (Array.isArray(queryResult.data)) {
-                results = queryResult.data
-              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
-                results = queryResult.data.cargoquery.map(item => item.title || item)
-              } else {
-                results = []
-              }
-            } else if (queryResult.results && Array.isArray(queryResult.results)) {
-              results = queryResult.results
-            } else if (queryResult.items && Array.isArray(queryResult.items)) {
-              results = queryResult.items
-            } else {
-              results = []
+            
+            // If join query returns no results, try direct query
+            if (results.length === 0) {
+              console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
+              results = await queryCargoAPI({
+                tables: 'ScoreboardPlayers',
+                fields: [
+                  'ScoreboardPlayers.Champion',
+                  'ScoreboardPlayers.Win',
+                  'ScoreboardPlayers.Date',
+                  'ScoreboardPlayers.Opponent',
+                  'ScoreboardPlayers.Team',
+                  'ScoreboardPlayers.Tournament',
+                  'ScoreboardPlayers.Kills',
+                  'ScoreboardPlayers.Deaths',
+                  'ScoreboardPlayers.Assists',
+                  'ScoreboardPlayers.CS',
+                  'ScoreboardPlayers.Gold',
+                  'ScoreboardPlayers.VisionScore',
+                  'ScoreboardPlayers.DamageToChampions'
+                ],
+                where: `ScoreboardPlayers.Player = "${playerName3}" AND ScoreboardPlayers.Date >= "2025-01-01"`,
+                order_by: 'ScoreboardPlayers.Date DESC',
+                limit: limit
+              })
             }
-          } else {
-            results = []
+            
+            console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
+          } catch (apiError) {
+            console.error(`[Leaguepedia] Cargo API error:`, apiError.message)
+            throw apiError
           }
-          
-          console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
           console.error(`[Leaguepedia] Query failed:`, error.message)
           console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          if (error.response) {
+            console.error(`[Leaguepedia] Response status:`, error.response.status)
+            console.error(`[Leaguepedia] Response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
           results = []
         }
         
@@ -471,55 +450,13 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] searchPlayers query for: "${searchTerm}"`)
         
         try {
-          // Try both formats
-          let queryResult
-          try {
-            queryResult = await cargo.query({
-              tables: 'Players=P',
-              fields: ['P.ID', 'P.Name', 'P.Team', 'P.Role', 'P.Region'],
-              where: `P.Name LIKE "%${searchTerm}%"`,
-              limit: 20
-            })
-          } catch (formatError) {
-            console.log(`[Leaguepedia] String format failed, trying array format:`, formatError.message)
-            queryResult = await cargo.query({
-              tables: ['Players'],
-              fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
-              where: `Players.Name LIKE "%${searchTerm}%"`,
-              limit: 20
-            })
-          }
-          
-          // Log the raw response structure for debugging
-          console.log(`[Leaguepedia] Search query result type:`, typeof queryResult)
-          console.log(`[Leaguepedia] Search query result is array:`, Array.isArray(queryResult))
-          
-          // Handle response - poro library may return data in different formats
-          if (Array.isArray(queryResult)) {
-            results = queryResult
-          } else if (queryResult && typeof queryResult === 'object') {
-            // Check for common response structures
-            if (queryResult.cargoquery && Array.isArray(queryResult.cargoquery)) {
-              // Raw Cargo API format - extract title objects
-              results = queryResult.cargoquery.map(item => item.title || item)
-            } else if (queryResult.data) {
-              if (Array.isArray(queryResult.data)) {
-                results = queryResult.data
-              } else if (queryResult.data.cargoquery && Array.isArray(queryResult.data.cargoquery)) {
-                results = queryResult.data.cargoquery.map(item => item.title || item)
-              } else {
-                results = []
-              }
-            } else if (queryResult.results && Array.isArray(queryResult.results)) {
-              results = queryResult.results
-            } else if (queryResult.items && Array.isArray(queryResult.items)) {
-              results = queryResult.items
-            } else {
-              results = []
-            }
-          } else {
-            results = []
-          }
+          // Use direct Cargo API to bypass poro library issues
+          results = await queryCargoAPI({
+            tables: 'Players',
+            fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Region'],
+            where: `Players.Name LIKE "%${searchTerm}%"`,
+            limit: 20
+          })
           
           console.log(`[Leaguepedia] Query successful, got ${results.length} results`)
         } catch (error) {
