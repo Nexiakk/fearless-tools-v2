@@ -185,15 +185,33 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
+      // Delete player document
       const playerRef = getScoutingDoc('players', playerId)
       await deleteDoc(playerRef)
+      console.log(`[ScoutingStore] Deleted player document: ${playerId}`)
+      
+      // Delete scouting data document if it exists
+      try {
+        const dataRef = getScoutingDoc('data', playerId)
+        const dataSnap = await getDoc(dataRef)
+        if (dataSnap.exists()) {
+          await deleteDoc(dataRef)
+          console.log(`[ScoutingStore] Deleted scouting data document: ${playerId}`)
+        } else {
+          console.log(`[ScoutingStore] No scouting data document found for player: ${playerId}`)
+        }
+      } catch (dataErr) {
+        // Log but don't fail if scouting data deletion fails
+        console.warn(`[ScoutingStore] Error deleting scouting data for player ${playerId}:`, dataErr)
+      }
       
       // Remove from local state
       players.value = players.value.filter(p => p.id !== playerId)
       
-      // Remove scouting data if exists
+      // Remove scouting data from local state if exists
       if (scoutingData.value[playerId]) {
         delete scoutingData.value[playerId]
+        console.log(`[ScoutingStore] Removed scouting data from local state: ${playerId}`)
       }
     } catch (err) {
       console.error('Error deleting player:', err)
