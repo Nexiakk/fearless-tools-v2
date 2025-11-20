@@ -1,4 +1,5 @@
 const { CargoClient } = require('poro')
+const axios = require('axios')
 
 exports.handler = async (event, context) => {
   // Enable CORS
@@ -54,6 +55,28 @@ exports.handler = async (event, context) => {
         console.log(`[Leaguepedia] getPlayerChampionPool query for player: "${playerName1}"`)
         
         try {
+          // First, let's try a direct axios call to see what Leaguepedia actually returns
+          // This will help us understand the error before using Poro
+          const baseUrl = 'https://lol.fandom.com/wiki/Special:CargoExport'
+          const testUrl = `${baseUrl}?tables=ScoreboardPlayer&fields=ScoreboardPlayer.Champion&where=ScoreboardPlayer.Player = "${playerName1}"&limit=1&format=json`
+          
+          console.log(`[Leaguepedia] Testing direct query to see response format`)
+          console.log(`[Leaguepedia] Test URL: ${testUrl}`)
+          
+          const testResponse = await axios.get(testUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 10000
+          })
+          
+          console.log(`[Leaguepedia] Direct query response status: ${testResponse.status}`)
+          console.log(`[Leaguepedia] Direct query response type: ${typeof testResponse.data}`)
+          console.log(`[Leaguepedia] Direct query response (first 500 chars): ${typeof testResponse.data === 'string' 
+            ? testResponse.data.substring(0, 500) 
+            : JSON.stringify(testResponse.data).substring(0, 500)}`)
+          
+          // If direct query works, try with Poro using a simpler query first
           // Use Poro's query method - it handles the CargoExport API correctly
           const queryResult = await cargo.query({
             tables: ['ScoreboardPlayer'],
