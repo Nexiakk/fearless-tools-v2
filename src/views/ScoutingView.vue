@@ -1,23 +1,28 @@
 <template>
-  <div v-if="workspaceStore.hasWorkspace" class="container-fluid mx-auto p-4">
-    <!-- Loading state -->
-    <div v-if="scoutingStore.isLoading" class="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-40">
-      <div class="text-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-        <p class="text-gray-300">Loading scouting data...</p>
+  <div>
+    <!-- Loading state (teleported to body) -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="scoutingStore.isLoading" class="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50">
+          <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+            <p class="text-gray-300">Loading scouting data...</p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <div v-if="workspaceStore.hasWorkspace" class="container-fluid mx-auto p-4 relative">
+      <!-- Error message -->
+      <div v-if="scoutingStore.error" class="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200">
+        {{ scoutingStore.error }}
+        <button @click="scoutingStore.clearError()" class="ml-4 text-red-300 hover:text-red-100">
+          ×
+        </button>
       </div>
-    </div>
 
-    <!-- Error message -->
-    <div v-if="scoutingStore.error" class="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200">
-      {{ scoutingStore.error }}
-      <button @click="scoutingStore.clearError()" class="ml-4 text-red-300 hover:text-red-100">
-        ×
-      </button>
-    </div>
-
-    <!-- Main content -->
-    <div v-if="!scoutingStore.isLoading" class="space-y-6">
+      <!-- Main content -->
+      <div v-if="!scoutingStore.isLoading" class="space-y-6">
       <!-- Header -->
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-white">Scouting</h1>
@@ -137,102 +142,109 @@
         <h2 class="text-xl font-semibold text-white mb-4">Analytics</h2>
         <p class="text-gray-400">Analytics dashboard coming soon...</p>
       </div>
+      </div>
     </div>
-  </div>
 
-  <!-- Player Detail Modal -->
-  <PlayerDetailModal
-    v-if="scoutingStore.selectedPlayer"
-    :player-id="scoutingStore.selectedPlayer"
-    @close="scoutingStore.setSelectedPlayer(null)"
-  />
+    <!-- Player Detail Modal (teleported to body) -->
+    <Teleport to="body">
+      <PlayerDetailModal
+        v-if="scoutingStore.selectedPlayer"
+        :player-id="scoutingStore.selectedPlayer"
+        @close="scoutingStore.setSelectedPlayer(null)"
+      />
+    </Teleport>
 
-  <!-- Add Player Modal -->
-  <div
-    v-if="showAddPlayerModal"
-    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-    @click.self="showAddPlayerModal = false"
-  >
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
-      <h3 class="text-xl font-semibold text-white mb-4">Add Player</h3>
-      <form @submit.prevent="handleAddPlayer" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Player Name</label>
-          <input
-            v-model="newPlayer.name"
-            type="text"
-            required
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
-            placeholder="Summoner Name"
-          />
+    <!-- Add Player Modal (teleported to body) -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showAddPlayerModal"
+          class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          @click.self="showAddPlayerModal = false"
+        >
+          <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
+            <h3 class="text-xl font-semibold text-white mb-4">Add Player</h3>
+            <form @submit.prevent="handleAddPlayer" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Player Name</label>
+                <input
+                  v-model="newPlayer.name"
+                  type="text"
+                  required
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                  placeholder="Summoner Name"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">op.gg URL</label>
+                <input
+                  v-model="newPlayer.opggUrl"
+                  type="url"
+                  required
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                  placeholder="https://www.op.gg/summoners/euw/..."
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Team</label>
+                <select
+                  v-model="newPlayer.team"
+                  required
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="own">Own Team</option>
+                  <option value="enemy">Enemy Team</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Role (Optional)</label>
+                <select
+                  v-model="newPlayer.role"
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">None</option>
+                  <option value="Top">Top</option>
+                  <option value="Jungle">Jungle</option>
+                  <option value="Mid">Mid</option>
+                  <option value="Bot">Bot</option>
+                  <option value="Support">Support</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Leaguepedia URL (Optional)</label>
+                <input
+                  v-model="newPlayer.leaguepediaUrl"
+                  type="url"
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                  placeholder="https://lol.fandom.com/wiki/..."
+                />
+              </div>
+              <div class="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  @click="showAddPlayerModal = false"
+                  class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  :disabled="isAddingPlayer"
+                  class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors disabled:opacity-50"
+                >
+                  {{ isAddingPlayer ? 'Adding...' : 'Add Player' }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">op.gg URL</label>
-          <input
-            v-model="newPlayer.opggUrl"
-            type="url"
-            required
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
-            placeholder="https://www.op.gg/summoners/euw/..."
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Team</label>
-          <select
-            v-model="newPlayer.team"
-            required
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
-          >
-            <option value="own">Own Team</option>
-            <option value="enemy">Enemy Team</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Role (Optional)</label>
-          <select
-            v-model="newPlayer.role"
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
-          >
-            <option value="">None</option>
-            <option value="Top">Top</option>
-            <option value="Jungle">Jungle</option>
-            <option value="Mid">Mid</option>
-            <option value="Bot">Bot</option>
-            <option value="Support">Support</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Leaguepedia URL (Optional)</label>
-          <input
-            v-model="newPlayer.leaguepediaUrl"
-            type="url"
-            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
-            placeholder="https://lol.fandom.com/wiki/..."
-          />
-        </div>
-        <div class="flex justify-end gap-3 mt-6">
-          <button
-            type="button"
-            @click="showAddPlayerModal = false"
-            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            :disabled="isAddingPlayer"
-            class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors disabled:opacity-50"
-          >
-            {{ isAddingPlayer ? 'Adding...' : 'Add Player' }}
-          </button>
-        </div>
-      </form>
-    </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useScoutingStore } from '@/stores/scouting'
 import { useAuthStore } from '@/stores/auth'
@@ -259,6 +271,23 @@ onMounted(async () => {
   if (workspaceStore.hasWorkspace) {
     await scoutingStore.loadPlayers()
   }
+})
+
+// Watch for route changes and cleanup
+import { useRoute } from 'vue-router'
+const route = useRoute()
+
+watch(() => route.name, (newName, oldName) => {
+  // If navigating away from scouting view, reset loading state
+  if (oldName === 'scouting' && newName !== 'scouting') {
+    scoutingStore.resetLoadingState()
+  }
+})
+
+// Cleanup when leaving the view
+onBeforeUnmount(() => {
+  // Reset loading states to prevent overlay from persisting
+  scoutingStore.resetLoadingState()
 })
 
 const handleAddPlayer = async () => {

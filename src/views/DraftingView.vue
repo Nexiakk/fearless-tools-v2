@@ -1,5 +1,6 @@
 <template>
-  <div v-if="workspaceStore.hasWorkspace" class="draft-creator-view">
+  <div>
+    <div v-if="workspaceStore.hasWorkspace" class="draft-creator-view">
     <div class="draft-creator-main-wrapper">
       <!-- Side Indicators -->
       <div class="draft-indicator-container">
@@ -348,10 +349,11 @@
         </div>
       </div>
     </div>
-  </div>
-  
-  <div v-else class="flex items-center justify-center h-screen">
-    <p class="text-gray-400">Please join a workspace to continue</p>
+    </div>
+    
+    <div v-else class="flex items-center justify-center h-screen">
+      <p class="text-gray-400">Please join a workspace to continue</p>
+    </div>
   </div>
 </template>
 

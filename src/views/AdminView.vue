@@ -1,18 +1,17 @@
 <template>
-  <div v-if="authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous">
-    <Teleport to="body">
-      <Transition name="fade">
+  <Teleport to="body">
+    <Transition name="fade">
+      <div
+        v-if="adminStore.isOpen && authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="adminStore.close()"
+        @keydown.escape="adminStore.close()"
+      >
+        <div class="fixed inset-0 bg-black/60" @click="adminStore.close()"></div>
         <div
-          v-if="adminStore.isOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-          @click.self="adminStore.close()"
-          @keydown.escape="adminStore.close()"
+          class="relative w-full max-w-6xl max-h-[90vh] rounded-lg bg-gray-800 border border-gray-700 shadow-lg flex flex-col"
+          @click.stop
         >
-          <div class="fixed inset-0 bg-black/60" @click="adminStore.close()"></div>
-          <div
-            class="relative w-full max-w-6xl max-h-[90vh] rounded-lg bg-gray-800 border border-gray-700 shadow-lg flex flex-col"
-            @click.stop
-          >
             <!-- Header -->
             <div class="flex items-center justify-between p-6 border-b border-gray-700">
               <h3 class="text-2xl font-semibold text-white">Admin Panel</h3>
@@ -407,11 +406,6 @@
         </div>
       </Transition>
     </Teleport>
-  </div>
-  
-  <div v-else class="flex items-center justify-center h-screen">
-    <p class="text-gray-400">Admin access required. Please sign in with an admin account.</p>
-  </div>
 </template>
 
 <script setup>

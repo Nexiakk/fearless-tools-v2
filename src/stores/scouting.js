@@ -253,6 +253,13 @@ export const useScoutingStore = defineStore('scouting', () => {
     error.value = ''
   }
   
+  function resetLoadingState() {
+    isLoading.value = false
+    isScouting.value = false
+    selectedPlayer.value = null
+    error.value = ''
+  }
+  
   // Get player champions (from SoloQ or Pro play)
   function getPlayerChampions(playerId) {
     const data = scoutingData.value[playerId]
@@ -350,6 +357,7 @@ export const useScoutingStore = defineStore('scouting', () => {
     setScouting,
     setError,
     clearError,
+    resetLoadingState,
     getPlayerChampions,
     getOverlappingChampions
   }
