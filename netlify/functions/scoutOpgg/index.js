@@ -483,11 +483,12 @@ exports.handler = async (event, context) => {
           
           if (cellText) {
             console.log(`[DEBUG] Champion: ${championName}, Cell 3 (KDA) text: "${cellText}"`)
-            // Extract KDA ratio (e.g., "2.12:1")
+            // Extract KDA ratio (e.g., "2.12:1") - must be before the KDA stats
             const ratioMatch = cellText.match(/(\d+\.?\d*)\s*:\s*1/)
-            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4")
-            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/)
-            // Extract kill participation (e.g., "(44%)")
+            // Extract KDA stats (e.g., "6.9 / 5.8 / 5.4") - must have two slashes
+            // Be more specific: look for pattern with exactly two slashes, not matching ratio
+            const kdaMatch = cellText.match(/(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)(?!\s*:)/)
+            // Extract kill participation (e.g., "(44%)") - must be in parentheses
             const kpMatch = cellText.match(/\((\d+\.?\d*)\s*%\)/)
             
             if (kdaMatch) {
@@ -502,7 +503,9 @@ exports.handler = async (event, context) => {
               if (kpMatch) {
                 kda.killParticipation = parseFloat(kpMatch[1])
               }
-              console.log(`[DEBUG] Extracted KDA:`, kda)
+              console.log(`[DEBUG] Extracted KDA from cell 3:`, kda)
+            } else {
+              console.log(`[DEBUG] KDA pattern did not match cell 3 text: "${cellText}"`)
             }
           }
         }
@@ -560,9 +563,15 @@ exports.handler = async (event, context) => {
                 placed: parseFloat(wardsMatch[3]),
                 killed: parseFloat(wardsMatch[4])
               }
-              console.log(`[DEBUG] Extracted wards:`, wards)
+              console.log(`[DEBUG] Extracted wards from cell 7:`, wards)
+            } else {
+              console.log(`[DEBUG] Wards pattern did not match cell 7 text: "${cellText}"`)
             }
+          } else {
+            console.log(`[DEBUG] Cell 7 is empty for champion: ${championName}`)
           }
+        } else {
+          console.log(`[DEBUG] Cannot extract wards - directCells.length: ${directCells.length}, already extracted: ${!!wards}`)
         }
         
         // Cell 8 (index 8): CS - "226 8.6/m"
@@ -580,9 +589,15 @@ exports.handler = async (event, context) => {
                 total: parseFloat(csMatch[1].replace(/,/g, '')),
                 perMinute: parseFloat(csMatch[2])
               }
-              console.log(`[DEBUG] Extracted CS:`, cs)
+              console.log(`[DEBUG] Extracted CS from cell 8:`, cs)
+            } else {
+              console.log(`[DEBUG] CS pattern did not match cell 8 text: "${cellText}"`)
             }
+          } else {
+            console.log(`[DEBUG] Cell 8 is empty for champion: ${championName}`)
           }
+        } else {
+          console.log(`[DEBUG] Cannot extract CS - directCells.length: ${directCells.length}, already extracted: ${!!cs}`)
         }
         
         // Cell 9 (index 9): Gold - "12,898 489.1/m"
@@ -600,9 +615,15 @@ exports.handler = async (event, context) => {
                 total: parseFloat(goldMatch[1].replace(/,/g, '')),
                 perMinute: parseFloat(goldMatch[2])
               }
-              console.log(`[DEBUG] Extracted gold:`, gold)
+              console.log(`[DEBUG] Extracted gold from cell 9:`, gold)
+            } else {
+              console.log(`[DEBUG] Gold pattern did not match cell 9 text: "${cellText}"`)
             }
+          } else {
+            console.log(`[DEBUG] Cell 9 is empty for champion: ${championName}`)
           }
+        } else {
+          console.log(`[DEBUG] Cannot extract gold - directCells.length: ${directCells.length}, already extracted: ${!!gold}`)
         }
         
         // Calculate games from wins + losses if we have them
@@ -798,6 +819,24 @@ exports.handler = async (event, context) => {
       const fieldsInFirst = Object.keys(firstChamp).filter(k => !['championName', 'games', 'wins', 'losses', 'winrate'].includes(k))
       console.log(`[Backend] First champion (${firstChamp.championName}) has fields:`, fieldsInFirst)
       console.log(`[Backend] First champion full structure:`, JSON.stringify(firstChamp, null, 2))
+      
+      // Count how many champions have each field
+      const fieldCounts = {
+        kda: 0,
+        damage: 0,
+        wards: 0,
+        cs: 0,
+        gold: 0
+      }
+      uniqueChampions.forEach(champ => {
+        if (champ.kda) fieldCounts.kda++
+        if (champ.damage) fieldCounts.damage++
+        if (champ.wards) fieldCounts.wards++
+        if (champ.cs) fieldCounts.cs++
+        if (champ.gold) fieldCounts.gold++
+      })
+      console.log(`[Backend] Field extraction summary:`, fieldCounts)
+      console.log(`[Backend] Total champions: ${uniqueChampions.length}`)
     }
     
     // If no champions found, try alternative extraction methods
@@ -969,11 +1008,36 @@ exports.handler = async (event, context) => {
                    ''
     const lp = parseInt(lpText.replace(/[^0-9]/g, '')) || 0
 
+    // Log extraction summary for debugging
+    const extractionSummary = {
+      totalChampions: uniqueChampions.length,
+      withKDA: uniqueChampions.filter(c => c.kda).length,
+      withDamage: uniqueChampions.filter(c => c.damage).length,
+      withWards: uniqueChampions.filter(c => c.wards).length,
+      withCS: uniqueChampions.filter(c => c.cs).length,
+      withGold: uniqueChampions.filter(c => c.gold).length
+    }
+    console.log(`[Backend] Extraction Summary:`, extractionSummary)
+    
+    // Log first champion's full row text for debugging
+    if (championRows.length > 0) {
+      const firstRow = $(championRows[0])
+      const firstRowText = firstRow.text()
+      const firstRowCells = firstRow.children('td')
+      console.log(`[Backend] First champion row has ${firstRowCells.length} cells`)
+      console.log(`[Backend] First champion row text (first 500 chars):`, firstRowText.substring(0, 500))
+      firstRowCells.each((idx, cell) => {
+        const cellText = $(cell).clone().find('table').remove().end().text().trim()
+        console.log(`[Backend] First champion cell ${idx}: "${cellText.substring(0, 100)}"`)
+      })
+    }
+    
     const responseData = {
       champions: uniqueChampions,
       rank: rankText,
       lp,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      _debug: extractionSummary // Include in response for debugging
     }
     
     console.log(`[Backend] Response data:`, JSON.stringify(responseData, null, 2))
