@@ -68,6 +68,8 @@ export const scoutingService = {
       }
       
       // 2. Try to get Pro play data from Leaguepedia API
+      // TEMPORARILY DISABLED - Focusing on op.gg scraping fix
+      /*
       try {
         // Extract player name from op.gg URL or use player name
         const playerName = this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
@@ -90,6 +92,17 @@ export const scoutingService = {
         if (existingData?.proplay) {
           scoutingData.proplay = existingData.proplay
         }
+      }
+      */
+      
+      // Keep existing proplay data if available, otherwise set to null
+      const existingData = scoutingStore.scoutingData[playerId]
+      if (existingData?.proplay) {
+        scoutingData.proplay = existingData.proplay
+        console.log('[ScoutingService] Using existing proplay data (Leaguepedia disabled)')
+      } else {
+        scoutingData.proplay = null
+        console.log('[ScoutingService] Leaguepedia scouting disabled - no existing proplay data')
       }
       
       // 3. Compute analytics

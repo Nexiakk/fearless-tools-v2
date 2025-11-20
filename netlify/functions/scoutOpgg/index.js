@@ -67,8 +67,8 @@ exports.handler = async (event, context) => {
     const $ = cheerio.load(response.data)
     
     // Debug: Check if we can find any tables
-    const allTables = $('table')
-    console.log(`[Backend] Found ${allTables.length} tables in HTML`)
+    const totalTables = $('table').length
+    console.log(`[Backend] Found ${totalTables} tables in HTML`)
 
     // Extract champion stats from the main champion list
     // CRITICAL: Only get stats from top-level champion items, NOT from expanded matchup sections
