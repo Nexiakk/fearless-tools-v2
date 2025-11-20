@@ -57,6 +57,15 @@ export const opggService = {
         } catch (e) {
           error = { message: errorText || `HTTP error! status: ${response.status}` }
         }
+        
+        // If headless failed, automatically fall back to regular scraper
+        if (useHeadless && response.status === 500) {
+          console.warn('[op.gg] Headless browser failed, falling back to regular scraper')
+          console.warn('[op.gg] Headless error:', error.message || error.error)
+          // Retry with regular scraper
+          return this.scrapePlayerChampions(opggUrl, false)
+        }
+        
         throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`)
       }
 

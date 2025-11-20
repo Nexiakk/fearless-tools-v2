@@ -14,9 +14,10 @@ const cheerio = require('cheerio')
 // Get API key from environment variable (set in Netlify dashboard)
 // For Browserless.io: Sign up at https://www.browserless.io/ (free tier available)
 const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY || ''
-// Updated endpoint: Browserless.io now uses /scrape for REST API (as of Nov 2025)
-// Alternative: Use WebSocket endpoints for Puppeteer/Playwright (wss://production-<region>.browserless.io)
-const BROWSERLESS_URL = process.env.BROWSERLESS_URL || 'https://chrome.browserless.io/scrape'
+// Browserless.io endpoint format: https://production-<region>.browserless.io/content
+// Regions: sfo (San Francisco), ams (Amsterdam), etc.
+// Default to sfo if not specified
+const BROWSERLESS_URL = process.env.BROWSERLESS_URL || 'https://production-sfo.browserless.io/content'
 
 // Alternative: ScrapingBee (uncomment to use instead)
 // const SCRAPINGBEE_API_KEY = process.env.SCRAPINGBEE_API_KEY || ''
@@ -70,54 +71,77 @@ exports.handler = async (event, context) => {
         const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
         
         try {
-          console.log('[Headless] Trying /content endpoint with token in query string')
+          // Follow Browserless.io documentation exactly:
+          // https://docs.browserless.io/rest-apis/content
+          // URL format: https://production-<region>.browserless.io/content?token=TOKEN
+          // Body: { url: "https://example.com/" }
+          // Response: Raw HTML text
+          
+          // Ensure we're using /content endpoint (not /scrape)
+          const contentUrl = BROWSERLESS_URL.replace(/\/scrape$/, '/content').replace(/\/unblock$/, '/content')
+          const apiUrl = `${contentUrl}?token=${BROWSERLESS_API_KEY}`
+          
+          console.log('[Headless] Calling Browserless.io /content API')
+          console.log('[Headless] Endpoint:', apiUrl)
+          console.log('[Headless] Target URL:', url)
+          
           const response = await axios.post(
-            `${contentUrl}?token=${BROWSERLESS_API_KEY}`,
-            {
-              url: url,
-              waitFor: 3000, // Wait longer for JS to render
-              gotoOptions: {
-                waitUntil: 'networkidle2',
-                timeout: 20000
-              }
-            },
+            apiUrl,
+            { url: url }, // Simple body - just the URL
             {
               timeout: 30000,
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${BROWSERLESS_API_KEY}` // Also try in headers
-              }
+                'Cache-Control': 'no-cache',
+                'Content-Type': 'application/json'
+              },
+              responseType: 'text' // Expect raw HTML text, not JSON
             }
           )
           
-          if (typeof response.data === 'string') {
+          // Response is raw HTML text (not JSON)
+          if (typeof response.data === 'string' && response.data.length > 0) {
             html = response.data
             usingHeadless = true
             console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
-          } else if (response.data && response.data.html) {
-            html = response.data.html
-            usingHeadless = true
-            console.log(`[Headless] ✅ Successfully fetched HTML via /content (${html.length} chars)`)
+          } else {
+            throw new Error('Empty or invalid response from Browserless.io')
           }
         } catch (error) {
           console.error('[Headless] /content failed:', error.message)
           if (error.response) {
             console.error('[Headless] Response status:', error.response.status)
-            console.error('[Headless] Response data:', JSON.stringify(error.response.data))
+            console.error('[Headless] Response statusText:', error.response.statusText)
+            console.error('[Headless] Response headers:', JSON.stringify(error.response.headers, null, 2))
+            // Response might be text or JSON
+            const responseData = typeof error.response.data === 'string' 
+              ? error.response.data 
+              : JSON.stringify(error.response.data, null, 2)
+            console.error('[Headless] Response data:', responseData.substring(0, 500))
           }
-          // Don't fall back - if headless fails, return error
-          throw new Error(`Browserless.io failed: ${error.message}. Check API key and endpoint.`)
+          if (error.request) {
+            console.error('[Headless] Request was made but no response received')
+            console.error('[Headless] Request URL:', error.config?.url)
+          }
+          throw error
         }
       } catch (error) {
         console.error('[Headless] Browserless.io error:', error.message)
+        console.error('[Headless] Full error:', error)
+        
+        // Return detailed error for debugging
+        const errorDetails = {
+          error: 'Failed to fetch with headless browser',
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          responseData: error.response?.data,
+          hint: 'Check BROWSERLESS_API_KEY and BROWSERLESS_URL environment variables. Browserless.io may be down or the API format may have changed.'
+        }
+        
         return {
           statusCode: 500,
           headers,
-          body: JSON.stringify({
-            error: 'Failed to fetch with headless browser',
-            message: error.message,
-            hint: 'Check BROWSERLESS_API_KEY and BROWSERLESS_URL environment variables'
-          })
+          body: JSON.stringify(errorDetails)
         }
       }
     } else {
