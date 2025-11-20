@@ -288,6 +288,29 @@
                     </div>
                     
                     <div class="pt-4 border-t border-gray-600">
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Scouting Settings</label>
+                      <div class="space-y-3">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            v-model="adminStore.globalSettings.useHeadlessBrowser"
+                            class="mt-1 w-4 h-4 text-amber-500 bg-gray-700 border-gray-600 rounded focus:ring-amber-500 focus:ring-2"
+                          />
+                          <div>
+                            <span class="text-white font-medium">Use Headless Browser for Scraping</span>
+                            <p class="text-sm text-gray-400 mt-1">
+                              Enable headless browser scraping (Browserless.io). Slower (5-10s) but more reliable. 
+                              Requires Browserless.io API key in Netlify environment variables.
+                            </p>
+                            <p class="text-xs text-amber-400 mt-2">
+                              <strong>Note:</strong> Make sure to set up Browserless.io API key in Netlify before enabling this.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-gray-600">
                       <button
                         @click="adminStore.saveGlobalSettings()"
                         :disabled="adminStore.isSavingSettings"
@@ -432,6 +455,21 @@ watch(() => router.currentRoute.value.path, (path) => {
 onMounted(() => {
   if (router.currentRoute.value.path === '/admin' && authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous) {
     adminStore.open()
+    // Load settings when admin panel opens
+    adminStore.loadGlobalSettings()
+  }
+})
+
+// Load settings when admin panel opens or settings tab is selected
+watch(() => adminStore.isOpen, (isOpen) => {
+  if (isOpen) {
+    adminStore.loadGlobalSettings()
+  }
+})
+
+watch(() => adminStore.activeTab, (tab) => {
+  if (tab === 'settings' && adminStore.isOpen) {
+    adminStore.loadGlobalSettings()
   }
 })
 </script>

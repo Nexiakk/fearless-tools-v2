@@ -33,7 +33,8 @@ export const useAdminStore = defineStore('admin', () => {
   
   // Global Settings State
   const globalSettings = ref({
-    anonymousUserMode: 'interact' // 'interact' or 'view'
+    anonymousUserMode: 'interact', // 'interact' or 'view'
+    useHeadlessBrowser: false // Use headless browser for op.gg scraping (slower but more reliable)
   })
   const isSavingSettings = ref(false)
   
@@ -588,7 +589,8 @@ export const useAdminStore = defineStore('admin', () => {
       if (settingsDoc.exists()) {
         const data = settingsDoc.data()
         globalSettings.value = {
-          anonymousUserMode: data.anonymousUserMode || 'interact'
+          anonymousUserMode: data.anonymousUserMode || 'interact',
+          useHeadlessBrowser: data.useHeadlessBrowser || false
         }
         console.log('Loaded global settings:', globalSettings.value)
       }
@@ -616,6 +618,7 @@ export const useAdminStore = defineStore('admin', () => {
       const settingsRef = doc(db, 'settings', 'global')
       await setDoc(settingsRef, {
         anonymousUserMode: globalSettings.value.anonymousUserMode,
+        useHeadlessBrowser: globalSettings.value.useHeadlessBrowser,
         lastUpdated: serverTimestamp(),
         updatedBy: authService.getUserId()
       }, { merge: true })

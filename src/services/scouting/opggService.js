@@ -15,9 +15,10 @@ export const opggService = {
   /**
    * Scrape op.gg champion stats for a player
    * @param {string} opggUrl - Full op.gg URL
+   * @param {boolean} useHeadless - Use headless browser (slower but more reliable)
    * @returns {Promise<Object>} Champion pool data
    */
-  async scrapePlayerChampions(opggUrl) {
+  async scrapePlayerChampions(opggUrl, useHeadless = false) {
     try {
       // Extract region and player name from URL
       const urlData = this.parseOpggUrl(opggUrl)
@@ -26,9 +27,11 @@ export const opggService = {
       }
 
       // Call backend API with full champions URL
-      const apiUrl = `${BACKEND_API_URL}/scoutOpgg`
-      console.log('[op.gg] Calling API:', apiUrl)
-      console.log('[op.gg] Request data:', { playerName: urlData.playerName, region: urlData.region, tag: urlData.tag, championsUrl: urlData.fullUrl })
+      // Use headless endpoint if requested, otherwise use regular endpoint
+      const endpoint = useHeadless ? 'scoutOpggHeadless' : 'scoutOpgg'
+      const apiUrl = `${BACKEND_API_URL}/${endpoint}`
+      console.log('[op.gg] Calling API:', apiUrl, useHeadless ? '(headless)' : '(regular)')
+      console.log('[op.gg] Request data:', { playerName: urlData.playerName, region: urlData.region, tag: urlData.tag, championsUrl: urlData.fullUrl, useHeadless })
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -39,7 +42,7 @@ export const opggService = {
           playerName: urlData.playerName,
           region: urlData.region,
           tag: urlData.tag,
-          championsUrl: urlData.fullUrl // Send the full champions URL to backend
+          championsUrl: urlData.fullUrl
         })
       })
 

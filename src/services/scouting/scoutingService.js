@@ -1,6 +1,8 @@
 import { leaguepediaService } from './leaguepediaService'
 import { opggService } from './opggService'
 import { useScoutingStore } from '@/stores/scouting'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/services/firebase/config'
 
 /**
  * Main orchestrator service for scouting data collection
@@ -35,7 +37,10 @@ export const scoutingService = {
       try {
         if (player.opggUrl) {
           console.log('[ScoutingService] Scraping op.gg for player:', player.name, 'URL:', player.opggUrl)
-          const soloqData = await opggService.scrapePlayerChampions(player.opggUrl)
+          // Get headless browser setting from global settings
+          const useHeadless = await this.getHeadlessBrowserSetting()
+          console.log('[ScoutingService] Using headless browser:', useHeadless)
+          const soloqData = await opggService.scrapePlayerChampions(player.opggUrl, useHeadless)
           console.log('[ScoutingService] Received soloqData:', soloqData)
           console.log('[ScoutingService] Champions from soloqData:', soloqData.champions)
           console.log('[ScoutingService] Champions count:', soloqData.champions?.length || 0)
@@ -327,6 +332,27 @@ export const scoutingService = {
     }
     
     return existingData
+  },
+
+  /**
+   * Get headless browser setting from global settings
+   * @returns {Promise<boolean>} Whether to use headless browser
+   */
+  async getHeadlessBrowserSetting() {
+    try {
+      const settingsRef = doc(db, 'settings', 'global')
+      const settingsDoc = await getDoc(settingsRef)
+      
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data()
+        return data.useHeadlessBrowser || false
+      }
+      
+      return false // Default to false if settings don't exist
+    } catch (error) {
+      console.error('[ScoutingService] Error loading headless browser setting:', error)
+      return false // Default to false on error
+    }
   }
 }
 
