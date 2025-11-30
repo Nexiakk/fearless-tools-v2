@@ -33,8 +33,7 @@ export const scoutingService = {
         lastUpdated: new Date()
       }
       
-      // 1. DISABLED: op.gg scraping (temporarily disabled for Leaguepedia testing)
-      /*
+      // 1. Scrape op.gg for SoloQ data
       try {
         if (player.opggUrl) {
           console.log('[ScoutingService] Scraping op.gg for player:', player.name, 'URL:', player.opggUrl)
@@ -71,17 +70,6 @@ export const scoutingService = {
         } else {
           console.warn('[ScoutingService] No existing soloq data to fallback to')
         }
-      }
-      */
-      
-      // Keep existing soloq data if available, otherwise set to null
-      const existingData = scoutingStore.scoutingData[playerId]
-      if (existingData?.soloq) {
-        scoutingData.soloq = existingData.soloq
-        console.log('[ScoutingService] Using existing soloq data (op.gg scraping disabled for testing)')
-      } else {
-        scoutingData.soloq = null
-        console.log('[ScoutingService] op.gg scraping disabled for testing - no existing soloq data')
       }
       
       // 2. Try to get Pro play data from Leaguepedia API (ENABLED for testing)

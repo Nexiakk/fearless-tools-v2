@@ -12,9 +12,9 @@
       </Transition>
     </Teleport>
 
-    <div v-if="workspaceStore.hasWorkspace" class="container-fluid mx-auto p-4">
+    <div v-if="workspaceStore.hasWorkspace" class="h-screen overflow-hidden flex flex-col">
       <!-- Error message -->
-      <div v-if="scoutingStore.error" class="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200">
+      <div v-if="scoutingStore.error" class="flex-shrink-0 p-4 bg-red-900/50 border-b border-red-700 text-red-200">
         {{ scoutingStore.error }}
         <button @click="scoutingStore.clearError()" class="ml-4 text-red-300 hover:text-red-100">
           ×
@@ -22,14 +22,14 @@
       </div>
 
       <!-- Main content -->
-      <div v-if="!scoutingStore.isLoading" class="relative min-h-screen">
+      <div v-if="!scoutingStore.isLoading" class="flex-1 relative overflow-hidden">
         <!-- Top Right: Player List Container -->
-        <div class="absolute top-0 right-0 w-64 z-10" id="players-container">
+        <div class="absolute top-4 right-4 w-64 z-10">
           <PlayerListContainer @open-management="showManagementModal = true" />
         </div>
 
-        <!-- Player Cards Grid (starts where PlayerListContainer ends vertically) -->
-        <div class="pt-[180px] pr-[280px]">
+        <!-- Player Cards Grid (starts where PlayerListContainer ends vertically, extends to right edge) -->
+        <div class="absolute top-[140px] left-4 right-4 bottom-4">
           <PlayerCardsGrid />
         </div>
       </div>

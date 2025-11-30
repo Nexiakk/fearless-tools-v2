@@ -1,32 +1,33 @@
 <template>
-  <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 flex flex-col min-h-[400px]">
-    <!-- Header -->
-    <div class="mb-4">
-      <h3 class="text-lg font-semibold text-white mb-2">{{ role }}</h3>
-      <p class="text-sm text-gray-400">{{ teamName }}</p>
+  <div class="player-card-container relative bg-gray-800 rounded-lg border border-gray-700 p-3 flex flex-col h-full overflow-hidden">
+    <!-- Role Icon (70/30 positioning like Champion Pool) -->
+    <img 
+      :src="roleIconUrl" 
+      :alt="role" 
+      class="player-card-role-icon" 
+    />
+    
+    <!-- Player Name Header (centered) -->
+    <div class="mb-2 text-center">
+      <h3 
+        v-if="currentPlayer"
+        class="text-base font-semibold text-white cursor-pointer hover:text-amber-500 transition-colors"
+        @click="openPlayerDetail"
+      >
+        {{ currentPlayer.name }}
+      </h3>
+      <h3 v-else class="text-base font-semibold text-gray-500">No Player</h3>
     </div>
 
     <!-- Empty State -->
-    <div v-if="!currentPlayer" class="flex-1 flex items-center justify-center min-h-[300px]">
+    <div v-if="!currentPlayer" class="flex-1 flex items-center justify-center">
       <div class="text-center">
-        <p class="text-gray-400 mb-2">No player assigned</p>
-        <p class="text-xs text-gray-500">{{ teamName }}</p>
+        <p class="text-gray-400 text-sm">No player assigned</p>
       </div>
     </div>
 
     <!-- Player Data -->
-    <div v-else class="flex-1 flex flex-col">
-      <!-- Player Info -->
-      <div 
-        class="mb-4 cursor-pointer hover:bg-gray-700 rounded p-2 transition-colors"
-        @click="openPlayerDetail"
-      >
-        <p class="text-white font-medium">{{ currentPlayer.name }}</p>
-        <p v-if="scoutingData" class="text-xs text-gray-400 mt-1">
-          {{ getLastUpdatedText() }}
-        </p>
-      </div>
-
+    <div v-else class="flex-1 flex flex-col min-h-0">
       <!-- Loading State -->
       <div v-if="isLoadingData" class="flex-1 flex items-center justify-center">
         <div class="text-center">
@@ -36,77 +37,100 @@
       </div>
 
       <!-- Statistics -->
-      <div v-else-if="scoutingData" class="flex-1 space-y-4 overflow-y-auto">
-        <!-- SoloQ Stats -->
-        <div v-if="scoutingData.soloq?.currentSeason" class="bg-gray-700 rounded p-3">
-          <h4 class="text-sm font-semibold text-white mb-2">SoloQ</h4>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between">
-              <span class="text-gray-400">Rank:</span>
-              <span class="text-white">{{ scoutingData.soloq.currentSeason.rank || 'Unknown' }}</span>
-            </div>
-            <div v-if="scoutingData.soloq.currentSeason.lp" class="flex justify-between">
-              <span class="text-gray-400">LP:</span>
-              <span class="text-white">{{ scoutingData.soloq.currentSeason.lp }}</span>
-            </div>
-            <div v-if="topChampions.soloq.length > 0" class="mt-2 pt-2 border-t border-gray-600">
-              <p class="text-gray-400 mb-1">Top Champions:</p>
-              <div class="space-y-1">
-                <div 
-                  v-for="champ in topChampions.soloq.slice(0, 5)" 
-                  :key="champ.championName"
-                  class="flex justify-between text-xs"
-                >
-                  <span class="text-white">{{ champ.championName }}</span>
-                  <span class="text-gray-400">
-                    {{ champ.games }}g {{ champ.winrate?.toFixed(0) || 0 }}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div v-else-if="scoutingData" class="flex-1 flex flex-col min-h-0 bg-gray-700 rounded overflow-hidden">
+        <!-- Shared Table Header -->
+        <div class="flex-shrink-0 border-b border-gray-600">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-800">
+              <tr>
+                <th class="text-left py-1 px-2 font-semibold text-white">CHAMPION</th>
+                <th class="text-center py-1 px-2 font-semibold text-white">G</th>
+                <th class="text-center py-1 px-2 font-semibold text-white">W</th>
+                <th class="text-center py-1 px-2 font-semibold text-white">L</th>
+                <th class="text-center py-1 px-2 font-semibold text-white">WR%</th>
+                <th class="text-center py-1 px-2 font-semibold text-white">KDA</th>
+              </tr>
+            </thead>
+          </table>
         </div>
 
-        <!-- Pro Play Stats -->
-        <div v-if="scoutingData.proplay" class="bg-gray-700 rounded p-3">
-          <h4 class="text-sm font-semibold text-white mb-2">Pro Play</h4>
-          <div class="space-y-1 text-xs">
-            <div v-if="scoutingData.proplay.playerInfo?.Team" class="flex justify-between">
-              <span class="text-gray-400">Team:</span>
-              <span class="text-white">{{ scoutingData.proplay.playerInfo.Team }}</span>
-            </div>
-            <div v-if="topChampions.proplay.length > 0" class="mt-2 pt-2 border-t border-gray-600">
-              <p class="text-gray-400 mb-1">Top Champions:</p>
-              <div class="space-y-1">
-                <div 
-                  v-for="champ in topChampions.proplay.slice(0, 5)" 
-                  :key="champ.championName"
-                  class="flex justify-between text-xs"
-                >
-                  <span class="text-white">{{ champ.championName }}</span>
-                  <span class="text-gray-400">
-                    {{ champ.games }}g {{ champ.winrate?.toFixed(0) || 0 }}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Scrollable Data Container -->
+        <div class="flex-1 overflow-y-auto min-h-0">
+          <table class="w-full text-xs">
+            <tbody>
+              <!-- SoloQ Section -->
+              <tr v-if="soloqChampions.length > 0 || competitiveChampions.length > 0">
+                <td colspan="6" class="px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-b border-gray-600">
+                  SoloQ (op.gg)
+                </td>
+              </tr>
+              <tr 
+                v-for="champ in soloqChampions" 
+                :key="`soloq-${champ.championName}`"
+                class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
+              >
+                <td class="py-1 px-2">
+                  <div class="flex items-center gap-1.5">
+                    <img 
+                      :src="getChampionIconUrl(champ.championName)" 
+                      :alt="champ.championName"
+                      class="w-4 h-4 rounded"
+                      @error="handleImageError"
+                    />
+                    <span class="text-white">{{ champ.championName }}</span>
+                  </div>
+                </td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
+              </tr>
+              <tr v-if="soloqChampions.length === 0 && competitiveChampions.length > 0">
+                <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No SoloQ data</td>
+              </tr>
 
-        <!-- Summary -->
-        <div class="bg-gray-700 rounded p-3">
-          <h4 class="text-sm font-semibold text-white mb-2">Summary</h4>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between">
-              <span class="text-gray-400">Total Champions:</span>
-              <span class="text-white">{{ totalChampions }}</span>
-            </div>
-          </div>
+              <!-- Competitive Section -->
+              <tr v-if="competitiveChampions.length > 0">
+                <td colspan="6" class="px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-b border-gray-600 border-t border-gray-600">
+                  Competitive (Leaguepedia)
+                </td>
+              </tr>
+              <tr 
+                v-for="champ in competitiveChampions" 
+                :key="`comp-${champ.championName}`"
+                class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
+              >
+                <td class="py-1 px-2">
+                  <div class="flex items-center gap-1.5">
+                    <img 
+                      :src="getChampionIconUrl(champ.championName)" 
+                      :alt="champ.championName"
+                      class="w-4 h-4 rounded"
+                      @error="handleImageError"
+                    />
+                    <span class="text-white">{{ champ.championName }}</span>
+                  </div>
+                </td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
+                <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
+              </tr>
+              <tr v-if="competitiveChampions.length === 0 && soloqChampions.length > 0">
+                <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No competitive data</td>
+              </tr>
+              <tr v-if="soloqChampions.length === 0 && competitiveChampions.length === 0">
+                <td colspan="6" class="text-center py-2 text-gray-400 text-xs">No data available</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- No Data State -->
-      <div v-else class="flex-1 flex items-center justify-center min-h-[200px]">
+      <div v-else class="flex-1 flex items-center justify-center">
         <p class="text-gray-400 text-sm text-center">No scouting data available</p>
       </div>
     </div>
@@ -116,6 +140,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useScoutingStore } from '@/stores/scouting'
+import { useChampionsStore } from '@/stores/champions'
 
 const props = defineProps({
   role: {
@@ -133,16 +158,15 @@ const props = defineProps({
 const emit = defineEmits(['open-detail'])
 
 const scoutingStore = useScoutingStore()
+const championsStore = useChampionsStore()
 const isLoadingData = ref(false)
 
 const currentPlayer = computed(() => {
   return scoutingStore.getPlayerByTeamAndRole(props.selectedTeam, props.role)
 })
 
-const teamName = computed(() => {
-  return props.selectedTeam === 'own' 
-    ? scoutingStore.ownTeamName 
-    : scoutingStore.enemyTeamName
+const roleIconUrl = computed(() => {
+  return championsStore.getRoleIconUrl(props.role)
 })
 
 const scoutingData = computed(() => {
@@ -150,54 +174,44 @@ const scoutingData = computed(() => {
   return scoutingStore.scoutingData[currentPlayer.value.id]
 })
 
-const topChampions = computed(() => {
-  const result = {
-    soloq: [],
-    proplay: []
-  }
-  
-  if (scoutingData.value?.soloq?.currentSeason?.champions) {
-    result.soloq = [...scoutingData.value.soloq.currentSeason.champions]
-      .sort((a, b) => (b.games || 0) - (a.games || 0))
-  }
-  
-  if (scoutingData.value?.proplay?.championPool) {
-    result.proplay = [...scoutingData.value.proplay.championPool]
-      .sort((a, b) => (b.games || 0) - (a.games || 0))
-  }
-  
-  return result
+const soloqChampions = computed(() => {
+  if (!scoutingData.value?.soloq?.currentSeason?.champions) return []
+  return [...scoutingData.value.soloq.currentSeason.champions]
+    .sort((a, b) => (b.games || 0) - (a.games || 0))
 })
 
-const totalChampions = computed(() => {
-  const champions = new Set()
-  if (scoutingData.value?.soloq?.currentSeason?.champions) {
-    scoutingData.value.soloq.currentSeason.champions.forEach(champ => {
-      champions.add(champ.championName)
-    })
-  }
-  if (scoutingData.value?.proplay?.championPool) {
-    scoutingData.value.proplay.championPool.forEach(champ => {
-      champions.add(champ.championName)
-    })
-  }
-  return champions.size
+const competitiveChampions = computed(() => {
+  if (!scoutingData.value?.proplay?.championPool) return []
+  return [...scoutingData.value.proplay.championPool]
+    .sort((a, b) => (b.games || 0) - (a.games || 0))
 })
 
-const getLastUpdatedText = () => {
-  if (!scoutingData.value?.lastUpdated) return 'Not scouted'
+const getChampionIconUrl = (championName) => {
+  return championsStore.getChampionIconUrl(championName, 'list')
+}
+
+const formatWinrate = (winrate) => {
+  if (winrate === null || winrate === undefined) return '0,00%'
+  return `${winrate.toFixed(2).replace('.', ',')}%`
+}
+
+const formatKDA = (kda) => {
+  if (!kda) return '0.00'
   
-  const lastUpdated = scoutingData.value.lastUpdated.toDate 
-    ? scoutingData.value.lastUpdated.toDate() 
-    : new Date(scoutingData.value.lastUpdated)
-  const hoursSinceUpdate = (new Date() - lastUpdated) / (1000 * 60 * 60)
-  
-  if (hoursSinceUpdate < 24) {
-    return `Updated ${Math.round(hoursSinceUpdate)}h ago`
-  } else {
-    const daysSinceUpdate = Math.floor(hoursSinceUpdate / 24)
-    return `Updated ${daysSinceUpdate}d ago`
+  if (typeof kda === 'object' && kda.ratio !== undefined) {
+    return kda.ratio.toFixed(2)
   }
+  
+  if (typeof kda === 'number') {
+    return kda.toFixed(2)
+  }
+  
+  return '0.00'
+}
+
+const handleImageError = (event) => {
+  // Fallback to placeholder if image fails to load
+  event.target.src = 'https://placehold.co/20x20/374151/9ca3af?text=?'
 }
 
 const openPlayerDetail = () => {
@@ -233,3 +247,58 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.player-card-container {
+  position: relative;
+  overflow: visible;
+}
+
+.player-card-role-icon {
+  position: absolute;
+  top: -17px; /* 70% outside, 30% inside (24px icon: ~17px outside, ~7px inside) */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  z-index: 10;
+  background-color: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 50%;
+  padding: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* Custom scrollbar for tables */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
+/* Table styling */
+table {
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #3a3a3a;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+</style>

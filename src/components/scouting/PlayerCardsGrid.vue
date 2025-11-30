@@ -1,7 +1,7 @@
 <template>
-  <div class="w-full">
+  <div class="w-full h-full flex flex-col">
     <!-- Team Selector -->
-    <div class="mb-4 flex items-center justify-center gap-4">
+    <div class="mb-4 flex items-center justify-center gap-4 flex-shrink-0">
       <button
         @click="selectedTeam = 'own'"
         :class="[
@@ -27,7 +27,7 @@
     </div>
 
     <!-- Player Cards Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-5 gap-4 w-full flex-1 min-h-0">
       <PlayerCard
         v-for="role in roles"
         :key="role"
