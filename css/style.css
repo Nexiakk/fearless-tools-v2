@@ -13,6 +13,10 @@
   min-height: 40px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+/* Editor mode: orange bottom border on navbar */
+.top-navbar.editor-mode-active {
+  border-bottom: 2px solid rgba(245, 158, 11, 0.8); /* Same orange as bottom border */
+}
 .navbar-container {
   display: flex;
   align-items: center;

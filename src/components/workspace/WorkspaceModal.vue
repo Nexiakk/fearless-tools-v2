@@ -3,7 +3,7 @@
     <Transition name="fade">
       <div
         v-if="workspaceStore.isWorkspaceModalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[200] flex items-center justify-center p-4"
         @click.self="handleClose"
       >
         <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="handleClose"></div>

@@ -20,6 +20,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const activeUsers = ref(0)
   const isOnline = ref(navigator.onLine)
   const networkError = ref(null)
+  const isInitializing = ref(true) // Track if app is still initializing
   let unsubscribeRealtimeSync = null
   
   // Getters
@@ -87,13 +88,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function loadLocalWorkspace(workspaceId) {
     const localData = workspaceService.getLocalWorkspaceData(workspaceId)
+    const draftStore = useDraftStore()
+    
     if (localData) {
       currentWorkspaceName.value = localData.name
       
-      const draftStore = useDraftStore()
       if (localData.draftData) {
         draftStore.loadDraftData(localData.draftData)
+      } else {
+        // No draft data - ensure loading state is false
+        draftStore.isLoading = false
       }
+    } else {
+      // No local data - ensure loading state is false
+      draftStore.isLoading = false
     }
   }
 
@@ -236,12 +244,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // Getters
     hasWorkspace,
     isLocalWorkspace,
+    isInitializing,
     // Actions
     setCurrentWorkspace,
     setLoading,
     setSyncing,
     openWorkspaceSettings,
     loadRecentWorkspaces,
-    loadWorkspace
+    loadWorkspace,
+    setInitializing: (value) => { isInitializing.value = value }
   }
 })

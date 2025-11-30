@@ -22,6 +22,15 @@ app.use(router)
 // Initialize app after stores are set up
 app.mount('#app')
 
+// Set modal to open immediately if no saved workspace (before async initialization)
+// This prevents UI flash before initialization completes
+const workspaceStore = useWorkspaceStore()
+const savedWorkspaceId = workspaceService.getCurrentWorkspaceId()
+if (!savedWorkspaceId) {
+  // Open modal immediately so UI doesn't flash
+  workspaceStore.isWorkspaceModalOpen = true
+}
+
 // Initialize app state
 async function initializeApp() {
   console.log('Initializing Vue app...')
@@ -34,9 +43,6 @@ async function initializeApp() {
   await championsStore.initializePatchVersion()
   
   // Try to auto-join workspace
-  const workspaceStore = useWorkspaceStore()
-  const savedWorkspaceId = workspaceService.getCurrentWorkspaceId()
-  
   if (savedWorkspaceId) {
     try {
       console.log('Attempting auto-join for workspace:', savedWorkspaceId)
@@ -45,6 +51,7 @@ async function initializeApp() {
         console.log('Auto-join successful, loading workspace...')
         await workspaceStore.loadWorkspace(savedWorkspaceId)
         console.log('Auto-joined workspace:', savedWorkspaceId)
+        workspaceStore.isWorkspaceModalOpen = false
       } else {
         console.log('Auto-join failed:', autoJoinResult.error)
         workspaceStore.isWorkspaceModalOpen = true
@@ -53,11 +60,11 @@ async function initializeApp() {
       console.error('Error auto-joining workspace:', error)
       workspaceStore.isWorkspaceModalOpen = true
     }
-  } else {
-    // No saved workspace, show join modal
-    workspaceStore.isWorkspaceModalOpen = true
   }
+  // If no saved workspace, modal is already open from above
   
+  // Mark initialization as complete
+  workspaceStore.setInitializing(false)
   console.log('App initialization complete')
 }
 

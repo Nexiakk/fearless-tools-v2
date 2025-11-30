@@ -20,6 +20,7 @@ export const useDraftStore = defineStore('draft', () => {
   const pickContext = ref([])
   let saveTimeout = null
   let isSaving = ref(false)
+  const isLoading = ref(false)
   
   // Getters
   const unavailableChampions = computed(() => new Set(draftSeries.value))
@@ -298,6 +299,7 @@ export const useDraftStore = defineStore('draft', () => {
   }
   
   async function loadWorkspaceData(workspaceId) {
+    isLoading.value = true
     try {
       const data = await fetchDraftDataFromFirestore(workspaceId)
       if (data) {
@@ -319,24 +321,31 @@ export const useDraftStore = defineStore('draft', () => {
       }
     } catch (error) {
       console.error('Error loading workspace data:', error)
+    } finally {
+      isLoading.value = false
     }
   }
   
   function loadDraftData(data) {
-    draftSeries.value = data.draftSeries || []
-    highlightedChampions.value = data.highlightedChampions || {}
-    unavailablePanelState.value = data.unavailablePanelState || {
-      Top: Array(10).fill(null),
-      Jungle: Array(10).fill(null),
-      Mid: Array(10).fill(null),
-      Bot: Array(10).fill(null),
-      Support: Array(10).fill(null)
-    }
-    pickContext.value = data.pickContext || []
-    
-    // Reconstruct pickContext if missing
-    if (pickContext.value.length === 0 && draftSeries.value.length > 0) {
-      reconstructPickContext()
+    isLoading.value = true
+    try {
+      draftSeries.value = data.draftSeries || []
+      highlightedChampions.value = data.highlightedChampions || {}
+      unavailablePanelState.value = data.unavailablePanelState || {
+        Top: Array(10).fill(null),
+        Jungle: Array(10).fill(null),
+        Mid: Array(10).fill(null),
+        Bot: Array(10).fill(null),
+        Support: Array(10).fill(null)
+      }
+      pickContext.value = data.pickContext || []
+      
+      // Reconstruct pickContext if missing
+      if (pickContext.value.length === 0 && draftSeries.value.length > 0) {
+        reconstructPickContext()
+      }
+    } finally {
+      isLoading.value = false
     }
   }
   
@@ -666,6 +675,7 @@ export const useDraftStore = defineStore('draft', () => {
     unavailablePanelState,
     pickContext,
     isSaving,
+    isLoading,
     // Getters
     unavailableChampions,
     championsByRoleForCompactView,

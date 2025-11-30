@@ -1,5 +1,5 @@
 <template>
-  <header class="top-navbar">
+  <header class="top-navbar" :class="{ 'editor-mode-active': adminStore.isEditorModeActive }">
     <div class="navbar-container">
       <nav class="navbar-nav">
         <router-link
