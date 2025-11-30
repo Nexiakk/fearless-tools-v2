@@ -91,7 +91,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const draftStore = useDraftStore()
     
     if (localData) {
-      currentWorkspaceName.value = localData.name
+      // Local workspaces don't have names
+      currentWorkspaceName.value = null
       
       if (localData.draftData) {
         draftStore.loadDraftData(localData.draftData)

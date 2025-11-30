@@ -1074,22 +1074,10 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   z-index: 5;
 }
 
-/* Only border around the icon, with pulse animation */
+/* Only border around the icon */
 .compact-champion-card.manually-marked .compact-champion-icon {
   border: 2px solid rgba(59, 130, 246, 0.8);
   box-shadow: 0 0 4px 1px rgba(59, 130, 246, 0.6);
-  animation: pulse-highlight-border 2s ease-in-out infinite;
-}
-
-@keyframes pulse-highlight-border {
-  0%, 100% {
-    border-color: rgba(59, 130, 246, 0.6);
-    box-shadow: 0 0 4px 1px rgba(59, 130, 246, 0.4);
-  }
-  50% {
-    border-color: rgba(59, 130, 246, 1);
-    box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.8);
-  }
 }
 
 /* Disable animations when no-animations class is present */

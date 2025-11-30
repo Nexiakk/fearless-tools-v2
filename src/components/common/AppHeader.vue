@@ -74,7 +74,7 @@
         
         <!-- Workspace info -->
         <div v-if="workspaceStore.currentWorkspaceId" class="flex items-center gap-2">
-          <span class="text-sm text-gray-400">
+          <span v-if="!workspaceStore.isLocalWorkspace" class="text-sm text-gray-400">
             {{ workspaceStore.currentWorkspaceName || workspaceStore.currentWorkspaceId }}
           </span>
           <button

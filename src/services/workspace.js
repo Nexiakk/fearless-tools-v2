@@ -244,19 +244,25 @@ export const workspaceService = {
     }
   },
 
-  // Create a local storage workspace
-  createLocalWorkspace(name) {
-    if (!name || name.trim() === '') {
-      return { workspaceId: null, error: 'Workspace name is required.' }
+  // Create a local storage workspace (only one local workspace allowed)
+  createLocalWorkspace(name = null) {
+    // Delete any existing local workspaces (only one allowed)
+    const existingLocalWorkspaces = this.getLocalWorkspaces()
+    const existingIds = Object.keys(existingLocalWorkspaces)
+    
+    // Clear current workspace if it's a local workspace
+    const currentWorkspaceId = this.getCurrentWorkspaceId()
+    if (currentWorkspaceId && currentWorkspaceId.startsWith('local_')) {
+      this.setCurrentWorkspaceId(null)
     }
 
     // Generate a unique local workspace ID
     const workspaceId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Store workspace data in localStorage
+    // Store workspace data in localStorage (only one local workspace)
     const workspaceData = {
       id: workspaceId,
-      name: name.trim(),
+      name: name && name.trim() !== '' ? name.trim() : null,
       isLocal: true,
       createdAt: new Date().toISOString(),
       draftData: {
@@ -273,8 +279,8 @@ export const workspaceService = {
       }
     }
 
-    // Store in localStorage
-    const localWorkspaces = this.getLocalWorkspaces()
+    // Store in localStorage (replace all existing local workspaces)
+    const localWorkspaces = {}
     localWorkspaces[workspaceId] = workspaceData
     localStorage.setItem('localWorkspaces', JSON.stringify(localWorkspaces))
 

@@ -16,7 +16,7 @@
           <div class="space-y-3 mb-4">
             <p class="text-sm text-gray-400">
               Current workspace: <span class="text-white font-medium">
-                {{ workspaceStore.currentWorkspaceName || workspaceStore.currentWorkspaceId || 'None' }}
+                {{ workspaceStore.isLocalWorkspace ? 'Local workspace' : (workspaceStore.currentWorkspaceName || workspaceStore.currentWorkspaceId || 'None') }}
               </span>
             </p>
             
@@ -35,7 +35,7 @@
                 >
                   <div class="flex items-center justify-between">
                     <div>
-                      <div class="text-white font-medium">{{ workspace.name || workspace.id }}</div>
+                      <div class="text-white font-medium">{{ workspace.isLocal ? 'Local workspace' : (workspace.name || workspace.id) }}</div>
                       <div class="text-xs text-gray-400 mt-1">
                         <span v-if="workspace.isLocal">Local workspace</span>
                         <span v-else>Cloud workspace</span>

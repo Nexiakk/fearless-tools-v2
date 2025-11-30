@@ -38,12 +38,12 @@ export function useWorkspace() {
     }
   }
 
-  const createLocalWorkspace = async (name) => {
+  const createLocalWorkspace = async (name = null) => {
     store.setLoading(true)
     try {
       const result = workspaceService.createLocalWorkspace(name)
       if (result.workspaceId) {
-        store.setCurrentWorkspace(result.workspaceId, name)
+        store.setCurrentWorkspace(result.workspaceId, null)
         return { success: true, workspaceId: result.workspaceId }
       }
       return { success: false, error: result.error }

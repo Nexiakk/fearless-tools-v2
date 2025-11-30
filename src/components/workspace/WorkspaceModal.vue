@@ -6,7 +6,11 @@
         class="fixed inset-0 z-[200] flex items-center justify-center p-4"
         @click.self="handleClose"
       >
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="handleClose"></div>
+        <div 
+          :class="!workspaceStore.hasWorkspace ? 'bg-black/30' : 'bg-black/80'" 
+          class="fixed inset-0 backdrop-blur-sm" 
+          @click="handleClose"
+        ></div>
         <div
           class="relative w-full max-w-md rounded-lg bg-gray-800 border border-gray-700 shadow-lg"
           @click.stop
@@ -86,26 +90,16 @@
 
             <!-- Create Local Workspace Tab -->
             <div v-if="workspaceStore.workspaceModalTab === 'createLocal'" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">Workspace Name</label>
-                <input
-                  type="text"
-                  v-model="createLocalWorkspaceName"
-                  @keyup.enter="handleCreateLocalWorkspace"
-                  placeholder="My Local Workspace"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
-                />
-                <p class="text-xs text-gray-500 mt-1">
-                  This workspace will be stored only on your device and won't sync to the cloud.
-                </p>
-              </div>
+              <p class="text-xs text-gray-500">
+                This workspace will be stored only on your device and won't sync to the cloud.
+              </p>
               <p v-if="workspaceError && workspaceStore.workspaceModalTab === 'createLocal'" class="text-red-400 text-sm">
                 {{ workspaceError }}
               </p>
               <div class="flex justify-end gap-3">
                 <button
                   @click="handleCreateLocalWorkspace"
-                  :disabled="workspaceStore.isLoading || !createLocalWorkspaceName || createLocalWorkspaceName.trim() === ''"
+                  :disabled="workspaceStore.isLoading"
                   class="modal-button modal-button-confirm"
                 >
                   <span v-if="!workspaceStore.isLoading">Create</span>
@@ -130,7 +124,6 @@ const { joinWorkspace, createLocalWorkspace } = useWorkspace()
 
 const joinWorkspaceId = ref('')
 const joinWorkspacePassword = ref('')
-const createLocalWorkspaceName = ref('')
 const workspaceError = ref('')
 
 // Watch for modal opening to reset form
@@ -138,7 +131,6 @@ watch(() => workspaceStore.isWorkspaceModalOpen, (isOpen) => {
   if (isOpen) {
     joinWorkspaceId.value = ''
     joinWorkspacePassword.value = ''
-    createLocalWorkspaceName.value = ''
     workspaceError.value = ''
   }
 })
@@ -166,12 +158,11 @@ const handleJoinWorkspace = async () => {
 
 const handleCreateLocalWorkspace = async () => {
   workspaceError.value = ''
-  const result = await createLocalWorkspace(createLocalWorkspaceName.value.trim())
+  const result = await createLocalWorkspace()
   
   if (result.success) {
     await workspaceStore.loadWorkspace(result.workspaceId)
     workspaceStore.isWorkspaceModalOpen = false
-    createLocalWorkspaceName.value = ''
   } else {
     workspaceError.value = result.error || 'Failed to create local workspace'
   }

@@ -3,6 +3,14 @@
     <!-- Only show navbar when workspace is loaded or modal is open (initialization complete) -->
     <AppHeader v-if="shouldShowUI" />
     <main class="main-content">
+      <!-- Show skeleton background when workspace modal is open and no workspace is loaded -->
+      <Transition name="skeleton-fade">
+        <div v-if="workspaceStore.isWorkspaceModalOpen && !workspaceStore.hasWorkspace" class="skeleton-background-container">
+          <div class="container-fluid mx-auto p-4">
+            <ChampionPoolSkeleton />
+          </div>
+        </div>
+      </Transition>
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />
@@ -41,6 +49,7 @@ import NotesModal from './NotesModal.vue'
 import MilestoneReviewModal from './MilestoneReviewModal.vue'
 import AdminView from '@/views/AdminView.vue'
 import NetworkErrorBanner from './NetworkErrorBanner.vue'
+import ChampionPoolSkeleton from '@/components/champion-pool/ChampionPoolSkeleton.vue'
 
 const workspaceStore = useWorkspaceStore()
 const isAuthModalOpen = ref(false)
@@ -80,6 +89,36 @@ defineExpose({
 .app-layout.modal-open .navbar-right-actions,
 .app-layout.modal-open .right-side-panel {
   pointer-events: none;
+}
+
+/* Skeleton background container - positioned behind modal */
+.skeleton-background-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+/* Skeleton fade-in transition with delay - appears after blur */
+.skeleton-fade-enter-active {
+  transition: opacity 0.5s ease-out;
+  transition-delay: 0.2s;
+}
+
+.skeleton-fade-enter-from {
+  opacity: 0;
+}
+
+.skeleton-fade-leave-active {
+  transition: opacity 0.3s ease-in;
+}
+
+.skeleton-fade-leave-to {
+  opacity: 0;
 }
 </style>
 

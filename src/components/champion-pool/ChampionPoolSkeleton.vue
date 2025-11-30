@@ -59,11 +59,11 @@ const cardSizeStyles = computed(() => {
   }
 })
 
-// Show a reasonable number of skeleton cards per role
+// Show a reasonable number of skeleton cards per role to fill containers fully
 const skeletonCardCount = computed(() => {
   // League of Legends has ~170 champions, distributed across 5 roles
-  // Each role typically has 30-50 champions, so we show 45 to cover most cases
-  return 45
+  // To fill containers fully, we show more cards (70 per role ensures full height)
+  return 50
 })
 </script>
 
@@ -94,7 +94,8 @@ const skeletonCardCount = computed(() => {
 
 .skeleton-card {
   pointer-events: none;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  animation: skeleton-pulse 2s ease-in-out infinite;
+  transform: scale(1);
 }
 
 .skeleton-icon {
@@ -144,22 +145,61 @@ const skeletonCardCount = computed(() => {
 @keyframes skeleton-pulse {
   0%, 100% {
     opacity: 1;
+    transform: scale(1) translateY(0);
   }
   50% {
-    opacity: 0.7;
+    opacity: 0.85;
+    transform: scale(1.02) translateY(-2px);
   }
 }
 
 /* Delay each card's animation slightly for a wave effect */
-.skeleton-card:nth-child(1) { animation-delay: 0s; }
-.skeleton-card:nth-child(2) { animation-delay: 0.05s; }
-.skeleton-card:nth-child(3) { animation-delay: 0.1s; }
-.skeleton-card:nth-child(4) { animation-delay: 0.15s; }
-.skeleton-card:nth-child(5) { animation-delay: 0.2s; }
-.skeleton-card:nth-child(6) { animation-delay: 0.25s; }
-.skeleton-card:nth-child(7) { animation-delay: 0.3s; }
-.skeleton-card:nth-child(8) { animation-delay: 0.35s; }
-.skeleton-card:nth-child(9) { animation-delay: 0.4s; }
-.skeleton-card:nth-child(10) { animation-delay: 0.45s; }
-.skeleton-card:nth-child(n+11) { animation-delay: 0.5s; }
+.skeleton-card:nth-child(1) { 
+  animation-delay: 0s; 
+}
+.skeleton-card:nth-child(2) { 
+  animation-delay: 0.1s; 
+}
+.skeleton-card:nth-child(3) { 
+  animation-delay: 0.2s; 
+}
+.skeleton-card:nth-child(4) { 
+  animation-delay: 0.3s; 
+}
+.skeleton-card:nth-child(5) { 
+  animation-delay: 0.4s; 
+}
+.skeleton-card:nth-child(6) { 
+  animation-delay: 0.5s; 
+}
+.skeleton-card:nth-child(7) { 
+  animation-delay: 0.6s; 
+}
+.skeleton-card:nth-child(8) { 
+  animation-delay: 0.7s; 
+}
+.skeleton-card:nth-child(9) { 
+  animation-delay: 0.8s; 
+}
+.skeleton-card:nth-child(10) { 
+  animation-delay: 0.9s; 
+}
+.skeleton-card:nth-child(11) { 
+  animation-delay: 1s; 
+}
+.skeleton-card:nth-child(12) { 
+  animation-delay: 1.1s; 
+}
+.skeleton-card:nth-child(13) { 
+  animation-delay: 1.2s; 
+}
+.skeleton-card:nth-child(14) { 
+  animation-delay: 1.3s; 
+}
+.skeleton-card:nth-child(15) { 
+  animation-delay: 1.4s; 
+}
+.skeleton-card:nth-child(n+16) { 
+  animation-delay: 1.5s; 
+}
 </style>
