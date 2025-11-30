@@ -800,15 +800,15 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 }
 
 .pillar-champions-grid.fluid::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 .pillar-champions-grid.fluid::-webkit-scrollbar-track {
   background: #1e1e1e;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 .pillar-champions-grid.fluid::-webkit-scrollbar-thumb {
   background-color: #444;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .sticky-champions-container {
@@ -844,15 +844,15 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 }
 
 .scrollable-champions-container::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 .scrollable-champions-container::-webkit-scrollbar-track {
   background: #1e1e1e;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 .scrollable-champions-container::-webkit-scrollbar-thumb {
   background-color: #444;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 /* [REWRITTEN] Compact Champion Card Logic */

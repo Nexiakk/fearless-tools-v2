@@ -616,24 +616,28 @@ exports.handler = async (event, context) => {
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }
-              // Always calculate ratio from kills/deaths/assists for accuracy
-              // op.gg ratio might be rounded, so we calculate it ourselves
-              if (kda.deaths > 0) {
-                kda.ratio = (kda.kills + kda.assists) / kda.deaths
-              } else if (kda.kills + kda.assists > 0) {
-                kda.ratio = kda.kills + kda.assists // Perfect KDA (no deaths)
-              } else {
-                kda.ratio = 0
-              }
-              // Also store the op.gg ratio if available for reference
+              
+              // Use op.gg's ratio if available (it's more accurate due to their internal precision)
+              // Only calculate if ratio is not provided
               if (ratioMatch) {
-                kda.opggRatio = parseFloat(ratioMatch[1])
+                kda.ratio = parseFloat(ratioMatch[1])
+                console.log(`[DEBUG] Using op.gg ratio: ${kda.ratio}`)
+              } else {
+                // Calculate ratio from kills/deaths/assists if op.gg ratio not available
+                if (kda.deaths > 0) {
+                  kda.ratio = (kda.kills + kda.assists) / kda.deaths
+                } else if (kda.kills + kda.assists > 0) {
+                  kda.ratio = kda.kills + kda.assists // Perfect KDA (no deaths)
+                } else {
+                  kda.ratio = 0
+                }
+                console.log(`[DEBUG] Calculated ratio (op.gg ratio not found): ${kda.ratio.toFixed(2)}`)
               }
+              
               if (kpMatch) {
                 kda.killParticipation = parseFloat(kpMatch[1])
               }
               console.log(`[DEBUG] Extracted KDA from cell 3:`, kda)
-              console.log(`[DEBUG] Calculated ratio: ${kda.ratio.toFixed(2)}, op.gg ratio: ${kda.opggRatio || 'N/A'}`)
             } else {
               console.log(`[DEBUG] KDA pattern did not match cell 3 text: "${cellText}"`)
             }
