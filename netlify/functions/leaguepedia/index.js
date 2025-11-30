@@ -130,185 +130,111 @@ exports.handler = async (event, context) => {
 
     switch (action) {
       case 'getPlayerChampionPool':
-        // Query champion pool - use ScoreboardPlayers (plural, not ScoreboardPlayer)
+        // Query champion pool using server-side aggregation with PlayerRedirects join
+        // Based on implementation guide: https://lol.fandom.com/wiki/Special:ApiSandbox
         const playerName1 = params.playerName
-        console.log(`[Leaguepedia] getPlayerChampionPool query for player: "${playerName1}"`)
+        const year = params.year || new Date().getFullYear() // Default to current year
+        
+        // Validate year
+        const currentYear = new Date().getFullYear()
+        if (year < 2011 || year > currentYear + 1) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              error: `Year must be between 2011 and ${currentYear + 1}`
+            })
+          }
+        }
+        
+        console.log(`[Leaguepedia] getPlayerChampionPool query for player: "${playerName1}", year: ${year}`)
         
         try {
-          // Query champion pool with aggregated stats from ScoreboardPlayers
-          // According to Leaguepedia API docs, we need to join PlayerRedirects for name resolution
-          // and use proper field names from ScoreboardPlayers table
-          console.log(`[Leaguepedia] Querying ScoreboardPlayers for champion pool data`)
+          // Validate player name
+          if (!playerName1 || !playerName1.trim()) {
+            throw new Error('Player name is required')
+          }
           
-          // Query using the working approach from the example
-          // Use ScoreboardGames join for date filtering, and SP.Link for player name
-          try {
-            const startDate = `2025-01-01 00:00:00`
-            const endDate = `2026-01-01 00:00:00`
+          const startDate = `${year}-01-01 00:00:00`
+          const endDate = `${year}-12-31 23:59:59`
+          
+          // Use server-side aggregation with PlayerRedirects for name resolution
+          // This matches the implementation guide exactly - field names have spaces
+          const queryParams = {
+            action: 'cargoquery',
+            format: 'json',
+            tables: 'ScoreboardPlayers=SP,ScoreboardGames=SG,PlayerRedirects=PR',
+            join_on: 'SP.GameId=SG.GameId,SP.Link=PR.AllName',
+            fields: 'SP.Champion,COUNT(*)=Games,SUM(CASE WHEN SP.Side = SG.Winner THEN 1 ELSE 0 END)=Wins,SUM(SP.Kills)=Total kills,SUM(SP.Deaths)=Total deaths,SUM(SP.Assists)=Total assists',
+            where: `PR.OverviewPage = "${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC <= "${endDate}"`,
+            group_by: 'SP.Champion',
+            order_by: 'Games DESC',
+            limit: 500
+          }
+          
+          // Note: Field names with spaces are returned as-is by Cargo API
+          // Access using bracket notation: match['Total kills']
+          
+          // Build URL with encoded params
+          const baseUrl = 'https://lol.fandom.com/api.php'
+          const url = `${baseUrl}?${new URLSearchParams(queryParams).toString()}`
+          
+          console.log(`[Leaguepedia] Query URL: ${url.substring(0, 200)}...`)
+          
+          const response = await axios.get(url, {
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)',
+              'Accept': 'application/json'
+            },
+            timeout: 30000
+          })
+          
+          console.log(`[Leaguepedia] Response status: ${response.status}`)
+          
+          // Parse Cargo API response
+          if (response.data && response.data.cargoquery && Array.isArray(response.data.cargoquery)) {
+            results = response.data.cargoquery.map(item => item.title || item)
+            console.log(`[Leaguepedia] Query successful, got ${results.length} champions`)
             
-            // Query using the same approach as the working example
-            // Join ScoreboardGames for date filtering, use SP.Link for player name
-            let rawResults = await queryCargoAPI({
-              tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP',
-              fields: [
-                'SP.Champion',
-                'SP.Result',
-                'SP.Kills',
-                'SP.Deaths',
-                'SP.Assists',
-                'SP.CS',
-                'SP.Gold',
-                'SP.VisionScore',
-                'SP.DamageToChampions',
-                'SG.DateTime_UTC'
-              ],
-              where: `SP.Link="${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
-              join_on: 'SG.GameId=SP.GameId',
-              order_by: 'SG.DateTime_UTC DESC',
-              limit: 1000
-            })
-            
-            console.log(`[Leaguepedia] Query successful, got ${rawResults.length} raw games`)
-            
-            // If no results, try with PlayerRedirects join as fallback
-            if (rawResults.length === 0) {
-              console.log(`[Leaguepedia] No results with Link field, trying PlayerRedirects join`)
-              rawResults = await queryCargoAPI({
-                tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP,PlayerRedirects=PR',
-                fields: [
-                  'SP.Champion',
-                  'SP.Result',
-                  'SP.Kills',
-                  'SP.Deaths',
-                  'SP.Assists',
-                  'SP.CS',
-                  'SP.Gold',
-                  'SP.VisionScore',
-                  'SP.DamageToChampions',
-                  'SG.DateTime_UTC'
-                ],
-                where: `PR.AllName = "${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC < "${endDate}"`,
-                join_on: 'SG.GameId=SP.GameId,SP.Link=PR.AllName',
-                order_by: 'SG.DateTime_UTC DESC',
-                limit: 1000
-              })
-              console.log(`[Leaguepedia] PlayerRedirects query got ${rawResults.length} raw games`)
-            }
-            
-            // Aggregate by champion in JavaScript
-            const championMap = {}
-            rawResults.forEach(game => {
-              const champ = game.Champion || game.champion || ''
-              if (!champ) return
-              
-              if (!championMap[champ]) {
-                championMap[champ] = {
-                  Champion: champ,
-                  games: 0,
-                  wins: 0,
-                  kills: [],
-                  deaths: [],
-                  assists: [],
-                  cs: [],
-                  gold: [],
-                  visionScore: [],
-                  damage: []
-                }
-              }
-              
-              const stats = championMap[champ]
-              stats.games++
-              
-              // Check if win - Result field returns "Win" or "Loss" (as shown in working example)
-              const result = game.Result || game.result || ''
-              const win = result === 'Win' || result === 'win' || result === 'W' || 
-                         result === '1' || result === 1 || result === true
-              if (win) stats.wins++
-              
-              // Collect stats for averaging
-              const kills = parseFloat(game.Kills || game.kills || 0) || 0
-              const deaths = parseFloat(game.Deaths || game.deaths || 0) || 0
-              const assists = parseFloat(game.Assists || game.assists || 0) || 0
-              const cs = parseFloat(game.CS || game.cs || 0) || 0
-              const gold = parseFloat(game.Gold || game.gold || 0) || 0
-              const vision = parseFloat(game.VisionScore || game.visionScore || 0) || 0
-              const damage = parseFloat(game.DamageToChampions || game.damageToChampions || 0) || 0
-              
-              stats.kills.push(kills)
-              stats.deaths.push(deaths)
-              stats.assists.push(assists)
-              stats.cs.push(cs)
-              stats.gold.push(gold)
-              stats.visionScore.push(vision)
-              stats.damage.push(damage)
-            })
-            
-            // Convert to array and calculate averages
-            results = Object.values(championMap).map(stats => {
-              const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
-              
-              return {
-                Champion: stats.Champion,
-                Games: stats.games,
-                Wins: stats.wins,
-                AvgKills: avg(stats.kills),
-                AvgDeaths: avg(stats.deaths),
-                AvgAssists: avg(stats.assists),
-                AvgCS: avg(stats.cs),
-                AvgGold: avg(stats.gold),
-                AvgVisionScore: avg(stats.visionScore),
-                AvgDamage: avg(stats.damage)
-              }
-            }).sort((a, b) => b.Games - a.Games).slice(0, 50) // Sort by games, limit to 50
-            
-            console.log(`[Leaguepedia] Aggregated ${results.length} champions from ${rawResults.length} games`)
             if (results.length > 0) {
               console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
             }
-          } catch (error) {
-            console.error(`[Leaguepedia] Query failed:`, error.message)
-            console.error(`[Leaguepedia] Query error stack:`, error.stack)
-            if (error.response) {
-              console.error(`[Leaguepedia] Response status:`, error.response.status)
-              console.error(`[Leaguepedia] Response data:`, typeof error.response.data === 'string' 
-                ? error.response.data.substring(0, 500) 
-                : JSON.stringify(error.response.data).substring(0, 500))
-            }
-            
-            // Try a minimal query to see what fields actually exist
-            try {
-              console.log(`[Leaguepedia] Trying minimal query to discover available fields`)
-              const testResult = await queryCargoAPI({
-                tables: 'ScoreboardPlayers',
-                fields: ['ScoreboardPlayers.Champion', 'ScoreboardPlayers.Player'],
-                where: `ScoreboardPlayers.Player = "${playerName1}"`,
-                limit: 1
-              })
-              if (testResult.length > 0) {
-                console.log(`[Leaguepedia] Test query successful, available fields in result:`, Object.keys(testResult[0]))
-              }
-            } catch (testError) {
-              console.error(`[Leaguepedia] Test query also failed:`, testError.message)
-            }
-            
+          } else {
+            console.log(`[Leaguepedia] No data found in response`)
             results = []
           }
         } catch (error) {
-          console.error(`[Leaguepedia] Outer try block error:`, error.message)
+          console.error(`[Leaguepedia] Query failed:`, error.message)
+          console.error(`[Leaguepedia] Query error stack:`, error.stack)
+          if (error.response) {
+            console.error(`[Leaguepedia] Response status:`, error.response.status)
+            console.error(`[Leaguepedia] Response data:`, typeof error.response.data === 'string' 
+              ? error.response.data.substring(0, 500) 
+              : JSON.stringify(error.response.data).substring(0, 500))
+          }
           results = []
         }
         
         // Transform results to match op.gg data structure
-        // Results are now pre-aggregated in JavaScript with proper field names
+        // Results are now server-side aggregated with fields: Champion, Games, Wins, Total_kills, Total_deaths, Total_assists
         const transformedChampionPool = results.map(match => {
           const games = parseInt(match.Games || match.games || 0) || 0
           const wins = parseInt(match.Wins || match.wins || 0) || 0
           const losses = games - wins
           const winrate = games > 0 ? (wins / games) * 100 : 0
           
-          const avgKills = parseFloat(match.AvgKills || match.avgKills || 0) || 0
-          const avgDeaths = parseFloat(match.AvgDeaths || match.avgDeaths || 0) || 0
-          const avgAssists = parseFloat(match.AvgAssists || match.avgAssists || 0) || 0
+          // Total kills/deaths/assists from aggregated data (field names have spaces per implementation guide)
+          const totalKills = parseFloat(match['Total kills'] || match['Total Kills'] || match['total kills'] || match.Total_kills || 0) || 0
+          const totalDeaths = parseFloat(match['Total deaths'] || match['Total Deaths'] || match['total deaths'] || match.Total_deaths || 0) || 0
+          const totalAssists = parseFloat(match['Total assists'] || match['Total Assists'] || match['total assists'] || match.Total_assists || 0) || 0
+          
+          // Calculate averages per game
+          const avgKills = games > 0 ? totalKills / games : 0
+          const avgDeaths = games > 0 ? totalDeaths / games : 0
+          const avgAssists = games > 0 ? totalAssists / games : 0
+          
+          // Calculate KDA ratio
           const kdaRatio = avgDeaths > 0 ? (avgKills + avgAssists) / avgDeaths : (avgKills + avgAssists)
           
           const championData = {
@@ -320,52 +246,13 @@ exports.handler = async (event, context) => {
           }
           
           // Add KDA if available
-          if (avgKills > 0 || avgDeaths > 0 || avgAssists > 0) {
+          if (totalKills > 0 || totalDeaths > 0 || totalAssists > 0) {
             championData.kda = {
               kills: Math.round(avgKills * 10) / 10,
               deaths: Math.round(avgDeaths * 10) / 10,
               assists: Math.round(avgAssists * 10) / 10,
               ratio: Math.round(kdaRatio * 100) / 100,
               killParticipation: 0 // Would need team data to calculate
-            }
-          }
-          
-          // Add CS if available
-          const avgCS = parseFloat(match.AvgCS || match.avgCS || 0) || 0
-          if (avgCS > 0) {
-            championData.cs = {
-              total: Math.round(avgCS), // Average CS per game
-              perMinute: 0 // Would need game duration to calculate
-            }
-          }
-          
-          // Add Gold if available
-          const avgGold = parseFloat(match.AvgGold || match.avgGold || 0) || 0
-          if (avgGold > 0) {
-            championData.gold = {
-              total: Math.round(avgGold), // Average gold per game
-              perMinute: 0 // Would need game duration to calculate
-            }
-          }
-          
-          // Add Vision Score if available
-          const avgVision = parseFloat(match.AvgVisionScore || match.avgVisionScore || 0) || 0
-          if (avgVision > 0) {
-            championData.wards = {
-              visionScore: Math.round(avgVision * 10) / 10,
-              controlWards: 0, // Would need separate field
-              placed: 0,
-              killed: 0
-            }
-          }
-          
-          // Add Damage if available
-          const avgDamage = parseFloat(match.AvgDamage || match.avgDamage || 0) || 0
-          if (avgDamage > 0) {
-            championData.damage = {
-              total: Math.round(avgDamage), // Average damage per game
-              perMinute: 0, // Would need game duration
-              percentage: 0 // Would need team total damage
             }
           }
           

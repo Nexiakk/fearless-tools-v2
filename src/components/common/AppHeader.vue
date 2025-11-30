@@ -25,7 +25,7 @@
         </router-link>
       </nav>
       
-      <div class="absolute right-4 flex items-center gap-3">
+      <div class="navbar-right-actions">
         <!-- Real-time sync indicator -->
         <div
           v-if="workspaceStore.currentWorkspaceId && !workspaceStore.isLocalWorkspace"

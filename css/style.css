@@ -2,16 +2,26 @@
 .top-navbar {
   background-color: #1a1a1a; /* Dark background */
   width: 100%;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   border-bottom: 1px solid #2a2a2a; /* Subtle separator */
+  overflow: hidden;
+  height: auto;
+  min-height: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .navbar-container {
   display: flex;
   align-items: center;
-  justify-content: center; /* Horizontally center the nav items */
+  justify-content: center; /* Center nav items */
   max-width: 1280px;
   margin: 0 auto;
-  position: relative; /* Needed for absolute positioning of the switcher */
+  position: relative;
+  padding: 6px 16px;
+  min-height: 40px;
 }
 .navbar-nav {
   display: flex;
@@ -24,10 +34,11 @@
   color: #a0a0a0; /* text-gray-400 */
   font-size: 0.875rem; /* text-sm */
   font-weight: 500; /* font-medium */
-  padding: 10px; /* py-3 */
+  padding: 6px 10px;
   cursor: pointer;
   transition: color 0.15s ease-in-out;
   position: relative;
+  text-decoration: none;
 }
 .nav-link:hover {
   color: #ffffff;
@@ -50,6 +61,16 @@
 }
 .nav-link.active::after {
   width: 50%; /* Active state: visible */
+}
+.navbar-right-actions {
+  position: fixed;
+  right: 24px; /* Nearly at the right edge of viewport */
+  top: 6px; /* Align at top */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 101; /* Above navbar */
 }
 
 /* --- [NEW] View Switcher in Navbar --- */
@@ -96,7 +117,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   background-color: #121212; /* Very dark gray base */
   color: #e0e0e0; /* Light gray text */
   overflow: hidden; /* Prevent body scrollbar */
@@ -104,9 +126,21 @@ body {
 }
 /* Ensure main content area can contain positioned elements */
 .main-content {
-  flex-grow: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   position: relative;
-  overflow-y: auto; /* Allow scrolling within the main content */
+  overflow: hidden; /* Prevent scrolling on main, let children handle it */
+  margin-top: 40px; /* Account for fixed navbar */
+}
+
+/* Ensure router-view takes full height */
+.main-content > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* --- [NEW] Expanded Container --- */

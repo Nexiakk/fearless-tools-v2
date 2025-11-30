@@ -1,8 +1,6 @@
 <template>
   <div class="role-pillar">
-    <div class="pillar-header-wrapper">
-      <img :src="roleIconUrl" :alt="role" class="pillar-header-icon" />
-    </div>
+    <img :src="roleIconUrl" :alt="role" class="pillar-header-icon" />
     
     <!-- Frozen Champions View (sticky + scrollable) -->
     <div v-if="isFrozenView" class="pillar-champions-grid">

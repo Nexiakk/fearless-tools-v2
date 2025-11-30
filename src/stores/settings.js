@@ -6,11 +6,16 @@ export const useSettingsStore = defineStore('settings', () => {
   const settings = ref({
     pool: {
       frozenChampions: false,
-      compactMode: false,
+      compactMode: false, // Deprecated, kept for backward compatibility
+      normalCardSize: 100, // Percentage scale (50-200), default 100
+      highlightCardSize: 100, // Percentage scale (50-200), default 100
+      unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
       disableAnimations: false,
       centerCards: true
     },
-    drafting: {}
+    drafting: {
+      integrateUnavailableChampions: true // default: enabled
+    }
   })
   
   const isSettingsOpen = ref(false)
@@ -27,7 +32,23 @@ export const useSettingsStore = defineStore('settings', () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        settings.value = { ...settings.value, ...parsed }
+        // Deep merge to preserve defaults for missing properties
+        if (parsed.pool) {
+          settings.value.pool = { ...settings.value.pool, ...parsed.pool }
+          // Initialize new size properties if they don't exist
+          if (settings.value.pool.normalCardSize === undefined) {
+            settings.value.pool.normalCardSize = parsed.pool.compactMode ? 83 : 100
+          }
+          if (settings.value.pool.highlightCardSize === undefined) {
+            settings.value.pool.highlightCardSize = 100
+          }
+          if (settings.value.pool.unavailableCardSize === undefined) {
+            settings.value.pool.unavailableCardSize = 83
+          }
+        }
+        if (parsed.drafting) {
+          settings.value.drafting = { ...settings.value.drafting, ...parsed.drafting }
+        }
       } catch (error) {
         console.error('Error loading settings:', error)
       }

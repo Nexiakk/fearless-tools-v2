@@ -275,3 +275,608 @@ export async function deleteDraftFromCreatorCollection(draftId, workspaceId) {
   }
 }
 
+// ========== SERIES FUNCTIONS ==========
+
+/**
+ * Create a new series in Firestore
+ */
+export async function createSeriesInFirestore(workspaceId, seriesData) {
+  if (!workspaceId) {
+    throw new Error('Workspace ID is required')
+  }
+
+  try {
+    const seriesRef = collection(db, 'workspaces', workspaceId, 'series')
+    const docRef = doc(seriesRef)
+    
+    // Convert Date objects to Timestamp for nested objects
+    const processedData = {
+      ...seriesData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      games: seriesData.games?.map(game => ({
+        ...game,
+        createdAt: game.createdAt instanceof Date ? Timestamp.fromDate(game.createdAt) : game.createdAt,
+        drafts: game.drafts?.map(draft => ({
+          ...draft,
+          createdAt: draft.createdAt instanceof Date ? Timestamp.fromDate(draft.createdAt) : draft.createdAt,
+          updatedAt: draft.updatedAt instanceof Date ? Timestamp.fromDate(draft.updatedAt) : draft.updatedAt
+        })) || []
+      })) || []
+    }
+    
+    await setDoc(docRef, processedData)
+    return { id: docRef.id, ...seriesData }
+  } catch (error) {
+    console.error('Error creating series:', error)
+    throw error
+  }
+}
+
+/**
+ * Save series to Firestore
+ */
+export async function saveSeriesToFirestore(workspaceId, seriesId, seriesData) {
+  if (!workspaceId || !seriesId) {
+    throw new Error('Workspace ID and Series ID are required')
+  }
+
+  try {
+    const seriesRef = doc(db, 'workspaces', workspaceId, 'series', seriesId)
+    
+    // Firestore automatically converts Date objects to Timestamp
+    const dataToSave = {
+      ...seriesData,
+      updatedAt: serverTimestamp()
+    }
+    
+    await updateDoc(seriesRef, dataToSave)
+    return { id: seriesId, ...seriesData }
+  } catch (error) {
+    console.error('Error saving series:', error)
+    throw error
+  }
+}
+
+/**
+ * Load series from Firestore
+ */
+export async function loadSeriesFromFirestore(workspaceId, seriesId) {
+  if (!workspaceId || !seriesId) {
+    throw new Error('Workspace ID and Series ID are required')
+  }
+
+  try {
+    const seriesRef = doc(db, 'workspaces', workspaceId, 'series', seriesId)
+    const docSnap = await getDoc(seriesRef)
+
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+      // Convert Timestamps to Dates
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+        games: data.games?.map(game => ({
+          ...game,
+          createdAt: game.createdAt?.toDate ? game.createdAt.toDate() : game.createdAt,
+          drafts: game.drafts?.map(draft => ({
+            ...draft,
+            createdAt: draft.createdAt?.toDate ? draft.createdAt.toDate() : draft.createdAt,
+            updatedAt: draft.updatedAt?.toDate ? draft.updatedAt.toDate() : draft.updatedAt
+          })) || []
+        })) || []
+      }
+    } else {
+      return null
+    }
+  } catch (error) {
+    console.error('Error loading series:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all series for a workspace
+ */
+export async function getAllSeriesForWorkspace(workspaceId) {
+  if (!workspaceId) {
+    console.warn('No workspace ID provided. Returning empty array.')
+    return []
+  }
+
+  try {
+    const seriesRef = collection(db, 'workspaces', workspaceId, 'series')
+    const q = query(seriesRef, orderBy('updatedAt', 'desc'))
+    const querySnapshot = await getDocs(q)
+
+    return querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching series:', error)
+    return []
+  }
+}
+
+/**
+ * Delete series from Firestore
+ */
+export async function deleteSeriesFromFirestore(workspaceId, seriesId) {
+  if (!workspaceId || !seriesId) {
+    throw new Error('Workspace ID and Series ID are required')
+  }
+
+  try {
+    const seriesRef = doc(db, 'workspaces', workspaceId, 'series', seriesId)
+    await deleteDoc(seriesRef)
+  } catch (error) {
+    console.error('Error deleting series:', error)
+    throw error
+  }
+}
+
+/**
+ * Set up real-time sync for series
+ */
+export function setupSeriesRealtimeSync(workspaceId, seriesId, callback) {
+  if (!workspaceId || !seriesId) {
+    console.warn('Workspace ID and Series ID are required for real-time sync')
+    return () => {}
+  }
+
+  try {
+    const seriesRef = doc(db, 'workspaces', workspaceId, 'series', seriesId)
+
+    const unsubscribe = onSnapshot(
+      seriesRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data()
+          const processedData = {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+            games: data.games?.map(game => ({
+              ...game,
+              createdAt: game.createdAt?.toDate ? game.createdAt.toDate() : game.createdAt,
+              drafts: game.drafts?.map(draft => ({
+                ...draft,
+                createdAt: draft.createdAt?.toDate ? draft.createdAt.toDate() : draft.createdAt,
+                updatedAt: draft.updatedAt?.toDate ? draft.updatedAt.toDate() : draft.updatedAt
+              })) || []
+            })) || []
+          }
+          callback(processedData)
+        } else {
+          callback(null)
+        }
+      },
+      (error) => {
+        console.error('Error listening to series updates:', error)
+      }
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error('Error setting up series real-time sync:', error)
+    return () => {}
+  }
+}
+
+// ========== NOTES FUNCTIONS ==========
+
+/**
+ * Save slot note
+ */
+export async function saveSlotNote(workspaceId, seriesId, noteData) {
+  if (!workspaceId || !seriesId) {
+    throw new Error('Workspace ID and Series ID are required')
+  }
+
+  try {
+    const notesRef = collection(db, 'workspaces', workspaceId, 'series', seriesId, 'notes')
+    
+    // Check if note exists - need separate queries for null and non-null gameId
+    let querySnapshot
+    if (noteData.gameId) {
+      const q = query(
+        notesRef,
+        where('type', '==', 'slot'),
+        where('side', '==', noteData.side),
+        where('slotType', '==', noteData.type),
+        where('index', '==', noteData.index),
+        where('gameId', '==', noteData.gameId)
+      )
+      querySnapshot = await getDocs(q)
+    } else {
+      // For null gameId, we need to get all matching notes and filter
+      const q = query(
+        notesRef,
+        where('type', '==', 'slot'),
+        where('side', '==', noteData.side),
+        where('slotType', '==', noteData.type),
+        where('index', '==', noteData.index)
+      )
+      const allDocs = await getDocs(q)
+      const matchingDocs = []
+      allDocs.forEach(doc => {
+        const data = doc.data()
+        if (!data.gameId) {
+          matchingDocs.push(doc)
+        }
+      })
+      querySnapshot = {
+        empty: matchingDocs.length === 0,
+        docs: matchingDocs
+      }
+    }
+    
+    if (querySnapshot.empty || querySnapshot.docs.length === 0) {
+      // Create new note
+      const newNote = {
+        type: 'slot',
+        side: noteData.side,
+        slotType: noteData.type,
+        index: noteData.index,
+        gameId: noteData.gameId || null,
+        scope: noteData.gameId ? 'local' : 'global',
+        notes: noteData.notes || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
+      const docRef = doc(notesRef)
+      await setDoc(docRef, newNote)
+      return { id: docRef.id, ...newNote }
+    } else {
+      // Update existing note
+      const existingDoc = querySnapshot.docs[0]
+      await updateDoc(existingDoc.ref, {
+        notes: noteData.notes || '',
+        updatedAt: serverTimestamp()
+      })
+      const existingData = existingDoc.data()
+      return { 
+        id: existingDoc.id, 
+        ...existingData, 
+        notes: noteData.notes || '',
+        createdAt: existingData.createdAt?.toDate ? existingData.createdAt.toDate() : existingData.createdAt,
+        updatedAt: existingData.updatedAt?.toDate ? existingData.updatedAt.toDate() : existingData.updatedAt
+      }
+    }
+  } catch (error) {
+    console.error('Error saving slot note:', error)
+    throw error
+  }
+}
+
+/**
+ * Save champion note
+ */
+export async function saveChampionNote(workspaceId, seriesId, noteData) {
+  if (!workspaceId || !seriesId) {
+    throw new Error('Workspace ID and Series ID are required')
+  }
+
+  try {
+    const notesRef = collection(db, 'workspaces', workspaceId, 'series', seriesId, 'notes')
+    
+    // Check if note exists - need separate queries for null and non-null gameId
+    let querySnapshot
+    if (noteData.gameId) {
+      const q = query(
+        notesRef,
+        where('type', '==', 'champion'),
+        where('championName', '==', noteData.championName),
+        where('gameId', '==', noteData.gameId)
+      )
+      querySnapshot = await getDocs(q)
+    } else {
+      // For null gameId, we need to get all matching notes and filter
+      const q = query(
+        notesRef,
+        where('type', '==', 'champion'),
+        where('championName', '==', noteData.championName)
+      )
+      const allDocs = await getDocs(q)
+      const matchingDocs = []
+      allDocs.forEach(doc => {
+        const data = doc.data()
+        if (!data.gameId) {
+          matchingDocs.push(doc)
+        }
+      })
+      querySnapshot = {
+        empty: matchingDocs.length === 0,
+        docs: matchingDocs
+      }
+    }
+    
+    if (querySnapshot.empty || querySnapshot.docs.length === 0) {
+      // Create new note
+      const newNote = {
+        type: 'champion',
+        championName: noteData.championName,
+        gameId: noteData.gameId || null,
+        scope: noteData.gameId ? 'local' : 'global',
+        notes: noteData.notes || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
+      const docRef = doc(notesRef)
+      await setDoc(docRef, newNote)
+      return { id: docRef.id, ...newNote }
+    } else {
+      // Update existing note
+      const existingDoc = querySnapshot.docs[0]
+      await updateDoc(existingDoc.ref, {
+        notes: noteData.notes || '',
+        updatedAt: serverTimestamp()
+      })
+      const existingData = existingDoc.data()
+      return { 
+        id: existingDoc.id, 
+        ...existingData, 
+        notes: noteData.notes || '',
+        createdAt: existingData.createdAt?.toDate ? existingData.createdAt.toDate() : existingData.createdAt,
+        updatedAt: existingData.updatedAt?.toDate ? existingData.updatedAt.toDate() : existingData.updatedAt
+      }
+    }
+  } catch (error) {
+    console.error('Error saving champion note:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all notes for a series
+ */
+export async function getNotesForSeries(workspaceId, seriesId) {
+  if (!workspaceId || !seriesId) {
+    return { slotNotes: [], championNotes: [] }
+  }
+
+  try {
+    const notesRef = collection(db, 'workspaces', workspaceId, 'series', seriesId, 'notes')
+    const querySnapshot = await getDocs(notesRef)
+
+    const slotNotes = []
+    const championNotes = []
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data()
+      const note = {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      }
+
+      if (data.type === 'slot') {
+        slotNotes.push(note)
+      } else if (data.type === 'champion') {
+        championNotes.push(note)
+      }
+    })
+
+    return { slotNotes, championNotes }
+  } catch (error) {
+    console.error('Error fetching notes:', error)
+    return { slotNotes: [], championNotes: [] }
+  }
+}
+
+/**
+ * Delete note
+ */
+export async function deleteNote(workspaceId, seriesId, noteId) {
+  if (!workspaceId || !seriesId || !noteId) {
+    throw new Error('Workspace ID, Series ID, and Note ID are required')
+  }
+
+  try {
+    const noteRef = doc(db, 'workspaces', workspaceId, 'series', seriesId, 'notes', noteId)
+    await deleteDoc(noteRef)
+  } catch (error) {
+    console.error('Error deleting note:', error)
+    throw error
+  }
+}
+
+/**
+ * Set up real-time sync for notes
+ */
+export function setupNotesRealtimeSync(workspaceId, seriesId, callback) {
+  if (!workspaceId || !seriesId) {
+    console.warn('Workspace ID and Series ID are required for notes real-time sync')
+    return () => {}
+  }
+
+  try {
+    const notesRef = collection(db, 'workspaces', workspaceId, 'series', seriesId, 'notes')
+
+    const unsubscribe = onSnapshot(
+      notesRef,
+      (querySnapshot) => {
+        const slotNotes = []
+        const championNotes = []
+
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data()
+          const note = {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+          }
+
+          if (data.type === 'slot') {
+            slotNotes.push(note)
+          } else if (data.type === 'champion') {
+            championNotes.push(note)
+          }
+        })
+
+        callback({ slotNotes, championNotes })
+      },
+      (error) => {
+        console.error('Error listening to notes updates:', error)
+      }
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error('Error setting up notes real-time sync:', error)
+    return () => {}
+  }
+}
+
+// ========== DRAWING FUNCTIONS ==========
+
+/**
+ * Save drawing stroke
+ */
+export async function saveDrawingStroke(workspaceId, view, stroke, isPartial = false) {
+  if (!workspaceId || !view || !stroke) {
+    throw new Error('Workspace ID, view, and stroke are required')
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const strokeRef = doc(strokesRef, stroke.id)
+    
+    const dataToSave = {
+      points: stroke.points || [],
+      color: stroke.color || '#ffffff',
+      width: stroke.width || 3,
+      userId: stroke.userId || 'unknown',
+      view,
+      createdAt: stroke.createdAt ? (stroke.createdAt instanceof Date ? Timestamp.fromDate(stroke.createdAt) : stroke.createdAt) : serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }
+    
+    if (isPartial) {
+      // Partial update - merge with existing
+      await updateDoc(strokeRef, {
+        points: dataToSave.points,
+        updatedAt: dataToSave.updatedAt
+      })
+    } else {
+      // Full document
+      await setDoc(strokeRef, dataToSave, { merge: true })
+    }
+    
+    return { id: stroke.id, ...dataToSave }
+  } catch (error) {
+    console.error('Error saving drawing stroke:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all drawing strokes for a view
+ */
+export async function getDrawingStrokes(workspaceId, view) {
+  if (!workspaceId || !view) {
+    console.warn('Workspace ID and view are required')
+    return []
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const q = query(strokesRef, orderBy('createdAt', 'asc'))
+    const querySnapshot = await getDocs(q)
+
+    return querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        points: data.points || [],
+        color: data.color || '#ffffff',
+        width: data.width || 3,
+        userId: data.userId || 'unknown',
+        view: data.view || view,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching drawing strokes:', error)
+    return []
+  }
+}
+
+/**
+ * Clear drawing canvas (delete all strokes)
+ */
+export async function clearDrawingCanvas(workspaceId, view) {
+  if (!workspaceId || !view) {
+    throw new Error('Workspace ID and view are required')
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const querySnapshot = await getDocs(strokesRef)
+
+    // Delete all strokes
+    const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref))
+    await Promise.all(deletePromises)
+    
+    return true
+  } catch (error) {
+    console.error('Error clearing drawing canvas:', error)
+    throw error
+  }
+}
+
+/**
+ * Set up real-time sync for drawing strokes
+ */
+export function setupDrawingRealtimeSync(workspaceId, view, callback) {
+  if (!workspaceId || !view) {
+    console.warn('Workspace ID and view are required for drawing real-time sync')
+    return () => {}
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const q = query(strokesRef, orderBy('createdAt', 'asc'))
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const strokes = querySnapshot.docs.map(docSnap => {
+          const data = docSnap.data()
+          return {
+            id: docSnap.id,
+            points: data.points || [],
+            color: data.color || '#ffffff',
+            width: data.width || 3,
+            userId: data.userId || 'unknown',
+            view: data.view || view,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+          }
+        })
+        callback(strokes)
+      },
+      (error) => {
+        console.error('Error listening to drawing updates:', error)
+      }
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error('Error setting up drawing real-time sync:', error)
+    return () => {}
+  }
+}
+

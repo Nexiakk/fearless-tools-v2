@@ -48,20 +48,57 @@
                 ></label>
               </div>
             </div>
-            <div class="flex items-center justify-between py-3 border-b border-gray-700">
-              <label for="toggle-compact-mode" class="font-medium">Compact Mode (Smaller Cards)</label>
-              <div class="relative inline-block w-10 mr-2 align-middle select-none">
-                <input
-                  type="checkbox"
-                  v-model="settingsStore.settings.pool.compactMode"
-                  name="toggle-compact-mode"
-                  id="toggle-compact-mode"
-                  class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
-                />
-                <label
-                  for="toggle-compact-mode"
-                  class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"
-                ></label>
+            <div class="py-3 border-b border-gray-700">
+              <label class="font-medium block mb-3">Card Size Adjustments</label>
+              
+              <div class="space-y-4">
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label for="normal-card-size" class="text-sm">Normal Cards</label>
+                    <span class="text-sm text-gray-400">{{ settingsStore.settings.pool.normalCardSize }}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="normal-card-size"
+                    v-model.number="settingsStore.settings.pool.normalCardSize"
+                    min="50"
+                    max="200"
+                    step="1"
+                    class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                </div>
+                
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label for="highlight-card-size" class="text-sm">OP/Highlight Cards</label>
+                    <span class="text-sm text-gray-400">{{ settingsStore.settings.pool.highlightCardSize }}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="highlight-card-size"
+                    v-model.number="settingsStore.settings.pool.highlightCardSize"
+                    min="50"
+                    max="200"
+                    step="1"
+                    class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                </div>
+                
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label for="unavailable-card-size" class="text-sm">Unavailable Cards</label>
+                    <span class="text-sm text-gray-400">{{ settingsStore.settings.pool.unavailableCardSize }}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="unavailable-card-size"
+                    v-model.number="settingsStore.settings.pool.unavailableCardSize"
+                    min="50"
+                    max="200"
+                    step="1"
+                    class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                </div>
               </div>
             </div>
             <div class="flex items-center justify-between py-3 border-b border-gray-700">
@@ -201,5 +238,33 @@ const openAuthModal = () => {
 
 .toggle-checkbox:checked {
   transform: translateX(1rem);
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #d97706;
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #d97706;
 }
 </style>

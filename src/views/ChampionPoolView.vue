@@ -9,38 +9,15 @@
         </div>
       </div>
 
-      <div v-else class="controls-container">
-        <div class="controls-row-bottom">
-          <div class="sort-reset-container">
-            <div>
-              <button
-                @click="openConfirmation('Are you sure you want to reset highlighted picks?', () => draftStore.resetHighlighted())"
-                class="reset-button reset-marked bg-blue-700 hover:bg-blue-600 text-white ml-2"
-                aria-label="Reset highlighted picks"
-              >
-                Reset Highlighted
-              </button>
-              <button
-                @click="openConfirmation('Reset unavailable champions? This cannot be undone.', () => draftStore.resetUnavailable(), true)"
-                class="reset-button reset-series bg-yellow-700 hover:bg-yellow-600 text-white ml-2"
-                aria-label="Reset unavailable champions"
-              >
-                Reset Unavailable
-              </button>
-              <button
-                @click="openMilestoneReview"
-                class="reset-button bg-amber-700 hover:bg-amber-600 text-white ml-2"
-                aria-label="Review Assignments"
-              >
-                Review Assignments
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- Editor Mode Bottom Border -->
+      <div v-if="adminStore.isEditorModeActive" class="editor-mode-banner-bottom-line"></div>
+      
       <div v-if="!championsStore.isLoading" class="pool-main-area">
-        <div class="compact-view-container" :class="viewClasses">
+        <div 
+          class="compact-view-container" 
+          :class="viewClasses"
+          :style="cardSizeStyles"
+        >
           <RolePillar
             v-for="role in roles"
             :key="role"
@@ -49,6 +26,13 @@
           />
         </div>
       </div>
+      
+      <!-- Champion Info Modal (for Editor Mode) -->
+      <ChampionInfoModal
+        :is-open="isChampionInfoModalOpen"
+        :champion="adminStore.selectedChampionForEditor"
+        @close="closeChampionInfoModal"
+      />
     </div>
     
     <div v-else class="flex items-center justify-center h-screen">
@@ -58,20 +42,20 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDraftStore } from '@/stores/draft'
 import { useChampionsStore } from '@/stores/champions'
 import { useSettingsStore } from '@/stores/settings'
-import { useConfirmationStore } from '@/stores/confirmation'
-import { useMilestoneStore } from '@/stores/milestone'
+import { useAdminStore } from '@/stores/admin'
 import RolePillar from '@/components/champion-pool/RolePillar.vue'
+import ChampionInfoModal from '@/components/champion-pool/ChampionInfoModal.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftStore = useDraftStore()
 const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
-const confirmationStore = useConfirmationStore()
+const adminStore = useAdminStore()
 
 const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 
@@ -85,13 +69,27 @@ const viewClasses = computed(() => ({
   'center-cards': settingsStore.settings.pool.centerCards
 }))
 
-const milestoneStore = useMilestoneStore()
+const cardSizeStyles = computed(() => {
+  const normalSize = settingsStore.settings.pool.normalCardSize || 100
+  const highlightSize = settingsStore.settings.pool.highlightCardSize || 100
+  const unavailableSize = settingsStore.settings.pool.unavailableCardSize || 83
+  
+  return {
+    '--normal-card-scale': normalSize / 100,
+    '--highlight-card-scale': highlightSize / 100,
+    '--unavailable-card-scale': unavailableSize / 100,
+    '--normal-font-scale': normalSize / 100,
+    '--highlight-font-scale': highlightSize / 100,
+    '--unavailable-font-scale': unavailableSize / 100
+  }
+})
 
-const openConfirmation = (message, confirmAction, isDanger = false) => {
-  confirmationStore.open({ message, confirmAction, isDanger })
-}
+// Champion Info Modal state
+const isChampionInfoModalOpen = computed(() => {
+  return adminStore.selectedChampionForEditor !== null
+})
 
-const openMilestoneReview = () => {
-  milestoneStore.open()
+const closeChampionInfoModal = () => {
+  adminStore.clearSelectedChampionForEditor()
 }
 </script>

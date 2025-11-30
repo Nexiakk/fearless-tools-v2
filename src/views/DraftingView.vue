@@ -1,7 +1,23 @@
 <template>
-  <div>
-    <div v-if="workspaceStore.hasWorkspace" class="draft-creator-view">
-    <div class="draft-creator-main-wrapper">
+  <div class="drafting-view-wrapper">
+    <div v-if="workspaceStore.hasWorkspace" class="draft-creator-container">
+      <!-- Drawing Canvas -->
+      <DrawingCanvas />
+      
+      <!-- Series Navigator - Top Bar -->
+      <SeriesNavigator v-if="workspaceStore.hasWorkspace" />
+      
+      <!-- Main Drafting Content -->
+      <div class="draft-creator-view">
+        <div v-if="!seriesStore.hasSeries" class="no-series-container">
+          <p class="no-series-text">Initializing series...</p>
+        </div>
+        
+        <div v-else-if="!currentDraft" class="no-draft-container">
+          <p class="no-draft-text">No draft available. Add a draft iteration to the current game.</p>
+        </div>
+        
+        <div v-else class="draft-creator-main-wrapper">
       <!-- Side Indicators -->
       <div class="draft-indicator-container">
         <div class="indicator-rect blue-indicator"></div>
@@ -17,25 +33,25 @@
             :key="`blue-ban-${i}`"
             class="draft-creator-slot ban-slot"
             :class="{
-              'filled': draftingStore.currentDraft.blueBans[i-1].champion,
-              'has-notes': draftingStore.currentDraft.blueBans[i-1].notes,
+              'filled': currentDraft.blueBans[i-1].champion,
+              'has-notes': currentDraft.blueBans[i-1].notes,
               'selected-for-move': draftingStore.selectedChampionSource?.side === 'blue' && draftingStore.selectedChampionSource?.type === 'bans' && draftingStore.selectedChampionSource?.index === (i-1),
-              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (i-1) && !draftingStore.currentDraft.blueBans[i-1].champion
+              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (i-1) && !currentDraft.blueBans[i-1].champion
             }"
-            @click="draftingStore.handleSlotClick('blue', 'bans', i-1)"
-            @contextmenu.prevent="draftingStore.clearCreatorSlot('blue', 'bans', i-1)"
+            @click="handleSlotClick('blue', 'bans', i-1)"
+            @contextmenu.prevent="handleClearSlot('blue', 'bans', i-1)"
             title="Click to place/move/target, Right-click to clear"
           >
             <img
-              v-if="draftingStore.currentDraft.blueBans[i-1].champion"
-              :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.blueBans[i-1].champion, 'ban')"
-              :alt="draftingStore.currentDraft.blueBans[i-1].champion"
+              v-if="currentDraft.blueBans[i-1].champion"
+              :src="championsStore.getChampionIconUrl(currentDraft.blueBans[i-1].champion, 'ban')"
+              :alt="currentDraft.blueBans[i-1].champion"
               draggable="false"
               @error="handleImageError"
             />
             <button
               class="notes-toggle-button"
-              @click.stop="draftingStore.toggleNotesVisibility('blue', 'bans', i-1)"
+              @click.stop="handleToggleNotes('blue', 'bans', i-1)"
               title="Edit Notes"
             >
               <svg><use href="#icon-note"></use></svg>
@@ -47,25 +63,25 @@
             :key="`blue-ban-${i+3}`"
             class="draft-creator-slot ban-slot"
             :class="{
-              'filled': draftingStore.currentDraft.blueBans[i+2].champion,
-              'has-notes': draftingStore.currentDraft.blueBans[i+2].notes,
+              'filled': currentDraft.blueBans[i+2].champion,
+              'has-notes': currentDraft.blueBans[i+2].notes,
               'selected-for-move': draftingStore.selectedChampionSource?.side === 'blue' && draftingStore.selectedChampionSource?.type === 'bans' && draftingStore.selectedChampionSource?.index === (i+2),
-              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (i+2) && !draftingStore.currentDraft.blueBans[i+2].champion
+              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (i+2) && !currentDraft.blueBans[i+2].champion
             }"
-            @click="draftingStore.handleSlotClick('blue', 'bans', i+2)"
-            @contextmenu.prevent="draftingStore.clearCreatorSlot('blue', 'bans', i+2)"
+            @click="handleSlotClick('blue', 'bans', i+2)"
+            @contextmenu.prevent="handleClearSlot('blue', 'bans', i+2)"
             title="Click to place/move/target, Right-click to clear"
           >
             <img
-              v-if="draftingStore.currentDraft.blueBans[i+2].champion"
-              :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.blueBans[i+2].champion, 'ban')"
-              :alt="draftingStore.currentDraft.blueBans[i+2].champion"
+              v-if="currentDraft.blueBans[i+2].champion"
+              :src="championsStore.getChampionIconUrl(currentDraft.blueBans[i+2].champion, 'ban')"
+              :alt="currentDraft.blueBans[i+2].champion"
               draggable="false"
               @error="handleImageError"
             />
             <button
               class="notes-toggle-button"
-              @click.stop="draftingStore.toggleNotesVisibility('blue', 'bans', i+2)"
+              @click.stop="handleToggleNotes('blue', 'bans', i+2)"
               title="Edit Notes"
             >
               <svg><use href="#icon-note"></use></svg>
@@ -80,25 +96,25 @@
             :key="`red-ban-${5-i}`"
             class="draft-creator-slot ban-slot"
             :class="{
-              'filled': draftingStore.currentDraft.redBans[5-i].champion,
-              'has-notes': draftingStore.currentDraft.redBans[5-i].notes,
+              'filled': currentDraft.redBans[5-i].champion,
+              'has-notes': currentDraft.redBans[5-i].notes,
               'selected-for-move': draftingStore.selectedChampionSource?.side === 'red' && draftingStore.selectedChampionSource?.type === 'bans' && draftingStore.selectedChampionSource?.index === (5-i),
-              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (5-i) && !draftingStore.currentDraft.redBans[5-i].champion
+              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (5-i) && !currentDraft.redBans[5-i].champion
             }"
-            @click="draftingStore.handleSlotClick('red', 'bans', 5-i)"
-            @contextmenu.prevent="draftingStore.clearCreatorSlot('red', 'bans', 5-i)"
+            @click="handleSlotClick('red', 'bans', 5-i)"
+            @contextmenu.prevent="handleClearSlot('red', 'bans', 5-i)"
             title="Click to place/move/target, Right-click to clear"
           >
             <img
-              v-if="draftingStore.currentDraft.redBans[5-i].champion"
-              :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.redBans[5-i].champion, 'ban')"
-              :alt="draftingStore.currentDraft.redBans[5-i].champion"
+              v-if="currentDraft.redBans[5-i].champion"
+              :src="championsStore.getChampionIconUrl(currentDraft.redBans[5-i].champion, 'ban')"
+              :alt="currentDraft.redBans[5-i].champion"
               draggable="false"
               @error="handleImageError"
             />
             <button
               class="notes-toggle-button"
-              @click.stop="draftingStore.toggleNotesVisibility('red', 'bans', 5-i)"
+              @click.stop="handleToggleNotes('red', 'bans', 5-i)"
               title="Edit Notes"
             >
               <svg><use href="#icon-note"></use></svg>
@@ -110,25 +126,25 @@
             :key="`red-ban-${3-i}`"
             class="draft-creator-slot ban-slot"
             :class="{
-              'filled': draftingStore.currentDraft.redBans[3-i].champion,
-              'has-notes': draftingStore.currentDraft.redBans[3-i].notes,
+              'filled': currentDraft.redBans[3-i].champion,
+              'has-notes': currentDraft.redBans[3-i].notes,
               'selected-for-move': draftingStore.selectedChampionSource?.side === 'red' && draftingStore.selectedChampionSource?.type === 'bans' && draftingStore.selectedChampionSource?.index === (3-i),
-              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (3-i) && !draftingStore.currentDraft.redBans[3-i].champion
+              'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'bans' && draftingStore.selectedTargetSlot?.index === (3-i) && !currentDraft.redBans[3-i].champion
             }"
-            @click="draftingStore.handleSlotClick('red', 'bans', 3-i)"
-            @contextmenu.prevent="draftingStore.clearCreatorSlot('red', 'bans', 3-i)"
+            @click="handleSlotClick('red', 'bans', 3-i)"
+            @contextmenu.prevent="handleClearSlot('red', 'bans', 3-i)"
             title="Click to place/move/target, Right-click to clear"
           >
             <img
-              v-if="draftingStore.currentDraft.redBans[3-i].champion"
-              :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.redBans[3-i].champion, 'ban')"
-              :alt="draftingStore.currentDraft.redBans[3-i].champion"
+              v-if="currentDraft.redBans[3-i].champion"
+              :src="championsStore.getChampionIconUrl(currentDraft.redBans[3-i].champion, 'ban')"
+              :alt="currentDraft.redBans[3-i].champion"
               draggable="false"
               @error="handleImageError"
             />
             <button
               class="notes-toggle-button"
-              @click.stop="draftingStore.toggleNotesVisibility('red', 'bans', 3-i)"
+              @click.stop="handleToggleNotes('red', 'bans', 3-i)"
               title="Edit Notes"
             >
               <svg><use href="#icon-note"></use></svg>
@@ -154,25 +170,25 @@
                   class="draft-creator-slot pick-slot"
                   :data-pick-order="`B${i}`"
                   :class="{
-                    'filled': draftingStore.currentDraft.bluePicks[i-1].champion,
-                    'has-notes': draftingStore.currentDraft.bluePicks[i-1].notes,
+              'filled': currentDraft.bluePicks[i-1].champion,
+              'has-notes': currentDraft.bluePicks[i-1].notes,
                     'selected-for-move': draftingStore.selectedChampionSource?.side === 'blue' && draftingStore.selectedChampionSource?.type === 'picks' && draftingStore.selectedChampionSource?.index === (i-1),
-                    'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'picks' && draftingStore.selectedTargetSlot?.index === (i-1) && !draftingStore.currentDraft.bluePicks[i-1].champion
+                    'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'blue' && draftingStore.selectedTargetSlot?.type === 'picks' && draftingStore.selectedTargetSlot?.index === (i-1) && !currentDraft.bluePicks[i-1].champion
                   }"
-                  @click="draftingStore.handleSlotClick('blue', 'picks', i-1)"
-                  @contextmenu.prevent="draftingStore.clearCreatorSlot('blue', 'picks', i-1)"
+                  @click="handleSlotClick('blue', 'picks', i-1)"
+                  @contextmenu.prevent="handleClearSlot('blue', 'picks', i-1)"
                   title="Click to place/move/target, Right-click to clear"
                 >
                   <img
-                    v-if="draftingStore.currentDraft.bluePicks[i-1].champion"
-                    :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.bluePicks[i-1].champion, 'pick')"
-                    :alt="draftingStore.currentDraft.bluePicks[i-1].champion"
+                    v-if="currentDraft.bluePicks[i-1].champion"
+              :src="championsStore.getChampionIconUrl(currentDraft.bluePicks[i-1].champion, 'pick')"
+              :alt="currentDraft.bluePicks[i-1].champion"
                     draggable="false"
                     @error="handleImageError"
                   />
                   <button
                     class="notes-toggle-button"
-                    @click.stop="draftingStore.toggleNotesVisibility('blue', 'picks', i-1)"
+                    @click.stop="handleToggleNotes('blue', 'picks', i-1)"
                     title="Edit Notes"
                   >
                     <svg><use href="#icon-note"></use></svg>
@@ -220,15 +236,17 @@
             <!-- Champion Grid -->
             <div class="draft-creator-champion-grid">
               <div
-                v-for="champion in draftingStore.filteredChampions"
+                v-for="champion in filteredChampions"
                 :key="champion.id"
                 class="draft-creator-champion-card"
                 :class="{
                   'selected-for-placement': draftingStore.selectedChampionForPlacement === champion.name,
-                  'already-placed': draftingStore.isChampionPlacedInCurrentDraft(champion.name) && !(draftingStore.selectedChampionSource && draftingStore.selectedChampionSource.championName === champion.name)
+                  'already-placed': isChampionPlacedInCurrentDraft(champion.name) && !(draftingStore.selectedChampionSource && draftingStore.selectedChampionSource.championName === champion.name),
+                  'unavailable': !isChampionAvailable(champion.name)
                 }"
-                @click="draftingStore.selectChampionForPlacement(champion.name)"
-                :title="champion.name"
+                @click="handleChampionClick(champion.name)"
+                @contextmenu.prevent="handleChampionNotes(champion.name)"
+                :title="getChampionTooltip(champion.name)"
               >
                 <img
                   class="champion-icon"
@@ -238,37 +256,20 @@
                   draggable="false"
                 />
                 <span class="champion-name-text">{{ champion.name }}</span>
+                <button
+                  v-if="hasChampionNote(champion.name)"
+                  @click.stop="handleChampionNotes(champion.name)"
+                  class="champion-notes-indicator"
+                  title="View/Edit Champion Notes"
+                >
+                  <svg><use href="#icon-note"></use></svg>
+                </button>
               </div>
-              <p v-if="draftingStore.filteredChampions.length === 0" class="text-gray-400 col-span-full text-center py-4">
+              <p v-if="filteredChampions.length === 0" class="text-gray-400 col-span-full text-center py-4">
                 No champions match filter/search.
               </p>
             </div>
 
-            <!-- Controls -->
-            <div class="draft-creator-controls">
-              <button
-                @click="handleEditGeneralNotes"
-                class="control-button"
-                style="background-color: #6b7280; color: white;"
-                title="Edit General Notes"
-              >
-                <svg><use href="#icon-note"></use></svg> General Notes
-              </button>
-              <button
-                @click="handleSaveDraft"
-                class="control-button save-button"
-                title="Save Current Draft"
-              >
-                <svg><use href="#icon-check"></use></svg> Save Draft
-              </button>
-              <button
-                @click="handleResetDraft"
-                class="control-button reset-button"
-                title="Reset Current Draft"
-              >
-                <svg><use href="#icon-trash"></use></svg> Reset
-              </button>
-            </div>
           </div>
 
           <!-- Red Side -->
@@ -284,25 +285,25 @@
                   class="draft-creator-slot pick-slot"
                   :data-pick-order="`R${i}`"
                   :class="{
-                    'filled': draftingStore.currentDraft.redPicks[i-1].champion,
-                    'has-notes': draftingStore.currentDraft.redPicks[i-1].notes,
+              'filled': currentDraft.redPicks[i-1].champion,
+              'has-notes': currentDraft.redPicks[i-1].notes,
                     'selected-for-move': draftingStore.selectedChampionSource?.side === 'red' && draftingStore.selectedChampionSource?.type === 'picks' && draftingStore.selectedChampionSource?.index === (i-1),
-                    'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'picks' && draftingStore.selectedTargetSlot?.index === (i-1) && !draftingStore.currentDraft.redPicks[i-1].champion
+                    'selected-for-targeting': draftingStore.selectedTargetSlot?.side === 'red' && draftingStore.selectedTargetSlot?.type === 'picks' && draftingStore.selectedTargetSlot?.index === (i-1) && !currentDraft.redPicks[i-1].champion
                   }"
-                  @click="draftingStore.handleSlotClick('red', 'picks', i-1)"
-                  @contextmenu.prevent="draftingStore.clearCreatorSlot('red', 'picks', i-1)"
+                  @click="handleSlotClick('red', 'picks', i-1)"
+                  @contextmenu.prevent="handleClearSlot('red', 'picks', i-1)"
                   title="Click to place/move/target, Right-click to clear"
                 >
                   <img
-                    v-if="draftingStore.currentDraft.redPicks[i-1].champion"
-                    :src="championsStore.getChampionIconUrl(draftingStore.currentDraft.redPicks[i-1].champion, 'pick')"
-                    :alt="draftingStore.currentDraft.redPicks[i-1].champion"
+                    v-if="currentDraft.redPicks[i-1].champion"
+                    :src="championsStore.getChampionIconUrl(currentDraft.redPicks[i-1].champion, 'pick')"
+                    :alt="currentDraft.redPicks[i-1].champion"
                     draggable="false"
                     @error="handleImageError"
                   />
                   <button
                     class="notes-toggle-button"
-                    @click.stop="draftingStore.toggleNotesVisibility('red', 'picks', i-1)"
+                    @click.stop="handleToggleNotes('red', 'picks', i-1)"
                     title="Edit Notes"
                   >
                     <svg><use href="#icon-note"></use></svg>
@@ -316,38 +317,8 @@
       </div>
     </div>
 
-    <!-- Saved Drafts Sidebar -->
-    <div class="draft-creator-saved">
-      <h3 class="saved-title">Saved Drafts ({{ draftingStore.savedDrafts.length }})</h3>
-      <div class="saved-drafts-list">
-        <p v-if="draftingStore.isLoadingSavedDrafts" class="text-gray-400 text-center p-4">
-          Loading saved drafts...
-        </p>
-        <p v-else-if="draftingStore.savedDrafts.length === 0" class="text-gray-400 text-center p-4">
-          No drafts saved yet.
-        </p>
-        <div
-          v-for="draft in draftingStore.savedDrafts"
-          :key="draft.id"
-          class="saved-draft-item"
-          :class="{ 'active-saved-draft': draftingStore.currentDraft.id === draft.id }"
-        >
-          <span
-            class="saved-draft-name"
-            @click="draftingStore.loadSavedDraft(draft.id)"
-          >
-            {{ draft.name || 'Unnamed Draft' }}
-          </span>
-          <div class="saved-draft-actions">
-            <button
-              @click="handleDeleteDraft(draft.id, draft.name)"
-              title="Delete Draft"
-            >
-              <svg><use href="#icon-trash"></use></svg>
-            </button>
-          </div>
-        </div>
-      </div>
+      <!-- Saved Series Sidebar -->
+      <SeriesManager />
     </div>
     </div>
     
@@ -358,74 +329,276 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, computed, watch } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDraftingStore } from '@/stores/drafting'
+import { useSeriesStore } from '@/stores/series'
 import { useChampionsStore } from '@/stores/champions'
 import { useConfirmationStore } from '@/stores/confirmation'
 import { useNotesStore } from '@/stores/notes'
+import { useSettingsStore } from '@/stores/settings'
+import { notesService } from '@/services/notes'
+import SeriesNavigator from '@/components/drafting/SeriesNavigator.vue'
+import SeriesManager from '@/components/drafting/SeriesManager.vue'
+import DrawingCanvas from '@/components/drafting/DrawingCanvas.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftingStore = useDraftingStore()
+const seriesStore = useSeriesStore()
 const championsStore = useChampionsStore()
 const confirmationStore = useConfirmationStore()
+const settingsStore = useSettingsStore()
 
 const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+
+// Get current draft from series store
+const currentDraft = computed(() => {
+  return seriesStore.currentDraft || {
+    bluePicks: Array(5).fill(null).map(() => ({ champion: null, notes: '' })),
+    blueBans: Array(5).fill(null).map(() => ({ champion: null, notes: '' })),
+    redPicks: Array(5).fill(null).map(() => ({ champion: null, notes: '' })),
+    redBans: Array(5).fill(null).map(() => ({ champion: null, notes: '' })),
+    generalNotes: ''
+  }
+})
+
+// Get unavailable champions for current game
+const unavailableChampions = computed(() => {
+  if (!seriesStore.currentGame || !settingsStore.settings.drafting?.integrateUnavailableChampions) {
+    return new Set()
+  }
+  return seriesStore.getUnavailableChampionsForGame(seriesStore.currentGame.gameNumber)
+})
+
+// Filter champions with unavailable check
+const filteredChampions = computed(() => {
+  if (!championsStore.allChampions || championsStore.allChampions.length === 0) return []
+  
+  const normalizeString = (str) => str.toLowerCase().replace(/[^a-z0-9]/gi, '')
+  let champs = [...championsStore.allChampions]
+  
+  // Filter by role
+  if (draftingStore.draftCreatorRoleFilter !== 'all') {
+    champs = champs.filter((c) => Array.isArray(c.roles) && c.roles.includes(draftingStore.draftCreatorRoleFilter))
+  }
+  
+  // Filter by search term
+  if (draftingStore.draftCreatorSearchTerm.trim() !== '') {
+    const normalizedSearch = normalizeString(draftingStore.draftCreatorSearchTerm.trim())
+    champs = champs.filter((c) => normalizeString(c.name).includes(normalizedSearch))
+  }
+  
+  return champs.sort((a, b) => a.name.localeCompare(b.name))
+})
+
+// Check if champion is available
+const isChampionAvailable = (championName) => {
+  if (!settingsStore.settings.drafting?.integrateUnavailableChampions) {
+    return true
+  }
+  return !unavailableChampions.value.has(championName)
+}
 
 const handleImageError = (e) => {
   e.target.style.opacity = '0.5'
 }
 
-const handleSaveDraft = async () => {
-  try {
-    await draftingStore.saveCurrentDraft()
-    await draftingStore.refreshSavedDrafts()
-    alert('Draft saved successfully!')
-  } catch (error) {
-    console.error('Error saving draft:', error)
-    alert('Failed to save draft. See console for details.')
+// Slot click handler
+function handleSlotClick(side, type, index) {
+  if (!currentDraft.value) return
+  
+  const slotKey = `${side}${type.charAt(0).toUpperCase() + type.slice(1)}`
+  const slot = currentDraft.value[slotKey]?.[index]
+  
+  if (draftingStore.selectedChampionForPlacement) {
+    // Place champion
+    if (slot && isChampionAvailable(draftingStore.selectedChampionForPlacement)) {
+      seriesStore.updateCurrentDraftSlot(side, type, index, draftingStore.selectedChampionForPlacement)
+      draftingStore.selectedChampionForPlacement = null
+    }
+  } else if (draftingStore.selectedChampionSource) {
+    // Move champion
+    const sourceKey = `${draftingStore.selectedChampionSource.side}${draftingStore.selectedChampionSource.type.charAt(0).toUpperCase() + draftingStore.selectedChampionSource.type.slice(1)}`
+    const sourceSlot = currentDraft.value[sourceKey]?.[draftingStore.selectedChampionSource.index]
+    
+    if (slot && sourceSlot) {
+      const tempChamp = sourceSlot.champion
+      const tempNotes = sourceSlot.notes
+      
+      sourceSlot.champion = slot.champion
+      sourceSlot.notes = slot.notes
+      
+      slot.champion = tempChamp
+      slot.notes = tempNotes
+      
+      draftingStore.selectedChampionSource = null
+      seriesStore.queueSave()
+    }
+  } else if (slot?.champion) {
+    // Select for move
+    draftingStore.selectedChampionSource = { side, type, index, championName: slot.champion }
+  } else {
+    // Select for targeting
+    draftingStore.selectedTargetSlot = { side, type, index }
   }
 }
 
-const handleResetDraft = () => {
-  confirmationStore.open({
-    message: 'Are you sure you want to reset the current draft? This cannot be undone.',
-    confirmAction: () => {
-      draftingStore.resetCurrentDraft()
-    },
-    isDanger: true
+// Clear slot handler
+function handleClearSlot(side, type, index) {
+  if (!currentDraft.value) return
+  seriesStore.updateCurrentDraftSlot(side, type, index, null)
+  if (draftingStore.selectedChampionSource && 
+      draftingStore.selectedChampionSource.side === side && 
+      draftingStore.selectedChampionSource.type === type && 
+      draftingStore.selectedChampionSource.index === index) {
+    draftingStore.selectedChampionSource = null
+  }
+  if (draftingStore.selectedTargetSlot && 
+      draftingStore.selectedTargetSlot.side === side && 
+      draftingStore.selectedTargetSlot.type === type && 
+      draftingStore.selectedTargetSlot.index === index) {
+    draftingStore.selectedTargetSlot = null
+  }
+}
+
+// Champion click handler
+function handleChampionClick(championName) {
+  if (!isChampionAvailable(championName)) {
+    return // Don't allow interaction with unavailable champions
+  }
+  draftingStore.selectChampionForPlacement(championName)
+}
+
+// Check if champion is placed in current draft
+function isChampionPlacedInCurrentDraft(championName) {
+  if (!currentDraft.value || !championName) return false
+  
+  const allSlots = [
+    ...currentDraft.value.bluePicks,
+    ...currentDraft.value.blueBans,
+    ...currentDraft.value.redPicks,
+    ...currentDraft.value.redBans
+  ]
+  
+  return allSlots.some(slot => slot.champion === championName)
+}
+
+// Toggle notes visibility (slot-based notes)
+function handleToggleNotes(side, type, index) {
+  if (!currentDraft.value) return
+  
+  const notesStore = useNotesStore()
+  const slotKey = `${side}${type.charAt(0).toUpperCase() + type.slice(1)}`
+  const slot = currentDraft.value[slotKey]?.[index]
+  
+  if (!slot) return
+  
+  // Get note from notes service (checks both local and global)
+  const note = notesService.getSlotNote(side, type, index, seriesStore.currentGame?.id)
+  const noteSource = note?.notes || slot.notes || ''
+  
+  const champName = slot.champion ? ` for ${slot.champion}` : ''
+  const slotLabel = `${side.charAt(0).toUpperCase()}${type.charAt(0).toUpperCase()}${index + 1}`
+  
+  notesStore.open({
+    noteType: 'slot',
+    side,
+    type,
+    index,
+    currentNote: noteSource,
+    title: `Edit Slot Notes${champName} (${slotLabel})`,
+    scope: note?.gameId ? 'local' : 'global'
   })
 }
 
-const handleDeleteDraft = (draftId, draftName) => {
-  confirmationStore.open({
-    message: `Are you sure you want to permanently delete '${draftName || 'this draft'}'? This cannot be undone.`,
-    confirmAction: async () => {
-      try {
-        await draftingStore.deleteSavedDraft(draftId)
-      } catch (error) {
-        console.error('Error deleting draft:', error)
-        alert('Failed to delete draft. See console for details.')
-      }
-    },
-    isDanger: true
+// Handle champion notes
+function handleChampionNotes(championName) {
+  const notesStore = useNotesStore()
+  
+  // Get note from notes service (checks both local and global)
+  const note = notesService.getChampionNote(championName, seriesStore.currentGame?.id)
+  const noteSource = note?.notes || ''
+  
+  notesStore.open({
+    noteType: 'champion',
+    side: null,
+    type: null,
+    index: null,
+    championName,
+    currentNote: noteSource,
+    title: `Edit Notes for ${championName}`,
+    scope: note?.gameId ? 'local' : 'global'
   })
 }
+
+// Check if champion has notes
+function hasChampionNote(championName) {
+  return !!notesService.getChampionNote(championName, seriesStore.currentGame?.id)
+}
+
+// Get champion tooltip with notes preview
+function getChampionTooltip(championName) {
+  const note = notesService.getChampionNote(championName, seriesStore.currentGame?.id)
+  if (note?.notes) {
+    const preview = note.notes.length > 50 ? note.notes.substring(0, 50) + '...' : note.notes
+    return `${championName}\n\nNotes: ${preview}\n\nRight-click to edit notes`
+  }
+  return `${championName}\n\nRight-click to add notes`
+}
+
+
 
 const handleEditGeneralNotes = () => {
+  if (!currentDraft.value) return
+  
   const notesStore = useNotesStore()
   notesStore.open({
+    noteType: 'general',
     side: 'general',
     type: null,
     index: null,
-    currentNote: draftingStore.currentDraft.generalNotes || '',
-    title: 'Edit General Draft Notes'
+    currentNote: currentDraft.value.generalNotes || '',
+    title: 'Edit General Draft Notes',
+    scope: 'local' // General notes are always local to the draft
   })
 }
 
 onMounted(async () => {
+  // Initialize default series if none exists
+  if (!seriesStore.hasSeries) {
+    seriesStore.initializeDefaultSeries()
+  }
+  
   if (workspaceStore.hasWorkspace && !workspaceStore.isLocalWorkspace) {
-    await draftingStore.refreshSavedDrafts()
+    await seriesStore.refreshSavedSeries()
+    
+    // Load notes if series is loaded
+    if (seriesStore.currentSeries?.id) {
+      await notesService.loadNotesForSeries(
+        workspaceStore.currentWorkspaceId,
+        seriesStore.currentSeries.id
+      )
+      notesService.setupRealtimeSync(
+        workspaceStore.currentWorkspaceId,
+        seriesStore.currentSeries.id
+      )
+    }
+  }
+})
+
+// Watch for series changes to load notes
+watch(() => seriesStore.currentSeries?.id, async (seriesId) => {
+  if (seriesId && workspaceStore.hasWorkspace && !workspaceStore.isLocalWorkspace) {
+    await notesService.loadNotesForSeries(
+      workspaceStore.currentWorkspaceId,
+      seriesId
+    )
+    notesService.setupRealtimeSync(
+      workspaceStore.currentWorkspaceId,
+      seriesId
+    )
+  } else {
+    notesService.cleanup()
   }
 })
 </script>
@@ -433,4 +606,29 @@ onMounted(async () => {
 <style scoped>
 /* Import the drafting tool CSS */
 @import '../../css/drafting-tool.css';
+
+.drafting-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.no-series-container,
+.no-draft-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  padding: 2rem;
+}
+
+.no-series-text,
+.no-draft-text {
+  color: #9ca3af;
+  font-size: 1.125rem;
+  text-align: center;
+}
 </style>

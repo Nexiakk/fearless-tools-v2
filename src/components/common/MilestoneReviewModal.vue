@@ -99,6 +99,7 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import { useMilestoneStore } from '@/stores/milestone'
 import { useDraftStore } from '@/stores/draft'
 import { useChampionsStore } from '@/stores/champions'
@@ -108,6 +109,21 @@ const draftStore = useDraftStore()
 const championsStore = useChampionsStore()
 
 const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+
+// Auto-balance when modal opens if there are champions but no assignments
+watch(() => milestoneStore.isOpen, (isOpen) => {
+  if (isOpen && draftStore.draftSeries.length > 0) {
+    // Check if there are any assignments
+    const hasAssignments = roles.some(role => {
+      return draftStore.unavailablePanelState[role]?.some(champ => champ !== null)
+    })
+    
+    // If no assignments, auto-balance
+    if (!hasAssignments) {
+      draftStore.balanceChampionsAcrossRoles()
+    }
+  }
+})
 
 const handleSlotClick = (role, index) => {
   const currentChampion = draftStore.unavailablePanelState[role]?.[index]

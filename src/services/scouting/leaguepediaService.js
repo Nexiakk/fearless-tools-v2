@@ -11,12 +11,18 @@ export const leaguepediaService = {
   /**
    * Get player's champion pool from pro play
    * @param {string} playerName - Player's name on Leaguepedia
+   * @param {number} year - Year to fetch data for (default: current year)
    * @returns {Promise<Array>} Array of champion play data
    */
-  async getPlayerChampionPool(playerName) {
+  async getPlayerChampionPool(playerName, year = null) {
     try {
+      // Default to current year if not provided
+      if (!year) {
+        year = new Date().getFullYear()
+      }
+      
       const apiUrl = `${BACKEND_API_URL}/leaguepedia`
-      console.log('[Leaguepedia] Calling API:', apiUrl, 'for player:', playerName)
+      console.log('[Leaguepedia] Calling API:', apiUrl, 'for player:', playerName, 'year:', year)
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -25,7 +31,7 @@ export const leaguepediaService = {
         },
         body: JSON.stringify({
           action: 'getPlayerChampionPool',
-          params: { playerName }
+          params: { playerName, year }
         })
       })
 

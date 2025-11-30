@@ -8,6 +8,7 @@
         </transition>
       </router-view>
     </main>
+    <RightSidePanel />
     
     <!-- Modals -->
     <WorkspaceModal />
@@ -28,6 +29,7 @@
 <script setup>
 import { ref } from 'vue'
 import AppHeader from './AppHeader.vue'
+import RightSidePanel from './RightSidePanel.vue'
 import WorkspaceModal from '../workspace/WorkspaceModal.vue'
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.vue'
 import WorkspaceSettings from '../workspace/WorkspaceSettings.vue'
@@ -48,6 +50,14 @@ defineExpose({
 </script>
 
 <style scoped>
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;

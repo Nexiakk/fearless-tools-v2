@@ -23,6 +23,7 @@
 import { computed } from 'vue'
 import { useChampionsStore } from '@/stores/champions'
 import { useDraftStore } from '@/stores/draft'
+import { useAdminStore } from '@/stores/admin'
 
 const props = defineProps({
   champion: {
@@ -37,6 +38,7 @@ const props = defineProps({
 
 const championsStore = useChampionsStore()
 const draftStore = useDraftStore()
+const adminStore = useAdminStore()
 
 const championIconUrl = computed(() =>
   championsStore.getChampionIconUrl(props.champion.name, 'creator-pool')
@@ -47,15 +49,25 @@ const cardClasses = computed(() => ({
   'op-tier': championsStore.isOpForRole(props.champion.name, props.role) &&
     !draftStore.isUnavailable(props.champion.name),
   'manually-marked': draftStore.isHighlighted(props.champion.name, props.role) &&
-    !draftStore.isUnavailable(props.champion.name)
+    !draftStore.isUnavailable(props.champion.name),
+  'editor-mode': adminStore.isEditorModeActive
 }))
 
 const handleClick = () => {
-  draftStore.togglePick(props.champion.name, props.role)
+  if (adminStore.isEditorModeActive) {
+    // In editor mode, open champion info modal
+    adminStore.setSelectedChampionForEditor(props.champion)
+  } else {
+    // Normal mode: toggle pick
+    draftStore.togglePick(props.champion.name, props.role)
+  }
 }
 
 const handleRightClick = () => {
-  draftStore.toggleHighlight(props.champion.name, props.role)
+  if (!adminStore.isEditorModeActive) {
+    // Only allow highlight toggle when not in editor mode
+    draftStore.toggleHighlight(props.champion.name, props.role)
+  }
 }
 </script>
 

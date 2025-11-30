@@ -376,140 +376,285 @@ export const useDraftStore = defineStore('draft', () => {
   
   function balanceChampionsAcrossRoles() {
     const championsStore = useChampionsStore()
-    const validRoles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+    const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
     
     // Clear all current placements
-    validRoles.forEach(role => {
+    roles.forEach(role => {
       unavailablePanelState.value[role] = Array(10).fill(null)
     })
     
-    // Calculate target count per role
-    const totalChampions = draftSeries.value.length
-    const targetPerRole = Math.floor(totalChampions / validRoles.length)
-    const remainder = totalChampions % validRoles.length
+    const bannedChamps = draftSeries.value
+    if (bannedChamps.length === 0) {
+      queueSave()
+      return
+    }
     
-    // Sort pick context by pick order
-    const sortedPicks = [...pickContext.value].sort((a, b) => a.pickOrder - b.pickOrder)
+    console.log('Balancing champions:', bannedChamps.length, 'champions')
     
-    // Track role counts
-    const roleCounts = {}
-    validRoles.forEach(role => {
-      roleCounts[role] = 0
+    // Get champion metadata
+    const champData = {}
+    bannedChamps.forEach(champName => {
+      const champion = championsStore.allChampions.find(c => c.name === champName)
+      if (champion) {
+        const possibleRoles = new Set()
+        if (champion.mainRole && roles.includes(champion.mainRole)) {
+          possibleRoles.add(champion.mainRole)
+        }
+        if (champion.roles && Array.isArray(champion.roles)) {
+          champion.roles.forEach(r => {
+            if (r && roles.includes(r)) {
+              possibleRoles.add(r)
+            }
+          })
+        }
+        champData[champName] = {
+          mainRole: champion.mainRole && roles.includes(champion.mainRole) ? champion.mainRole : null,
+          possibleRoles: Array.from(possibleRoles)
+        }
+      } else {
+        // Champion not found in store - use all roles as fallback
+        champData[champName] = {
+          mainRole: null,
+          possibleRoles: [...roles]
+        }
+      }
+    })
+    
+    // === INFERENCE STEP ===
+    // Define forward and reverse sequences
+    const forwardSequence = roles
+    const reverseSequence = [...roles].reverse()
+    
+    // Count matches for each sequence
+    let forwardMatches = 0
+    let reverseMatches = 0
+    
+    bannedChamps.forEach((champName, index) => {
+      const champ = champData[champName]
+      if (!champ) return
+      
+      const forwardRole = forwardSequence[index % forwardSequence.length]
+      const reverseRole = reverseSequence[index % reverseSequence.length]
+      
+      if (champ.possibleRoles.includes(forwardRole)) {
+        forwardMatches++
+      }
+      if (champ.possibleRoles.includes(reverseRole)) {
+        reverseMatches++
+      }
+    })
+    
+    // Choose the sequence with more matches
+    const probableSequence = forwardMatches >= reverseMatches ? forwardSequence : reverseSequence
+    const probableRoles = {}
+    bannedChamps.forEach((champName, index) => {
+      probableRoles[champName] = probableSequence[index % probableSequence.length]
+    })
+    
+    // === PREFERENCE BUILDING ===
+    const championsWithPreferences = bannedChamps.map(champName => {
+      const champ = champData[champName]
+      if (!champ || champ.possibleRoles.length === 0) {
+        // If no metadata or no possible roles, assign to all roles as fallback
+        return {
+          name: champName,
+          preferences: [...roles],
+          possibleRolesCount: roles.length
+        }
+      }
+      
+      const preferences = []
+      
+      // 1. Add inferred probable role if possible
+      const inferredRole = probableRoles[champName]
+      if (inferredRole && champ.possibleRoles.includes(inferredRole) && !preferences.includes(inferredRole)) {
+        preferences.push(inferredRole)
+      }
+      
+      // 2. Add mainRole if not already included
+      if (champ.mainRole && champ.possibleRoles.includes(champ.mainRole) && !preferences.includes(champ.mainRole)) {
+        preferences.push(champ.mainRole)
+      }
+      
+      // 3. Add remaining possibleRoles
+      champ.possibleRoles.forEach(role => {
+        if (!preferences.includes(role)) {
+          preferences.push(role)
+        }
+      })
+      
+      return {
+        name: champName,
+        preferences,
+        possibleRolesCount: champ.possibleRoles.length
+          }
+        })
+    
+    // Sort by number of possibleRoles (fewest first) to assign restricted champions first
+    championsWithPreferences.sort((a, b) => a.possibleRolesCount - b.possibleRolesCount)
+    
+    // Calculate target count per role (scale for <10 bans)
+    const totalBans = bannedChamps.length
+    const targetCount = totalBans >= 10 ? 2 : Math.ceil(totalBans / roles.length)
+    
+    // === GREEDY ASSIGNMENT ===
+    const assignments = {}
+    const counts = {}
+    roles.forEach(role => {
+      assignments[role] = []
+      counts[role] = 0
     })
     
     const placementOrder = [0, 5, 1, 6, 2, 7, 3, 8, 4, 9]
     
-    // Place champions
-    sortedPicks.forEach(pick => {
-      const champion = championsStore.allChampions.find(c => c.name === pick.championName)
-      if (!champion) return
+    championsWithPreferences.forEach(champ => {
+      let assigned = false
       
-      // Get all roles this champion can play
-      const allChampionRoles = new Set()
-      if (champion.mainRole && validRoles.includes(champion.mainRole)) {
-        allChampionRoles.add(champion.mainRole)
-      }
-      if (champion.roles) {
-        champion.roles.forEach(r => {
-          if (r && validRoles.includes(r)) {
-            allChampionRoles.add(r)
-          }
-        })
-      }
-      
-      // Calculate target for each role
-      const roleTargets = {}
-      validRoles.forEach((role, idx) => {
-        roleTargets[role] = targetPerRole + (idx < remainder ? 1 : 0)
-      })
-      
-      // Priority 1: Use the role from pick context if champion can play it and role is below target
-      let placed = false
-      if (pick.role && allChampionRoles.has(pick.role) && roleCounts[pick.role] < roleTargets[pick.role]) {
-        for (const slotIndex of placementOrder) {
-          if (unavailablePanelState.value[pick.role][slotIndex] === null) {
-            unavailablePanelState.value[pick.role][slotIndex] = pick.championName
-            roleCounts[pick.role]++
-            placed = true
+      // Try first preference where count < targetCount
+      for (const preferredRole of champ.preferences) {
+        if (counts[preferredRole] < targetCount) {
+          assignments[preferredRole].push(champ.name)
+          counts[preferredRole]++
+          assigned = true
             break
           }
-        }
       }
       
-      // Priority 2: Find role that's below target and champion can play
-      if (!placed) {
-        let bestRole = null
-        let bestDeficit = -Infinity
-        
-        validRoles.forEach(role => {
-          if (allChampionRoles.has(role)) {
-            const deficit = roleTargets[role] - roleCounts[role]
-            if (deficit > bestDeficit) {
-              bestDeficit = deficit
-              bestRole = role
-            }
-          }
-        })
-        
-        if (bestRole && bestDeficit > 0) {
-          for (const slotIndex of placementOrder) {
-            if (unavailablePanelState.value[bestRole][slotIndex] === null) {
-              unavailablePanelState.value[bestRole][slotIndex] = pick.championName
-              roleCounts[bestRole]++
-              placed = true
+      // If no preference available, try any possible role with space
+      if (!assigned) {
+        for (const role of champ.preferences) {
+          if (counts[role] < targetCount) {
+            assignments[role].push(champ.name)
+            counts[role]++
+            assigned = true
               break
-            }
           }
         }
       }
       
-      // Priority 3: Find any role champion can play with fewest champions
-      if (!placed) {
+      // Final fallback: assign to role with fewest champions
+      if (!assigned) {
         let bestRole = null
         let minCount = Infinity
-        
-        validRoles.forEach(role => {
-          if (allChampionRoles.has(role) && roleCounts[role] < minCount) {
-            minCount = roleCounts[role]
+        for (const role of champ.preferences) {
+          if (counts[role] < minCount) {
+            minCount = counts[role]
             bestRole = role
-          }
-        })
-        
-        if (bestRole) {
-          for (const slotIndex of placementOrder) {
-            if (unavailablePanelState.value[bestRole][slotIndex] === null) {
-              unavailablePanelState.value[bestRole][slotIndex] = pick.championName
-              roleCounts[bestRole]++
-              placed = true
-              break
-            }
           }
         }
-      }
-      
-      // Priority 4: Find any role with fewest champions (fallback)
-      if (!placed) {
-        let bestRole = null
-        let minCount = Infinity
-        
-        validRoles.forEach(role => {
-          if (roleCounts[role] < minCount) {
-            minCount = roleCounts[role]
-            bestRole = role
-          }
-        })
-        
         if (bestRole) {
-          for (const slotIndex of placementOrder) {
-            if (unavailablePanelState.value[bestRole][slotIndex] === null) {
-              unavailablePanelState.value[bestRole][slotIndex] = pick.championName
-              roleCounts[bestRole]++
-              break
-            }
-          }
+          assignments[bestRole].push(champ.name)
+          counts[bestRole]++
+        } else if (champ.preferences.length > 0) {
+          // Last resort: use first preference
+          assignments[champ.preferences[0]].push(champ.name)
+          counts[champ.preferences[0]]++
         }
       }
     })
+    
+    // === BALANCE ADJUSTMENT ===
+    const overfilled = []
+    const underfilled = []
+    
+    roles.forEach(role => {
+      if (counts[role] > targetCount) {
+        overfilled.push(role)
+      } else if (counts[role] < targetCount) {
+        underfilled.push(role)
+      }
+    })
+    
+    // Move champions from overfilled to underfilled roles
+    overfilled.forEach(overRole => {
+      const champsToMove = [...assignments[overRole]]
+      
+      for (const champName of champsToMove) {
+        if (counts[overRole] <= targetCount) break
+        
+        const champ = champData[champName]
+        if (!champ) continue
+        
+        // Try to move to an underfilled role
+        for (const underRole of underfilled) {
+          if (champ.possibleRoles.includes(underRole) && counts[underRole] < targetCount) {
+            // Move champion
+            assignments[overRole] = assignments[overRole].filter(n => n !== champName)
+            assignments[underRole].push(champName)
+            counts[overRole]--
+            counts[underRole]++
+            
+            // Update underfilled list
+            if (counts[underRole] >= targetCount) {
+              underfilled.splice(underfilled.indexOf(underRole), 1)
+            }
+              break
+            }
+          }
+        }
+    })
+    
+    // === ROUND-ROBIN FALLBACK ===
+    // For extreme cases, redistribute via round-robin
+    const hasExtremeImbalance = roles.some(role => counts[role] === 0 || counts[role] > 3)
+    
+    if (hasExtremeImbalance) {
+      // Clear and redistribute
+      roles.forEach(role => {
+        assignments[role] = []
+        counts[role] = 0
+      })
+      
+      let roleIndex = 0
+      championsWithPreferences.forEach(champ => {
+        let assigned = false
+        
+        // Try round-robin through roles
+        for (let i = 0; i < roles.length; i++) {
+          const role = roles[(roleIndex + i) % roles.length]
+          if (champ.preferences.includes(role) && counts[role] < 3) {
+            assignments[role].push(champ.name)
+            counts[role]++
+            roleIndex = (roleIndex + i + 1) % roles.length
+            assigned = true
+            break
+          }
+        }
+        
+        // If still not assigned, use any possible role
+        if (!assigned) {
+          for (let i = 0; i < roles.length; i++) {
+            const role = roles[(roleIndex + i) % roles.length]
+            if (champ.preferences.includes(role)) {
+              assignments[role].push(champ.name)
+              counts[role]++
+              roleIndex = (roleIndex + i + 1) % roles.length
+              break
+            }
+          }
+        }
+      })
+    }
+    
+    // === PLACE CHAMPIONS IN PANEL ===
+    let totalPlaced = 0
+    roles.forEach(role => {
+      assignments[role].forEach((champName, idx) => {
+        if (idx < placementOrder.length) {
+          unavailablePanelState.value[role][placementOrder[idx]] = champName
+          totalPlaced++
+      }
+    })
+    })
+    
+    console.log('Placed champions:', totalPlaced, 'out of', bannedChamps.length)
+    if (totalPlaced !== bannedChamps.length) {
+      console.warn('Not all champions were placed!', {
+        total: bannedChamps.length,
+        placed: totalPlaced,
+        assignments
+      })
+    }
     
     queueSave()
   }

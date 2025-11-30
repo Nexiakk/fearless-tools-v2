@@ -14,6 +14,47 @@
         >
           <h3 class="text-xl font-semibold text-white mb-4">{{ notesStore.title }}</h3>
           
+          <!-- Note Type Indicator -->
+          <div v-if="notesStore.noteType !== 'general'" class="mb-3 flex items-center gap-2 text-sm text-gray-400">
+            <span class="px-2 py-1 rounded bg-gray-700">
+              {{ notesStore.noteType === 'champion' ? 'Champion Note' : 'Slot Note' }}
+            </span>
+          </div>
+          
+          <!-- Scope Selector (only for slot and champion notes, not general) -->
+          <div v-if="notesStore.noteType !== 'general' && seriesStore.hasSeries" class="mb-3">
+            <label class="block text-sm font-medium text-gray-300 mb-2">Scope:</label>
+            <div class="flex gap-2">
+              <button
+                @click="notesStore.setScope('local')"
+                :class="[
+                  'px-4 py-2 rounded text-sm font-medium transition-colors',
+                  notesStore.scope === 'local'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ]"
+              >
+                This Game Only
+              </button>
+              <button
+                @click="notesStore.setScope('global')"
+                :class="[
+                  'px-4 py-2 rounded text-sm font-medium transition-colors',
+                  notesStore.scope === 'global'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ]"
+              >
+                All Games (Global)
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">
+              {{ notesStore.scope === 'global' 
+                ? 'This note will be visible across all games in the series' 
+                : 'This note will only be visible in the current game' }}
+            </p>
+          </div>
+          
           <textarea
             ref="textareaRef"
             v-model="notesStore.currentNote"
@@ -46,10 +87,11 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue'
 import { useNotesStore } from '@/stores/notes'
-import { useDraftingStore } from '@/stores/drafting'
+import { useSeriesStore } from '@/stores/series'
+import { notesService } from '@/services/notes'
 
 const notesStore = useNotesStore()
-const draftingStore = useDraftingStore()
+const seriesStore = useSeriesStore()
 const textareaRef = ref(null)
 
 // Auto-focus textarea when modal opens
@@ -65,14 +107,31 @@ const handleClose = () => {
   notesStore.close()
 }
 
-const handleSave = () => {
-  const { side, type, index, currentNote } = notesStore
+const handleSave = async () => {
+  const { noteType, side, type, index, championName, currentNote, scope } = notesStore
   
   try {
-    if (side === 'general') {
-      draftingStore.updateGeneralNotes(currentNote)
-    } else if (side && type && index !== null) {
-      draftingStore.updateSlotNotes(side, type, index, currentNote)
+    if (noteType === 'general') {
+      // General draft notes (stored in draft, not separate notes system)
+      seriesStore.updateCurrentDraftGeneralNotes(currentNote)
+    } else if (noteType === 'slot' && side && type && index !== null) {
+      // Slot-based note
+      await notesService.saveSlotNote(
+        side,
+        type,
+        index,
+        currentNote,
+        scope,
+        seriesStore.currentGame?.id
+      )
+    } else if (noteType === 'champion' && championName) {
+      // Champion-based note
+      await notesService.saveChampionNote(
+        championName,
+        currentNote,
+        scope,
+        seriesStore.currentGame?.id
+      )
     }
   } catch (error) {
     console.error('Failed to save notes:', error)

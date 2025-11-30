@@ -692,10 +692,14 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 .pool-main-area {
   position: relative;
   width: 100%;
-  height: 86vh;
-  margin-top: 0.5rem;
-  overflow: hidden; /* Prevent page scrolling */
+  height: calc(100vh - 40px - 4.5rem); /* Full height minus navbar (40px) and margin */
+  margin-top: 2rem; /* Larger margin between navbar and content */
+  overflow: visible; /* Allow icons to be visible outside */
+  box-sizing: border-box;
+  transition: margin-left 0.2s ease;
 }
+
+/* Banner doesn't push content - it's positioned fixed and doesn't affect layout */
 .compact-view-container {
   display: flex;
   gap: 1rem;
@@ -705,6 +709,7 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   position: absolute;
   max-width: 100%; /* Ensure it doesn't exceed page width */
   box-sizing: border-box;
+  overflow: visible; /* Allow icons to be visible outside */
 }
 .role-pillar {
   flex: 1;
@@ -715,25 +720,29 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   background-color: #1e1e1e;
   border: 1px solid #3a3a3a;
   border-radius: 0.5rem;
-  overflow: hidden; /* Prevent pillar from overflowing */
+  overflow: visible; /* Allow icon to be visible outside */
+  position: relative; /* For absolute positioning of icon */
 }
 .pillar-header-wrapper {
-  text-align: center;
-  padding: 0.25rem;
-  background-color: #282828;
-  border-bottom: 1px solid #3a3a3a;
-  border-radius: 0.5rem 0.5rem 0 0;
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: none; /* Remove header container */
 }
 .pillar-header {
   display: none;
 }
 .pillar-header-icon {
+  position: absolute;
+  top: -17px; /* Position at top center edge: 70% outside / 30% inside (24px icon: ~17px outside, ~7px inside) */
+  left: 50%;
+  transform: translateX(-50%);
   width: 24px;
   height: 24px;
+  z-index: 10;
+  background-color: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 50%;
+  padding: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none; /* Prevent icon from blocking interactions */
 }
 
 .pillar-champions-grid {
@@ -818,8 +827,19 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 
 /* [REWRITTEN] Compact Champion Card Logic */
 /* Default (compact mode OFF): Normal cards are bigger, unavailable are smaller */
+/* CSS variables for dynamic sizing: --normal-card-scale, --highlight-card-scale, --unavailable-card-scale */
+/* Font scale variables: --normal-font-scale, --highlight-font-scale, --unavailable-font-scale */
+.compact-view-container {
+  --normal-card-scale: 1;
+  --highlight-card-scale: 1;
+  --unavailable-card-scale: 0.833; /* 16.666/20 = 0.833 */
+  --normal-font-scale: 1;
+  --highlight-font-scale: 1;
+  --unavailable-font-scale: 0.833;
+}
+
 .compact-champion-card {
-  width: calc(20% - 3.2px); /* 5 columns - normal size (default) */
+  width: calc(20% * var(--normal-card-scale, 1) - 3.2px); /* 5 columns - normal size (default) */
   background-color: #1e1e1e;
   border: 1px solid transparent; /* Make base border transparent */
   border-radius: 4px;
@@ -835,10 +855,10 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   box-sizing: border-box;
 }
 
-/* Highlighted/OP cards are same size as normal (default) */
+/* Highlighted/OP cards use highlight scale */
 .compact-champion-card.manually-marked,
 .compact-champion-card.op-tier {
-  width: calc(20% - 3.2px); /* 5 columns - same size as normal (default) */
+  width: calc(20% * var(--highlight-card-scale, 1) - 3.2px); /* 5 columns - scaled by highlight scale */
 }
 
 /* Default (compact OFF): Normal/Highlighted/OP = 5 columns, Unavailable = 6 columns */
@@ -846,6 +866,50 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 .compact-champion-card:hover {
   transform: scale(1.05);
   z-index: 10;
+}
+
+/* Editor Mode Visual Indicators */
+.compact-view-container.editor-mode .compact-champion-card {
+  cursor: pointer;
+  position: relative;
+}
+
+.compact-view-container.editor-mode .compact-champion-card:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 12px 2px rgba(245, 158, 11, 0.4);
+  border-color: rgba(245, 158, 11, 0.6);
+  z-index: 15;
+}
+
+.compact-view-container.editor-mode .compact-champion-card::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.compact-view-container.editor-mode .compact-champion-card:hover::before {
+  opacity: 1;
+  border-color: rgba(245, 158, 11, 0.8);
+}
+
+/* Editor mode bottom border line */
+.editor-mode-banner-bottom-line {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(245, 158, 11, 0.8);
+  z-index: 98; /* High enough to be visible above content */
+  pointer-events: none;
 }
 .compact-champion-icon-wrapper {
   width: 100%;
@@ -863,8 +927,8 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 }
 /* [REMOVED] .compact-champion-name-bar rule */
 .compact-champion-name {
-  font-size: 0.55rem; /* Font for normal cards (default) */
-  line-height: 0.75rem;
+  font-size: calc(0.55rem * var(--normal-font-scale, 1)); /* Font for normal cards (scaled) */
+  line-height: calc(0.75rem * var(--normal-font-scale, 1));
   font-weight: 500;
   color: #cccccc;
   white-space: nowrap;
@@ -873,20 +937,20 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   width: 100%;
   text-align: center;
   flex-shrink: 0;
-  min-height: 0.75rem; /* Ensure consistent height */
+  min-height: calc(0.75rem * var(--normal-font-scale, 1)); /* Ensure consistent height */
 }
 
-/* Bigger font for highlighted/OP cards (default) */
+/* Bigger font for highlighted/OP cards (scaled) */
 .compact-champion-card.manually-marked .compact-champion-name,
 .compact-champion-card.op-tier .compact-champion-name {
-  font-size: 0.6rem; /* Bigger font for highlighted cards (default) */
-  line-height: 0.8rem;
+  font-size: calc(0.6rem * var(--highlight-font-scale, 1)); /* Bigger font for highlighted cards (scaled) */
+  line-height: calc(0.8rem * var(--highlight-font-scale, 1));
   font-weight: 600;
 }
 
-/* Unavailable champions - smaller size (always) */
+/* Unavailable champions - use unavailable scale */
 .compact-champion-card.unavailable {
-  width: calc(16.666% - 3.4px); /* 6 columns - smaller size (always) */
+  width: calc(20% * var(--unavailable-card-scale, 0.833) - 3.4px); /* Scaled by unavailable scale */
   opacity: 0.6;
   background-color: #121212;
 }
@@ -896,7 +960,7 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
   box-shadow: none !important;
 }
 .compact-champion-card.unavailable .compact-champion-name {
-  font-size: 0.5rem; /* Smaller font for unavailable */
+  font-size: calc(0.5rem * var(--unavailable-font-scale, 0.833)); /* Smaller font for unavailable (scaled) */
   font-weight: 500;
 }
 .compact-champion-card.unavailable:hover {
@@ -943,34 +1007,35 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 
 /* --- Compact Mode ON - Normal cards become same size as unavailable --- */
 /* When compact mode is enabled, normal cards shrink to match unavailable size */
+/* Note: Compact mode is deprecated in favor of sliders, but kept for backward compatibility */
 .compact-view-container.compact-mode .compact-champion-card {
-  width: calc(16.666% - 3.4px); /* 6 columns - same as unavailable */
+  width: calc(20% * var(--unavailable-card-scale, 0.833) - 3.4px); /* Use unavailable scale */
   padding: 2px;
 }
 
 .compact-view-container.compact-mode .compact-champion-card.manually-marked,
 .compact-view-container.compact-mode .compact-champion-card.op-tier {
-  width: calc(20% - 3.2px); /* 5 columns - still bigger to highlight */
+  width: calc(20% * var(--highlight-card-scale, 1) - 3.2px); /* Use highlight scale */
 }
 
 .compact-view-container.compact-mode .compact-champion-name {
-  font-size: 0.5rem; /* Smaller font for normal cards in compact mode */
-  line-height: 0.7rem;
+  font-size: calc(0.5rem * var(--unavailable-font-scale, 0.833)); /* Smaller font for normal cards in compact mode (scaled) */
+  line-height: calc(0.7rem * var(--unavailable-font-scale, 0.833));
 }
 
 .compact-view-container.compact-mode .compact-champion-card.manually-marked .compact-champion-name,
 .compact-view-container.compact-mode .compact-champion-card.op-tier .compact-champion-name {
-  font-size: 0.6rem; /* Bigger font for highlighted cards */
-  line-height: 0.8rem;
+  font-size: calc(0.6rem * var(--highlight-font-scale, 1)); /* Bigger font for highlighted cards (scaled) */
+  line-height: calc(0.8rem * var(--highlight-font-scale, 1));
   font-weight: 600;
 }
 
 .compact-view-container.compact-mode .compact-champion-card.unavailable {
-  width: calc(16.666% - 3.4px); /* 6 columns - same size (unchanged) */
+  width: calc(20% * var(--unavailable-card-scale, 0.833) - 3.4px); /* Use unavailable scale */
 }
 
 .compact-view-container.compact-mode .compact-champion-card.unavailable .compact-champion-name {
-  font-size: 0.5rem; /* Same as normal cards in compact mode */
+  font-size: calc(0.5rem * var(--unavailable-font-scale, 0.833)); /* Same as normal cards in compact mode (scaled) */
 }
 
 /* --- Enhanced Highlighted Champions Visibility --- */

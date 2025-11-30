@@ -11,7 +11,11 @@
 /* Note: body styles are already defined in css/style.css */
 /* This ensures #app takes full height and matches original styling */
 #app {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background-color: #121212; /* Match original body background */
 }
 

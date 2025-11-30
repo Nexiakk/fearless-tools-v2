@@ -98,6 +98,38 @@ service cloud.firestore {
         // Only admins can write scouting data
         allow write: if isAdmin();
       }
+      
+      // SERIES COLLECTION
+      match /series/{seriesId} {
+        // Workspace members can read series
+        allow read: if isAuthenticated();
+        // Workspace members can create/update/delete series
+        allow write: if isAuthenticated();
+        
+        // NOTES subcollection under series
+        match /notes/{noteId} {
+          // Workspace members can read notes
+          allow read: if isAuthenticated();
+          // Workspace members can create/update/delete notes
+          allow write: if isAuthenticated();
+        }
+      }
+      
+      // DRAWING COLLECTION
+      match /drawing/{view} {
+        // Workspace members can read drawings
+        allow read: if isAuthenticated();
+        
+        // STROKES subcollection under drawing
+        match /strokes/{strokeId} {
+          // Workspace members can read strokes
+          allow read: if isAuthenticated();
+          // Workspace members can create/update strokes
+          allow create, update: if isAuthenticated();
+          // Only admins can delete strokes (for clear canvas)
+          allow delete: if isAdmin();
+        }
+      }
     }
   }
 }

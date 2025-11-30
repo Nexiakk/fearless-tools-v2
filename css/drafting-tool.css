@@ -1,15 +1,28 @@
-/* --- UPDATED: Draft Creator View Styles --- */
+/* --- UPDATED: Draft Creator Container (Top Level) --- */
+.draft-creator-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  position: relative;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* --- UPDATED: Draft Creator View Styles (Main Content Area) --- */
 .draft-creator-view {
   display: flex;
   flex-direction: row;
-  flex-grow: 1;
-  height: 87vh;
+  flex: 1;
+  min-height: 0;
   position: relative;
   padding: 1rem;
   background-color: #121212; /* Base background */
   border-radius: 8px;
   border: 1px solid #3a3a3a;
   gap: 1rem;
+  overflow: hidden;
 }
 
 /* Wrapper for Bans Header and Main Grid */
@@ -475,6 +488,67 @@
 }
 .draft-creator-champion-card.already-placed img.champion-icon {
   filter: grayscale(100%);
+}
+
+.draft-creator-champion-card.unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+  position: relative;
+}
+
+.draft-creator-champion-card.unavailable::after {
+  content: 'Unavailable';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #ef4444;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.draft-creator-champion-card.unavailable:hover {
+  transform: none;
+  filter: grayscale(100%);
+}
+
+.draft-creator-champion-card.unavailable img.champion-icon {
+  opacity: 0.3;
+}
+
+.champion-notes-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(217, 119, 6, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  z-index: 5;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.champion-notes-indicator:hover {
+  transform: scale(1.1);
+  background: rgba(217, 119, 6, 1);
+}
+
+.champion-notes-indicator svg {
+  width: 12px;
+  height: 12px;
+  fill: white;
 }
 
 /* Center Column: Save/Reset Controls */

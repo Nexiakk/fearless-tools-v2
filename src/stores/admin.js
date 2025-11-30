@@ -38,6 +38,12 @@ export const useAdminStore = defineStore('admin', () => {
   })
   const isSavingSettings = ref(false)
   
+  // Editor Mode State (for UI interaction system)
+  const isEditorModeActive = ref(false)
+  const selectedChampionForEditor = ref(null)
+  const isOpTierEditorModalOpen = ref(false)
+  const opTierEditorChampion = ref(null)
+  
   // Valid roles
   const validRoles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
   
@@ -124,6 +130,45 @@ export const useAdminStore = defineStore('admin', () => {
     success.value = ''
     selectedChampion.value = null
     isEditModalOpen.value = false
+  }
+  
+  // Editor Mode Functions
+  function toggleEditorMode() {
+    isEditorModeActive.value = !isEditorModeActive.value
+    if (!isEditorModeActive.value) {
+      // Clear selection when exiting editor mode
+      selectedChampionForEditor.value = null
+    }
+  }
+  
+  function setEditorMode(value) {
+    isEditorModeActive.value = value
+    if (!value) {
+      // Clear selection when exiting editor mode
+      selectedChampionForEditor.value = null
+    }
+  }
+  
+  function setSelectedChampionForEditor(champion) {
+    selectedChampionForEditor.value = champion
+  }
+  
+  function clearSelectedChampionForEditor() {
+    selectedChampionForEditor.value = null
+  }
+  
+  function openOpTierEditorModal(champion) {
+    // Ensure data is loaded
+    if (champions.value.length === 0) {
+      loadData()
+    }
+    opTierEditorChampion.value = champion
+    isOpTierEditorModalOpen.value = true
+  }
+  
+  function closeOpTierEditorModal() {
+    isOpTierEditorModalOpen.value = false
+    opTierEditorChampion.value = null
   }
   
   async function loadData() {
@@ -391,8 +436,7 @@ export const useAdminStore = defineStore('admin', () => {
         const championsStore = useChampionsStore()
         await championsStore.loadChampions()
         
-        success.value = 'Champion saved successfully'
-        closeEditModal()
+        success.value = 'Champion and OP tier data saved successfully'
         
         setTimeout(() => {
           success.value = ''
@@ -651,6 +695,10 @@ export const useAdminStore = defineStore('admin', () => {
     migrationStatus,
     globalSettings,
     isSavingSettings,
+    isEditorModeActive,
+    selectedChampionForEditor,
+    isOpTierEditorModalOpen,
+    opTierEditorChampion,
     validRoles,
     // Computed
     filteredChampions,
@@ -659,6 +707,12 @@ export const useAdminStore = defineStore('admin', () => {
     // Actions
     open,
     close,
+    toggleEditorMode,
+    setEditorMode,
+    setSelectedChampionForEditor,
+    clearSelectedChampionForEditor,
+    openOpTierEditorModal,
+    closeOpTierEditorModal,
     loadData,
     loadApiChampionsForEditor,
     openEditModal,
