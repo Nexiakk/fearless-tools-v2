@@ -54,78 +54,83 @@
           </table>
         </div>
 
-        <!-- Scrollable Data Container -->
-        <div class="flex-1 overflow-y-auto min-h-0">
-          <table class="w-full text-xs">
-            <tbody>
-              <!-- SoloQ Section -->
-              <tr v-if="soloqChampions.length > 0 || competitiveChampions.length > 0">
-                <td colspan="6" class="px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-b border-gray-600">
-                  SoloQ (op.gg)
-                </td>
-              </tr>
-              <tr 
-                v-for="champ in soloqChampions" 
-                :key="`soloq-${champ.championName}`"
-                class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
-              >
-                <td class="py-1 px-2">
-                  <div class="flex items-center gap-1.5">
-                    <img 
-                      :src="getChampionIconUrl(champ.championName)" 
-                      :alt="champ.championName"
-                      class="w-4 h-4 rounded"
-                      @error="handleImageError"
-                    />
-                    <span class="text-white">{{ champ.championName }}</span>
-                  </div>
-                </td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
-              </tr>
-              <tr v-if="soloqChampions.length === 0 && competitiveChampions.length > 0">
-                <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No SoloQ data</td>
-              </tr>
+        <!-- Data Sections Container -->
+        <div class="flex-1 flex flex-col min-h-0" style="height: 0;">
+          <!-- SoloQ Section -->
+          <div class="flex flex-col overflow-hidden" style="flex: 1 1 0; min-height: 0;">
+            <div class="flex-shrink-0 px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-b border-gray-600">
+              SoloQ (op.gg)
+            </div>
+            <div class="flex-1 overflow-y-auto min-h-0" style="height: 0;">
+              <table class="w-full text-xs">
+                <tbody>
+                  <tr 
+                    v-for="champ in soloqChampions" 
+                    :key="`soloq-${champ.championName}`"
+                    class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
+                  >
+                    <td class="py-1 px-2">
+                      <div class="flex items-center gap-1.5">
+                        <img 
+                          :src="getChampionIconUrl(champ.championName)" 
+                          :alt="champ.championName"
+                          class="w-4 h-4 rounded"
+                          @error="handleImageError"
+                        />
+                        <span class="text-white">{{ champ.championName }}</span>
+                      </div>
+                    </td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
+                  </tr>
+                  <tr v-if="soloqChampions.length === 0">
+                    <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No SoloQ data</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-              <!-- Competitive Section -->
-              <tr v-if="competitiveChampions.length > 0">
-                <td colspan="6" class="px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-b border-gray-600 border-t border-gray-600">
-                  Competitive (Leaguepedia)
-                </td>
-              </tr>
-              <tr 
-                v-for="champ in competitiveChampions" 
-                :key="`comp-${champ.championName}`"
-                class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
-              >
-                <td class="py-1 px-2">
-                  <div class="flex items-center gap-1.5">
-                    <img 
-                      :src="getChampionIconUrl(champ.championName)" 
-                      :alt="champ.championName"
-                      class="w-4 h-4 rounded"
-                      @error="handleImageError"
-                    />
-                    <span class="text-white">{{ champ.championName }}</span>
-                  </div>
-                </td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
-                <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
-              </tr>
-              <tr v-if="competitiveChampions.length === 0 && soloqChampions.length > 0">
-                <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No competitive data</td>
-              </tr>
-              <tr v-if="soloqChampions.length === 0 && competitiveChampions.length === 0">
-                <td colspan="6" class="text-center py-2 text-gray-400 text-xs">No data available</td>
-              </tr>
-            </tbody>
-          </table>
+          <!-- Competitive Section -->
+          <div class="flex flex-col overflow-hidden" style="flex: 1 1 0; min-height: 0;">
+            <div class="flex-shrink-0 px-2 py-1 bg-gray-600 text-xs font-semibold text-gray-300 border-t border-gray-600 border-b border-gray-600">
+              Competitive (Leaguepedia)
+            </div>
+            <div class="flex-1 overflow-y-auto min-h-0" style="height: 0;">
+              <table class="w-full text-xs">
+                <tbody>
+                  <tr 
+                    v-for="champ in competitiveChampions" 
+                    :key="`comp-${champ.championName}`"
+                    class="border-b border-gray-600 hover:bg-gray-600 transition-colors"
+                  >
+                    <td class="py-1 px-2">
+                      <div class="flex items-center gap-1.5">
+                        <img 
+                          :src="getChampionIconUrl(champ.championName)" 
+                          :alt="champ.championName"
+                          class="w-4 h-4 rounded"
+                          @error="handleImageError"
+                        />
+                        <span class="text-white">{{ champ.championName }}</span>
+                      </div>
+                    </td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.games || 0 }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.wins || 0 }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ champ.losses || (champ.games || 0) - (champ.wins || 0) }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ formatWinrate(champ.winrate) }}</td>
+                    <td class="text-center py-1 px-2 text-white">{{ formatKDA(champ.kda) }}</td>
+                  </tr>
+                  <tr v-if="competitiveChampions.length === 0">
+                    <td colspan="6" class="text-center py-1.5 text-gray-500 text-xs">No competitive data</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -198,8 +203,26 @@ const formatWinrate = (winrate) => {
 const formatKDA = (kda) => {
   if (!kda) return '0.00'
   
-  if (typeof kda === 'object' && kda.ratio !== undefined) {
-    return kda.ratio.toFixed(2)
+  if (typeof kda === 'object') {
+    // If ratio is available, use it
+    if (kda.ratio !== undefined) {
+      return kda.ratio.toFixed(2)
+    }
+    
+    // Otherwise, calculate ratio from kills, deaths, assists
+    if (kda.kills !== undefined && kda.deaths !== undefined && kda.assists !== undefined) {
+      const kills = parseFloat(kda.kills) || 0
+      const deaths = parseFloat(kda.deaths) || 0
+      const assists = parseFloat(kda.assists) || 0
+      
+      if (deaths > 0) {
+        const ratio = (kills + assists) / deaths
+        return ratio.toFixed(2)
+      } else if (kills + assists > 0) {
+        // Perfect KDA (no deaths)
+        return (kills + assists).toFixed(2)
+      }
+    }
   }
   
   if (typeof kda === 'number') {

@@ -1,6 +1,52 @@
 const axios = require('axios')
 const cheerio = require('cheerio')
 
+/**
+ * Normalize champion name to match Leaguepedia format
+ * Maps op.gg names to Leaguepedia standard names
+ */
+function normalizeChampionName(name) {
+  if (!name) return name
+  
+  // Champion name mappings (op.gg -> Leaguepedia)
+  // Most champions are the same, but some have variations
+  const nameMap = {
+    // Common variations
+    'MonkeyKing': 'Wukong',
+    'DrMundo': 'Dr. Mundo',
+    'JarvanIV': 'Jarvan IV',
+    'MasterYi': 'Master Yi',
+    'MissFortune': 'Miss Fortune',
+    'TahmKench': 'Tahm Kench',
+    'TwistedFate': 'Twisted Fate',
+    'XinZhao': 'Xin Zhao',
+    'AurelionSol': 'Aurelion Sol',
+    'KogMaw': 'Kog\'Maw',
+    'RekSai': 'Rek\'Sai',
+    // Names with apostrophes (preserve them)
+    'KSante': 'K\'Sante',
+    'KSante': 'K\'Sante', // In case it was already stripped
+    'BelVeth': 'Bel\'Veth',
+    'BelVeth': 'Bel\'Veth', // In case it was already stripped
+  }
+  
+  // Check exact match first
+  if (nameMap[name]) {
+    return nameMap[name]
+  }
+  
+  // Check case-insensitive match
+  const lowerName = name.toLowerCase()
+  for (const [key, value] of Object.entries(nameMap)) {
+    if (key.toLowerCase() === lowerName) {
+      return value
+    }
+  }
+  
+  // If no mapping found, return as-is (most champions are the same)
+  return name
+}
+
 exports.handler = async (event, context) => {
   // Enable CORS
   const headers = {
@@ -177,7 +223,10 @@ exports.handler = async (event, context) => {
         // Process the champions data
         const extractedChampions = championsData.map(champ => {
           // Try various field names for champion name
-          const name = champ.championName || champ.name || champ.champion || champ.champion_id || ''
+          let name = champ.championName || champ.name || champ.champion || champ.champion_id || ''
+          // Normalize champion name to match Leaguepedia format
+          name = normalizeChampionName(name)
+          
           // Try various field names for stats
           const wins = champ.wins || champ.win || 0
           const losses = champ.losses || champ.loss || champ.defeats || 0
@@ -185,17 +234,41 @@ exports.handler = async (event, context) => {
           const winrate = champ.winrate || champ.winRate || champ.win_rate || 
                          (games > 0 && wins > 0 ? (wins / games) * 100 : 0)
           
+          // Extract and normalize KDA
+          let kda = null
+          if (champ.kda) {
+            const kills = champ.kda.kills || champ.kda.k || 0
+            const deaths = champ.kda.deaths || champ.kda.d || 0
+            const assists = champ.kda.assists || champ.kda.a || 0
+            
+            // Calculate ratio from kills/deaths/assists
+            let ratio = 0
+            if (deaths > 0) {
+              ratio = (kills + assists) / deaths
+            } else if (kills + assists > 0) {
+              ratio = kills + assists // Perfect KDA
+            }
+            
+            kda = {
+              kills,
+              deaths,
+              assists,
+              ratio
+            }
+            
+            // Store op.gg ratio if available
+            if (champ.kda.ratio !== undefined) {
+              kda.opggRatio = champ.kda.ratio
+            }
+          }
+          
           return {
             championName: name,
             games: games || 0,
             wins: wins || 0,
             losses: losses || 0,
             winrate: winrate || 0,
-            kda: champ.kda ? {
-              kills: champ.kda.kills || champ.kda.k || 0,
-              deaths: champ.kda.deaths || champ.kda.d || 0,
-              assists: champ.kda.assists || champ.kda.a || 0
-            } : null
+            kda
           }
         }).filter(champ => champ.championName && champ.games > 0)
         
@@ -398,9 +471,14 @@ exports.handler = async (event, context) => {
       }
       
       // Clean up champion name
+      // Only remove double quotes, preserve apostrophes (e.g., "K'Sante" should stay "K'Sante")
       championName = championName
-        .replace(/['"]/g, '') // Remove quotes
+        .replace(/"/g, '') // Remove double quotes only
         .trim() // Trim edges
+      
+      // Normalize champion name to match Leaguepedia format
+      // Leaguepedia uses specific names (e.g., "K'Sante", "Bel'Veth", "Wukong" not "MonkeyKing")
+      championName = normalizeChampionName(championName)
       
       if (!championName || championName.length < 2) {
         console.log(`[DEBUG] Skipping row - no valid champion name found`)
@@ -538,13 +616,24 @@ exports.handler = async (event, context) => {
                 deaths: parseFloat(kdaMatch[2]),
                 assists: parseFloat(kdaMatch[3])
               }
+              // Always calculate ratio from kills/deaths/assists for accuracy
+              // op.gg ratio might be rounded, so we calculate it ourselves
+              if (kda.deaths > 0) {
+                kda.ratio = (kda.kills + kda.assists) / kda.deaths
+              } else if (kda.kills + kda.assists > 0) {
+                kda.ratio = kda.kills + kda.assists // Perfect KDA (no deaths)
+              } else {
+                kda.ratio = 0
+              }
+              // Also store the op.gg ratio if available for reference
               if (ratioMatch) {
-                kda.ratio = parseFloat(ratioMatch[1])
+                kda.opggRatio = parseFloat(ratioMatch[1])
               }
               if (kpMatch) {
                 kda.killParticipation = parseFloat(kpMatch[1])
               }
               console.log(`[DEBUG] Extracted KDA from cell 3:`, kda)
+              console.log(`[DEBUG] Calculated ratio: ${kda.ratio.toFixed(2)}, op.gg ratio: ${kda.opggRatio || 'N/A'}`)
             } else {
               console.log(`[DEBUG] KDA pattern did not match cell 3 text: "${cellText}"`)
             }
