@@ -11,7 +11,7 @@ import { cacheService } from '@/services/cache'
 export const useAdminStore = defineStore('admin', () => {
   // State
   const isOpen = ref(false)
-  const activeTab = ref('champions') // 'champions', 'opTier', 'migration', 'settings'
+  const activeTab = ref('champions') // 'champions', 'opTier', 'migration', 'settings', 'workspaceSettings'
   const isLoading = ref(false)
   const error = ref('')
   const success = ref('')
@@ -115,10 +115,13 @@ export const useAdminStore = defineStore('admin', () => {
   }
   
   // Actions
-  async function open() {
+  async function open(tab = null) {
     isOpen.value = true
     error.value = ''
     success.value = ''
+    if (tab) {
+      activeTab.value = tab
+    }
     await loadData()
     await loadGlobalSettings()
     await loadApiChampionsForEditor()

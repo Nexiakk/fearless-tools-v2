@@ -216,10 +216,40 @@ img.player-badge {
   pointer-events: none;
 }
 
+/* Normal cards hover - use border directly to maintain position */
 div.champion-card:not(.unavailable):hover img.champion-icon,
 .compact-champion-card:not(.unavailable):hover .compact-champion-icon {
-  border-color: transparent; /* Hide the original border */
-  box-shadow: 0 0 0 1px #c89b3c; /* Create border effect with box-shadow */
+  border-color: #c89b3c !important; /* Change border color to gold */
+  box-shadow: none !important; /* Remove any box-shadow */
+}
+
+/* Override highlighted card's blue border/box-shadow on hover - keep 2px border width, use outline for 1px gold */
+.compact-champion-card.manually-marked:not(.unavailable):hover .compact-champion-icon {
+  border: 2px solid transparent !important; /* Keep 2px width to maintain size, hide color */
+  box-shadow: none !important; /* Remove blue glow */
+  outline: 1px solid #c89b3c !important; /* 1px gold outline - doesn't affect box model */
+  outline-offset: -1.5px !important; /* Position outline at outer edge of 2px border space */
+}
+
+/* Override OP card's orange border on hover - keep 2px border width, use outline for 1px gold */
+.compact-champion-card.op-tier:not(.unavailable):hover .compact-champion-icon {
+  border: 2px solid transparent !important; /* Keep 2px width to maintain size, hide color */
+  outline: 1px solid #c89b3c !important; /* 1px gold outline - doesn't affect box model */
+  outline-offset: -1.5px !important; /* Position outline at outer edge of 2px border space */
+}
+
+/* Override highlighted card's blue border/box-shadow on hover (old champion-card class) - keep 2px border width, use outline for 1px gold */
+.champion-card.manually-marked:not(.unavailable):hover img.champion-icon {
+  border: 2px solid transparent !important; /* Keep 2px width to maintain size, hide color */
+  box-shadow: none !important; /* Remove blue glow */
+  outline: 1px solid #c89b3c !important; /* 1px gold outline - doesn't affect box model */
+  outline-offset: -1.5px !important; /* Position outline at outer edge of 2px border space */
+}
+
+/* Override OP card's orange border on hover (old champion-card class) - keep 1px border width */
+.champion-card.tier-OP:not(.unavailable):hover img.champion-icon {
+  border: 1px solid #c89b3c !important; /* Keep 1px width, change to gold */
+  box-shadow: none !important;
 }
 
 .champion-icon-wrapper::before,
@@ -692,8 +722,8 @@ div.champion-card:not(.unavailable):hover img.champion-icon,
 .pool-main-area {
   position: relative;
   width: 100%;
-  height: calc(100vh - 40px - 4.5rem); /* Full height minus navbar (40px) and margin */
-  margin-top: 2rem; /* Larger margin between navbar and content */
+  height: calc(100vh - 40px - 4rem); /* Full height minus navbar (40px) and margin */
+  margin-top: 1.5rem; /* Larger margin between navbar and content */
   overflow: visible; /* Allow icons to be visible outside */
   box-sizing: border-box;
   transition: margin-left 0.2s ease;

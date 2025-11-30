@@ -15,7 +15,6 @@
     <!-- Modals -->
     <WorkspaceModal />
     <WorkspaceSwitcher />
-    <WorkspaceSettings />
     <AuthModal v-model="isAuthModalOpen" />
     <SettingsModal />
     <ConfirmationModal />
@@ -35,7 +34,6 @@ import AppHeader from './AppHeader.vue'
 import RightSidePanel from './RightSidePanel.vue'
 import WorkspaceModal from '../workspace/WorkspaceModal.vue'
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.vue'
-import WorkspaceSettings from '../workspace/WorkspaceSettings.vue'
 import AuthModal from './AuthModal.vue'
 import SettingsModal from './SettingsModal.vue'
 import ConfirmationModal from './ConfirmationModal.vue'

@@ -84,14 +84,6 @@
           >
             Switch
           </button>
-          <button
-            v-if="authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous && !workspaceStore.isLocalWorkspace"
-            @click="openWorkspaceSettings"
-            class="text-gray-400 hover:text-white transition-colors text-sm"
-            title="Workspace Settings"
-          >
-            ⚙
-          </button>
         </div>
         
         <!-- Admin button -->
@@ -134,10 +126,6 @@ const adminStore = useAdminStore()
 const openWorkspaceSwitcher = () => {
   workspaceStore.isWorkspaceSwitcherOpen = true
   workspaceStore.loadRecentWorkspaces()
-}
-
-const openWorkspaceSettings = () => {
-  workspaceStore.openWorkspaceSettings()
 }
 
 const openAdminPanel = () => {

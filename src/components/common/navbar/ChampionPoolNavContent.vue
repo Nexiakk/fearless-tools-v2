@@ -89,19 +89,23 @@ const openMilestoneReview = () => {
 .navbar-action-button:first-child {
   background-color: #1e40af;
   border-color: #2563eb;
+  color: #60a5fa; /* Blue-ish text for Reset Highlighted */
 }
 
 .navbar-action-button:first-child:hover {
   background-color: #2563eb;
+  color: #93c5fd; /* Lighter blue on hover */
 }
 
 .navbar-action-button:nth-child(2) {
   background-color: #854d0e;
   border-color: #a16207;
+  color: #fbbf24; /* Orangish text for Reset Unavailable */
 }
 
 .navbar-action-button:nth-child(2):hover {
   background-color: #a16207;
+  color: #fcd34d; /* Lighter orange on hover */
 }
 
 .navbar-action-button:last-child {

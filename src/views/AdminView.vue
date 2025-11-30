@@ -53,6 +53,8 @@
               >
                 OP Tier Editor
               </button>
+              <!-- Migration tab hidden - no longer needed as data is in cloud, but kept for potential future use -->
+              <!--
               <button
                 @click="adminStore.activeTab = 'migration'"
                 class="px-4 py-3 font-medium transition-colors"
@@ -63,6 +65,7 @@
               >
                 Migration
               </button>
+              -->
               <button
                 @click="adminStore.activeTab = 'settings'"
                 class="px-4 py-3 font-medium transition-colors"
@@ -72,6 +75,16 @@
                 }"
               >
                 Settings
+              </button>
+              <button
+                @click="adminStore.activeTab = 'workspaceSettings'"
+                class="px-4 py-3 font-medium transition-colors"
+                :class="{
+                  'border-b-2 border-amber-500 text-amber-500': adminStore.activeTab === 'workspaceSettings',
+                  'text-gray-400 hover:text-white': adminStore.activeTab !== 'workspaceSettings'
+                }"
+              >
+                Workspace Settings
               </button>
             </div>
             
@@ -226,7 +239,8 @@
               </p>
             </div>
             
-            <!-- Migration Tab -->
+            <!-- Migration Tab - Hidden: No longer needed as data is in cloud, but kept for potential future use -->
+            <!--
             <div v-if="adminStore.activeTab === 'migration'" class="flex-1 overflow-auto p-6">
               <div class="max-w-2xl mx-auto space-y-6">
                 <div class="bg-gray-700 rounded-lg p-6">
@@ -248,6 +262,7 @@
                 </div>
               </div>
             </div>
+            -->
             
             <!-- Settings Tab -->
             <div v-if="adminStore.activeTab === 'settings'" class="flex-1 overflow-auto p-6">
@@ -288,35 +303,127 @@
                     </div>
                     
                     <div class="pt-4 border-t border-gray-600">
-                      <label class="block text-sm font-medium text-gray-300 mb-2">Scouting Settings</label>
-                      <div class="space-y-3">
-                        <label class="flex items-start gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            v-model="adminStore.globalSettings.useHeadlessBrowser"
-                            class="mt-1 w-4 h-4 text-amber-500 bg-gray-700 border-gray-600 rounded focus:ring-amber-500 focus:ring-2"
-                          />
-                          <div>
-                            <span class="text-white font-medium">Use Headless Browser for Scraping</span>
-                            <p class="text-sm text-gray-400 mt-1">
-                              Enable headless browser scraping (Browserless.io). Slower (5-10s) but more reliable. 
-                              Requires Browserless.io API key in Netlify environment variables.
-                            </p>
-                            <p class="text-xs text-amber-400 mt-2">
-                              <strong>Note:</strong> Make sure to set up Browserless.io API key in Netlify before enabling this.
-                            </p>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <div class="pt-4 border-t border-gray-600">
                       <button
                         @click="adminStore.saveGlobalSettings()"
                         :disabled="adminStore.isSavingSettings"
                         class="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <span v-if="!adminStore.isSavingSettings">Save Settings</span>
+                        <span v-else>Saving...</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Workspace Settings Tab -->
+            <div v-if="adminStore.activeTab === 'workspaceSettings'" class="flex-1 overflow-auto p-6">
+              <div class="max-w-2xl mx-auto space-y-6">
+                <!-- Create New Workspace Section -->
+                <div class="bg-gray-700 rounded-lg p-6">
+                  <h4 class="text-xl font-semibold text-white mb-4">Create New Workspace</h4>
+                  
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Workspace Name</label>
+                      <input
+                        type="text"
+                        v-model="newWorkspaceName"
+                        placeholder="Workspace name"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">
+                        The workspace ID will be generated from the name (alphanumeric characters and spaces only).
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                      <input
+                        type="password"
+                        v-model="newWorkspacePassword"
+                        placeholder="Enter password"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    
+                    <div v-if="newWorkspacePassword">
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
+                      <input
+                        type="password"
+                        v-model="newWorkspacePasswordConfirm"
+                        placeholder="Confirm password"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    
+                    <p v-if="createWorkspaceError" class="text-red-400 text-sm">{{ createWorkspaceError }}</p>
+                    <p v-if="createWorkspaceSuccess" class="text-green-400 text-sm">{{ createWorkspaceSuccess }}</p>
+                    
+                    <div class="pt-4 border-t border-gray-600">
+                      <button
+                        @click="handleCreateWorkspace"
+                        :disabled="isCreatingWorkspace || !newWorkspaceName || !newWorkspacePassword"
+                        class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span v-if="!isCreatingWorkspace">Create Workspace</span>
+                        <span v-else>Creating...</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Edit Current Workspace Section -->
+                <div class="bg-gray-700 rounded-lg p-6">
+                  <h4 class="text-xl font-semibold text-white mb-4">Edit Current Workspace</h4>
+                  
+                  <div v-if="!workspaceStore.currentWorkspaceId || workspaceStore.isLocalWorkspace" class="text-gray-400 text-sm mb-4">
+                    <p v-if="!workspaceStore.currentWorkspaceId">No workspace selected.</p>
+                    <p v-else>Workspace settings are only available for Firestore workspaces, not local workspaces.</p>
+                  </div>
+                  
+                  <div v-else class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Workspace Name</label>
+                      <input
+                        type="text"
+                        v-model="workspaceName"
+                        placeholder="Workspace name"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-300 mb-2">New Password (leave blank to keep current)</label>
+                      <input
+                        type="password"
+                        v-model="newPassword"
+                        placeholder="New password"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    
+                    <div v-if="newPassword">
+                      <label class="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
+                      <input
+                        type="password"
+                        v-model="confirmPassword"
+                        placeholder="Confirm password"
+                        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    
+                    <p v-if="workspaceSettingsError" class="text-red-400 text-sm">{{ workspaceSettingsError }}</p>
+                    <p v-if="workspaceSettingsSuccess" class="text-green-400 text-sm">{{ workspaceSettingsSuccess }}</p>
+                    
+                    <div class="pt-4 border-t border-gray-600">
+                      <button
+                        @click="handleSaveWorkspaceSettings"
+                        :disabled="isSavingWorkspaceSettings"
+                        class="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span v-if="!isSavingWorkspaceSettings">Save Settings</span>
                         <span v-else>Saving...</span>
                       </button>
                     </div>
@@ -432,16 +539,155 @@
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue'
+import { onMounted, watch, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
 import { useChampionsStore } from '@/stores/champions'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorkspace } from '@/composables/useWorkspace'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const adminStore = useAdminStore()
 const championsStore = useChampionsStore()
+const workspaceStore = useWorkspaceStore()
+const { updateWorkspaceSettings, createWorkspace } = useWorkspace()
 const router = useRouter()
+
+// Workspace settings state
+const workspaceName = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const workspaceSettingsError = ref('')
+const workspaceSettingsSuccess = ref('')
+const isSavingWorkspaceSettings = ref(false)
+
+// Create workspace state
+const newWorkspaceName = ref('')
+const newWorkspacePassword = ref('')
+const newWorkspacePasswordConfirm = ref('')
+const createWorkspaceError = ref('')
+const createWorkspaceSuccess = ref('')
+const isCreatingWorkspace = ref(false)
+
+// Watch for tab changes to reset workspace settings form
+watch(() => adminStore.activeTab, (tab) => {
+  if (tab === 'workspaceSettings') {
+    workspaceName.value = workspaceStore.currentWorkspaceName || ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    workspaceSettingsError.value = ''
+    workspaceSettingsSuccess.value = ''
+    // Reset create workspace form
+    newWorkspaceName.value = ''
+    newWorkspacePassword.value = ''
+    newWorkspacePasswordConfirm.value = ''
+    createWorkspaceError.value = ''
+    createWorkspaceSuccess.value = ''
+  }
+  if (tab === 'settings' && adminStore.isOpen) {
+    adminStore.loadGlobalSettings()
+  }
+})
+
+// Watch for workspace changes to update form
+watch(() => workspaceStore.currentWorkspaceName, (name) => {
+  if (adminStore.activeTab === 'workspaceSettings') {
+    workspaceName.value = name || ''
+  }
+})
+
+const handleSaveWorkspaceSettings = async () => {
+  workspaceSettingsError.value = ''
+  workspaceSettingsSuccess.value = ''
+  
+  if (newPassword.value && newPassword.value !== confirmPassword.value) {
+    workspaceSettingsError.value = 'Passwords do not match'
+    return
+  }
+  
+  isSavingWorkspaceSettings.value = true
+  
+  try {
+    const updates = {}
+    if (workspaceName.value && workspaceName.value.trim() !== '') {
+      updates.name = workspaceName.value.trim()
+    }
+    if (newPassword.value && newPassword.value.trim() !== '') {
+      updates.password = newPassword.value.trim()
+    }
+    
+    if (Object.keys(updates).length === 0) {
+      workspaceSettingsError.value = 'No changes to save'
+      isSavingWorkspaceSettings.value = false
+      return
+    }
+    
+    await updateWorkspaceSettings(updates)
+    workspaceSettingsSuccess.value = 'Settings saved successfully'
+    workspaceStore.currentWorkspaceName = workspaceName.value
+    
+    setTimeout(() => {
+      workspaceSettingsSuccess.value = ''
+    }, 3000)
+  } catch (err) {
+    workspaceSettingsError.value = err.message || 'Failed to save settings'
+  } finally {
+    isSavingWorkspaceSettings.value = false
+  }
+}
+
+const handleCreateWorkspace = async () => {
+  createWorkspaceError.value = ''
+  createWorkspaceSuccess.value = ''
+  
+  if (!newWorkspaceName.value || newWorkspaceName.value.trim() === '') {
+    createWorkspaceError.value = 'Workspace name is required'
+    return
+  }
+  
+  if (!newWorkspacePassword.value || newWorkspacePassword.value.trim() === '') {
+    createWorkspaceError.value = 'Password is required'
+    return
+  }
+  
+  if (newWorkspacePassword.value !== newWorkspacePasswordConfirm.value) {
+    createWorkspaceError.value = 'Passwords do not match'
+    return
+  }
+  
+  isCreatingWorkspace.value = true
+  
+  try {
+    const result = await createWorkspace(newWorkspaceName.value.trim(), newWorkspacePassword.value)
+    
+    if (result.success) {
+      createWorkspaceSuccess.value = `Workspace "${newWorkspaceName.value.trim()}" created successfully!`
+      // Clear form
+      newWorkspaceName.value = ''
+      newWorkspacePassword.value = ''
+      newWorkspacePasswordConfirm.value = ''
+      
+      // Optionally switch to the new workspace
+      if (result.workspaceId) {
+        setTimeout(async () => {
+          await workspaceStore.loadWorkspace(result.workspaceId)
+          createWorkspaceSuccess.value = `Workspace created and loaded successfully!`
+        }, 1000)
+      }
+      
+      setTimeout(() => {
+        createWorkspaceSuccess.value = ''
+      }, 5000)
+    } else {
+      createWorkspaceError.value = result.error || 'Failed to create workspace'
+    }
+  } catch (err) {
+    createWorkspaceError.value = err.message || 'Failed to create workspace'
+  } finally {
+    isCreatingWorkspace.value = false
+  }
+}
 
 // Open admin panel when route is /admin
 watch(() => router.currentRoute.value.path, (path) => {
@@ -460,16 +706,14 @@ onMounted(() => {
   }
 })
 
-// Load settings when admin panel opens or settings tab is selected
+// Load settings when admin panel opens
 watch(() => adminStore.isOpen, (isOpen) => {
   if (isOpen) {
     adminStore.loadGlobalSettings()
-  }
-})
-
-watch(() => adminStore.activeTab, (tab) => {
-  if (tab === 'settings' && adminStore.isOpen) {
-    adminStore.loadGlobalSettings()
+    // Initialize workspace settings form if on that tab
+    if (adminStore.activeTab === 'workspaceSettings') {
+      workspaceName.value = workspaceStore.currentWorkspaceName || ''
+    }
   }
 })
 </script>

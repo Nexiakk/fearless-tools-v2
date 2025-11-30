@@ -45,7 +45,7 @@
                   ? workspaceStore.currentWorkspaceId
                     ? 'Join a different workspace. You will switch to the new workspace.'
                     : 'You must join a workspace to use the site.'
-                  : 'Create a private workspace stored only on your device (localStorage).'
+                  : 'Create a private workspace stored only on your device.'
               }}
             </p>
 

@@ -99,6 +99,13 @@ service cloud.firestore {
         allow write: if isAdmin();
       }
       
+      match /scoutingSettings/{document=**} {
+        // Workspace members can read scouting settings (team names)
+        allow read: if isAuthenticated();
+        // Only admins can write scouting settings
+        allow write: if isAdmin();
+      }
+      
       // SERIES COLLECTION
       match /series/{seriesId} {
         // Workspace members can read series
