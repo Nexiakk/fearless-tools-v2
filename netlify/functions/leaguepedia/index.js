@@ -62,16 +62,24 @@ async function queryCargoAPI({ tables, fields, where, join_on, group_by, order_b
     timeout: 30000
   })
   
+  // Handle errors first (including rate limits)
+  if (response.data && response.data.error) {
+    const error = response.data.error
+    console.error(`[Leaguepedia] API error:`, error)
+    
+    // If rate limited, throw error so caller can handle it
+    if (error.code === 'ratelimited') {
+      throw new Error(`Rate limited: ${error.info || 'Please wait and try again'}`)
+    }
+    
+    // For other errors, return empty array
+    return []
+  }
+  
   // Parse Cargo API response
   // Format: { "cargoquery": [{ "title": { "field": "value" } }] }
   if (response.data && response.data.cargoquery && Array.isArray(response.data.cargoquery)) {
     return response.data.cargoquery.map(item => item.title || item)
-  }
-  
-  // Handle errors
-  if (response.data && response.data.error) {
-    console.error(`[Leaguepedia] API error:`, response.data.error)
-    return []
   }
   
   // Fallback: if response is already an array or different structure
@@ -207,11 +215,20 @@ exports.handler = async (event, context) => {
             if (results.length > 0) {
               console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
             } else {
+              // Check if rate limited before retrying
+              if (response.data?.error?.code === 'ratelimited') {
+                console.log(`[Leaguepedia] Rate limited, skipping retry`)
+                throw new Error(`Rate limited: ${response.data.error.info || 'Please wait and try again'}`)
+              }
+              
               console.log(`[Leaguepedia] Empty results with PR.OverviewPage, trying PR.AllName instead`)
               // Try alternative: use PR.AllName in WHERE clause
               queryParams.where = `PR.AllName = "${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC <= "${endDate}"`
               url = `${baseUrl}?${new URLSearchParams(queryParams).toString()}`
               console.log(`[Leaguepedia] Retry URL: ${url.substring(0, 200)}...`)
+              
+              // Add delay before retry to avoid rate limiting
+              await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
               
               response = await axios.get(url, {
                 headers: { 
@@ -233,6 +250,9 @@ exports.handler = async (event, context) => {
                 }
                 if (response.data?.error) {
                   console.log(`[Leaguepedia] Error:`, JSON.stringify(response.data.error))
+                  if (response.data.error.code === 'ratelimited') {
+                    throw new Error(`Rate limited: ${response.data.error.info || 'Please wait and try again'}`)
+                  }
                 }
               }
             }
@@ -326,6 +346,8 @@ exports.handler = async (event, context) => {
             // If join query returns no results, try direct query
             if (results.length === 0) {
               console.log(`[Leaguepedia] Join query returned no results, trying direct query`)
+              // Add delay before retry to avoid rate limiting
+              await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
               results = await queryCargoAPI({
                 tables: 'Players',
                 fields: ['Players.ID', 'Players.Name', 'Players.Team', 'Players.Role', 'Players.Country', 'Players.Birthdate', 'Players.Residency'],
@@ -401,6 +423,8 @@ exports.handler = async (event, context) => {
             // If no results, try with PlayerRedirects join
             if (results.length === 0) {
               console.log(`[Leaguepedia] No results with Link field, trying PlayerRedirects join`)
+              // Add delay before retry to avoid rate limiting
+              await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
               results = await queryCargoAPI({
                 tables: 'ScoreboardGames=SG,ScoreboardPlayers=SP,PlayerRedirects=PR',
                 fields: [

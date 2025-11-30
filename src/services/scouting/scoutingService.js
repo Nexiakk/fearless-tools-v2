@@ -99,11 +99,16 @@ export const scoutingService = {
         console.log('[ScoutingService] Fetching Leaguepedia data for player:', playerName)
         console.log('[ScoutingService] Using leaguepediaUrl:', player.leaguepediaUrl || 'none')
         
+        // Add delays between API calls to avoid rate limiting (1 second between each)
         const championPool = await leaguepediaService.getPlayerChampionPool(playerName)
         console.log('[ScoutingService] Leaguepedia champion pool:', championPool)
         
+        await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay
+        
         const playerInfo = await leaguepediaService.getPlayerInfo(playerName)
         console.log('[ScoutingService] Leaguepedia player info:', playerInfo)
+        
+        await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay
         
         const recentMatches = await leaguepediaService.getRecentMatches(playerName, 20)
         console.log('[ScoutingService] Leaguepedia recent matches:', recentMatches)
