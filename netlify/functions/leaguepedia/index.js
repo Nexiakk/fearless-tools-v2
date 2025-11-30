@@ -161,7 +161,8 @@ exports.handler = async (event, context) => {
           
           // Use server-side aggregation with PlayerRedirects for name resolution
           // This matches the implementation guide exactly - field names have spaces
-          const queryParams = {
+          // Try with PR.OverviewPage first (matches wiki page name)
+          let queryParams = {
             action: 'cargoquery',
             format: 'json',
             tables: 'ScoreboardPlayers=SP,ScoreboardGames=SG,PlayerRedirects=PR',
@@ -173,16 +174,18 @@ exports.handler = async (event, context) => {
             limit: 500
           }
           
+          console.log(`[Leaguepedia] First attempt: Using PR.OverviewPage = "${playerName1}"`)
+          
           // Note: Field names with spaces are returned as-is by Cargo API
           // Access using bracket notation: match['Total kills']
           
           // Build URL with encoded params
           const baseUrl = 'https://lol.fandom.com/api.php'
-          const url = `${baseUrl}?${new URLSearchParams(queryParams).toString()}`
+          let url = `${baseUrl}?${new URLSearchParams(queryParams).toString()}`
           
           console.log(`[Leaguepedia] Query URL: ${url.substring(0, 200)}...`)
           
-          const response = await axios.get(url, {
+          let response = await axios.get(url, {
             headers: { 
               'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)',
               'Accept': 'application/json'
@@ -193,15 +196,49 @@ exports.handler = async (event, context) => {
           console.log(`[Leaguepedia] Response status: ${response.status}`)
           
           // Parse Cargo API response
+          console.log(`[Leaguepedia] Response data keys:`, response.data ? Object.keys(response.data) : 'no data')
+          console.log(`[Leaguepedia] Response cargoquery exists:`, response.data?.cargoquery ? 'yes' : 'no')
+          console.log(`[Leaguepedia] Response cargoquery type:`, Array.isArray(response.data?.cargoquery) ? 'array' : typeof response.data?.cargoquery)
+          
           if (response.data && response.data.cargoquery && Array.isArray(response.data.cargoquery)) {
             results = response.data.cargoquery.map(item => item.title || item)
             console.log(`[Leaguepedia] Query successful, got ${results.length} champions`)
             
             if (results.length > 0) {
               console.log(`[Leaguepedia] First result sample:`, JSON.stringify(results[0]).substring(0, 300))
+            } else {
+              console.log(`[Leaguepedia] Empty results with PR.OverviewPage, trying PR.AllName instead`)
+              // Try alternative: use PR.AllName in WHERE clause
+              queryParams.where = `PR.AllName = "${playerName1}" AND SG.DateTime_UTC >= "${startDate}" AND SG.DateTime_UTC <= "${endDate}"`
+              url = `${baseUrl}?${new URLSearchParams(queryParams).toString()}`
+              console.log(`[Leaguepedia] Retry URL: ${url.substring(0, 200)}...`)
+              
+              response = await axios.get(url, {
+                headers: { 
+                  'User-Agent': 'Mozilla/5.0 (compatible; LeaguepediaBot/1.0)',
+                  'Accept': 'application/json'
+                },
+                timeout: 30000
+              })
+              
+              if (response.data && response.data.cargoquery && Array.isArray(response.data.cargoquery)) {
+                results = response.data.cargoquery.map(item => item.title || item)
+                console.log(`[Leaguepedia] Retry successful, got ${results.length} champions`)
+              }
+              
+              if (results.length === 0) {
+                console.log(`[Leaguepedia] Still empty - checking if response has error or warnings`)
+                if (response.data?.warnings) {
+                  console.log(`[Leaguepedia] Warnings:`, JSON.stringify(response.data.warnings))
+                }
+                if (response.data?.error) {
+                  console.log(`[Leaguepedia] Error:`, JSON.stringify(response.data.error))
+                }
+              }
             }
           } else {
             console.log(`[Leaguepedia] No data found in response`)
+            console.log(`[Leaguepedia] Full response structure:`, JSON.stringify(response.data).substring(0, 1000))
             results = []
           }
         } catch (error) {
