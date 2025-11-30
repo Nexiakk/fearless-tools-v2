@@ -14,6 +14,7 @@ function normalizeChampionName(name) {
     // Common variations
     'MonkeyKing': 'Wukong',
     'DrMundo': 'Dr. Mundo',
+    'Dr Mundo': 'Dr. Mundo', // op.gg sometimes returns with space but no period
     'JarvanIV': 'Jarvan IV',
     'MasterYi': 'Master Yi',
     'MissFortune': 'Miss Fortune',
@@ -25,9 +26,7 @@ function normalizeChampionName(name) {
     'RekSai': 'Rek\'Sai',
     // Names with apostrophes (preserve them)
     'KSante': 'K\'Sante',
-    'KSante': 'K\'Sante', // In case it was already stripped
     'BelVeth': 'Bel\'Veth',
-    'BelVeth': 'Bel\'Veth', // In case it was already stripped
   }
   
   // Check exact match first

@@ -78,12 +78,22 @@ export const scoutingService = {
         let playerName = null
         if (player.leaguepediaUrl) {
           // Extract from URL like: https://lol.fandom.com/wiki/PlayerName
+          // Handle both encoded and unencoded URLs
           const match = player.leaguepediaUrl.match(/wiki\/([^/?]+)/)
           if (match) {
+            // Decode URL-encoded characters (e.g., %20 -> space, %27 -> apostrophe)
+            // Use the exact name from URL first (Leaguepedia OverviewPage matches wiki page name exactly)
             playerName = decodeURIComponent(match[1])
+            console.log('[ScoutingService] Extracted player name from Leaguepedia URL (exact):', playerName)
+            // Note: We use the name as-is from the URL because PR.OverviewPage matches the wiki page name exactly
+            // If it doesn't work, the API will try PR.AllName as fallback
           }
         }
-        playerName = playerName || this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
+        // Only fallback to other sources if URL extraction failed
+        if (!playerName) {
+          playerName = this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
+          console.log('[ScoutingService] Using fallback player name:', playerName)
+        }
         console.log('[ScoutingService] Fetching Leaguepedia data for player:', playerName)
         console.log('[ScoutingService] Using leaguepediaUrl:', player.leaguepediaUrl || 'none')
         

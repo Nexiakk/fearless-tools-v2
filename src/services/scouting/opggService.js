@@ -89,23 +89,34 @@ export const opggService = {
       
       // Try new format with optional language code
       // Pattern: op.gg/(optional language)/lol/summoners/(region)/(playerName-tag)
-      const newFormatMatch = url.match(/op\.gg\/(?:[^/]+\/)?lol\/summoners\/([^/]+)\/([^/?]+)/)
+      const newFormatMatch = url.match(/op\.gg\/(?:([^/]+)\/)?lol\/summoners\/([^/]+)\/([^/?]+)/)
       if (newFormatMatch) {
-        const fullName = decodeURIComponent(newFormatMatch[2])
+        const languageCode = newFormatMatch[1] // e.g., 'pl', 'de', 'en', or undefined
+        const region = newFormatMatch[2]
+        const fullName = decodeURIComponent(newFormatMatch[3])
         // Check if it has a tag (format: "playerName-tag")
         const nameParts = fullName.split('-')
         const playerName = nameParts.slice(0, -1).join('-') // Everything except last part
         const tag = nameParts.length > 1 ? nameParts[nameParts.length - 1] : null
         
-        // Build champions URL with queue_type=SOLORANKED to only get solo queue data
-        let championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Build champions URL - normalize to /en/ localization for consistency
+        // Replace any language code with 'en', or add /en/ if no language code exists
+        let baseUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Remove existing language code and replace with /en/
+        baseUrl = baseUrl.replace(/op\.gg\/[^/]+\/lol/, 'op.gg/en/lol')
+        // If no language code was present, add /en/
+        if (!baseUrl.includes('/en/lol') && !baseUrl.includes('/pl/lol') && !baseUrl.includes('/de/lol')) {
+          baseUrl = baseUrl.replace(/op\.gg\/lol/, 'op.gg/en/lol')
+        }
+        
+        let championsUrl = baseUrl
         // Add query parameter if not already present
         if (!championsUrl.includes('queue_type=')) {
           championsUrl += championsUrl.includes('?') ? '&queue_type=SOLORANKED' : '?queue_type=SOLORANKED'
         }
         
         return {
-          region: newFormatMatch[1],
+          region: region,
           playerName: playerName,
           tag: tag,
           fullUrl: championsUrl
@@ -116,8 +127,17 @@ export const opggService = {
       const oldFormatMatch = url.match(/op\.gg\/summoners\/([^/]+)\/([^/?]+)/)
       if (oldFormatMatch) {
         const playerName = decodeURIComponent(oldFormatMatch[2])
-        // Build champions URL with queue_type=SOLORANKED to only get solo queue data
-        let championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Build champions URL - normalize to /en/ localization
+        let baseUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Add /en/ localization if not present
+        if (!baseUrl.includes('/en/') && !baseUrl.includes('/pl/') && !baseUrl.includes('/de/')) {
+          baseUrl = baseUrl.replace(/op\.gg\//, 'op.gg/en/')
+        } else {
+          // Replace any existing localization with /en/
+          baseUrl = baseUrl.replace(/op\.gg\/[^/]+\//, 'op.gg/en/')
+        }
+        
+        let championsUrl = baseUrl
         // Add query parameter if not already present
         if (!championsUrl.includes('queue_type=')) {
           championsUrl += championsUrl.includes('?') ? '&queue_type=SOLORANKED' : '?queue_type=SOLORANKED'
