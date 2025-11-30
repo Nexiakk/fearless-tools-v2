@@ -86,9 +86,18 @@ export const scoutingService = {
       
       // 2. Try to get Pro play data from Leaguepedia API (ENABLED for testing)
       try {
-        // Extract player name from op.gg URL or use player name
-        const playerName = this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
+        // Extract player name from leaguepediaUrl if available, otherwise from op.gg URL or use player name
+        let playerName = null
+        if (player.leaguepediaUrl) {
+          // Extract from URL like: https://lol.fandom.com/wiki/PlayerName
+          const match = player.leaguepediaUrl.match(/wiki\/([^/?]+)/)
+          if (match) {
+            playerName = decodeURIComponent(match[1])
+          }
+        }
+        playerName = playerName || this.extractPlayerNameFromOpgg(player.opggUrl) || player.name
         console.log('[ScoutingService] Fetching Leaguepedia data for player:', playerName)
+        console.log('[ScoutingService] Using leaguepediaUrl:', player.leaguepediaUrl || 'none')
         
         const championPool = await leaguepediaService.getPlayerChampionPool(playerName)
         console.log('[ScoutingService] Leaguepedia champion pool:', championPool)

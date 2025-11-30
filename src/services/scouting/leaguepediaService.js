@@ -51,9 +51,19 @@ export const leaguepediaService = {
 
       const result = await response.json()
       console.log('[Leaguepedia] Success, received data:', result)
+      console.log('[Leaguepedia] Result type:', typeof result)
+      console.log('[Leaguepedia] Result.success:', result.success)
+      console.log('[Leaguepedia] Result.data:', result.data)
+      console.log('[Leaguepedia] Result.data type:', typeof result.data)
+      console.log('[Leaguepedia] Result.data isArray:', Array.isArray(result.data))
+      
       if (result.success && Array.isArray(result.data)) {
+        console.log('[Leaguepedia] Returning data array with length:', result.data.length)
         return result.data
       }
+      
+      console.warn('[Leaguepedia] Invalid response format, returning empty array')
+      console.warn('[Leaguepedia] Full result:', JSON.stringify(result, null, 2))
       return []
     } catch (error) {
       console.error('Leaguepedia API error (getPlayerChampionPool):', error)
