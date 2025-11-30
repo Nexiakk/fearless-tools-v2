@@ -242,9 +242,11 @@ exports.handler = async (event, context) => {
             const assists = champ.kda.assists || champ.kda.a || 0
             
             // Calculate ratio from kills/deaths/assists
+            // Round down to 2 decimal places to match op.gg's display
             let ratio = 0
             if (deaths > 0) {
-              ratio = (kills + assists) / deaths
+              const calculatedRatio = (kills + assists) / deaths
+              ratio = Math.floor(calculatedRatio * 100) / 100
             } else if (kills + assists > 0) {
               ratio = kills + assists // Perfect KDA
             }
@@ -256,9 +258,11 @@ exports.handler = async (event, context) => {
               ratio
             }
             
-            // Store op.gg ratio if available
+            // Store op.gg ratio if available (also floor it)
             if (champ.kda.ratio !== undefined) {
-              kda.opggRatio = champ.kda.ratio
+              kda.opggRatio = Math.floor(champ.kda.ratio * 100) / 100
+              // Use op.gg's ratio if available
+              kda.ratio = kda.opggRatio
             }
           }
           
@@ -618,14 +622,19 @@ exports.handler = async (event, context) => {
               }
               
               // Use op.gg's ratio if available (it's more accurate due to their internal precision)
+              // Round down to 2 decimal places to match op.gg's display (e.g., 2.137 -> 2.13)
               // Only calculate if ratio is not provided
               if (ratioMatch) {
-                kda.ratio = parseFloat(ratioMatch[1])
-                console.log(`[DEBUG] Using op.gg ratio: ${kda.ratio}`)
+                const rawRatio = parseFloat(ratioMatch[1])
+                // Round down to 2 decimal places: Math.floor(value * 100) / 100
+                kda.ratio = Math.floor(rawRatio * 100) / 100
+                console.log(`[DEBUG] Using op.gg ratio: ${rawRatio} -> ${kda.ratio} (floored to 2 decimals)`)
               } else {
                 // Calculate ratio from kills/deaths/assists if op.gg ratio not available
+                // Also round down to 2 decimal places for consistency
                 if (kda.deaths > 0) {
-                  kda.ratio = (kda.kills + kda.assists) / kda.deaths
+                  const calculatedRatio = (kda.kills + kda.assists) / kda.deaths
+                  kda.ratio = Math.floor(calculatedRatio * 100) / 100
                 } else if (kda.kills + kda.assists > 0) {
                   kda.ratio = kda.kills + kda.assists // Perfect KDA (no deaths)
                 } else {

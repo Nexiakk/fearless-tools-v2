@@ -97,8 +97,12 @@ export const opggService = {
         const playerName = nameParts.slice(0, -1).join('-') // Everything except last part
         const tag = nameParts.length > 1 ? nameParts[nameParts.length - 1] : null
         
-        // Build champions URL
-        const championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Build champions URL with queue_type=SOLORANKED to only get solo queue data
+        let championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Add query parameter if not already present
+        if (!championsUrl.includes('queue_type=')) {
+          championsUrl += championsUrl.includes('?') ? '&queue_type=SOLORANKED' : '?queue_type=SOLORANKED'
+        }
         
         return {
           region: newFormatMatch[1],
@@ -112,7 +116,12 @@ export const opggService = {
       const oldFormatMatch = url.match(/op\.gg\/summoners\/([^/]+)\/([^/?]+)/)
       if (oldFormatMatch) {
         const playerName = decodeURIComponent(oldFormatMatch[2])
-        const championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Build champions URL with queue_type=SOLORANKED to only get solo queue data
+        let championsUrl = url.includes('/champions') ? url : `${url.replace(/\/$/, '')}/champions`
+        // Add query parameter if not already present
+        if (!championsUrl.includes('queue_type=')) {
+          championsUrl += championsUrl.includes('?') ? '&queue_type=SOLORANKED' : '?queue_type=SOLORANKED'
+        }
         
         return {
           region: oldFormatMatch[1],
