@@ -12,9 +12,15 @@
       </Transition>
     </Teleport>
 
-    <div v-if="workspaceStore.hasWorkspace" class="h-screen overflow-hidden flex flex-col">
+    <div v-if="workspaceStore.hasWorkspace" class="scouting-view-container">
+      <!-- Expanded Navigation (only visible on Scouting page) -->
+      <ScoutingNavContent 
+        :current-view="currentView"
+        @view-change="handleViewChange"
+      />
+
       <!-- Error message -->
-      <div v-if="scoutingStore.error" class="flex-shrink-0 p-4 bg-red-900/50 border-b border-red-700 text-red-200">
+      <div v-if="scoutingStore.error" class="scouting-error-message">
         {{ scoutingStore.error }}
         <button @click="scoutingStore.clearError()" class="ml-4 text-red-300 hover:text-red-100">
           ×
@@ -22,16 +28,21 @@
       </div>
 
       <!-- Main content -->
-      <div v-if="!scoutingStore.isLoading" class="flex-1 relative overflow-hidden">
-        <!-- Top Right: Player List Container -->
-        <div class="absolute top-4 right-4 w-64 z-10">
-          <PlayerListContainer @open-management="showManagementModal = true" />
-        </div>
+      <div v-if="!scoutingStore.isLoading" class="scouting-content-area">
+        <Transition name="view-fade" mode="out-in">
+          <!-- Summary View -->
+          <div v-if="currentView === 'summary'" key="summary" class="h-full w-full">
+            <!-- Player Cards Grid (expanded vertically) -->
+            <div class="absolute top-4 left-4 right-4 bottom-4">
+              <PlayerCardsGrid />
+            </div>
+          </div>
 
-        <!-- Player Cards Grid (starts where PlayerListContainer ends vertically, extends to right edge) -->
-        <div class="absolute top-[140px] left-4 right-4 bottom-4">
-          <PlayerCardsGrid />
-        </div>
+          <!-- Manage Players View -->
+          <div v-else-if="currentView === 'manage-players'" key="manage-players" class="h-full w-full">
+            <ManagePlayersView />
+          </div>
+        </Transition>
       </div>
     </div>
 
@@ -43,16 +54,6 @@
         @close="scoutingStore.setSelectedPlayer(null)"
       />
     </Teleport>
-
-    <!-- Player Management Modal -->
-    <PlayerManagementModal
-      :is-open="showManagementModal"
-      @close="showManagementModal = false"
-      @player-added="handlePlayerAdded"
-      @player-updated="handlePlayerUpdated"
-      @player-deleted="handlePlayerDeleted"
-      @team-name-updated="handleTeamNameUpdated"
-    />
   </div>
 </template>
 
@@ -63,9 +64,9 @@ import { useScoutingStore } from '@/stores/scouting'
 import { useAuthStore } from '@/stores/auth'
 import { scoutingService } from '@/services/scouting/scoutingService'
 import PlayerDetailModal from '@/components/scouting/PlayerDetailModal.vue'
-import PlayerListContainer from '@/components/scouting/PlayerListContainer.vue'
 import PlayerCardsGrid from '@/components/scouting/PlayerCardsGrid.vue'
-import PlayerManagementModal from '@/components/scouting/PlayerManagementModal.vue'
+import ManagePlayersView from '@/components/scouting/ManagePlayersView.vue'
+import ScoutingNavContent from '@/components/common/navbar/ScoutingNavContent.vue'
 import { useRoute } from 'vue-router'
 
 const workspaceStore = useWorkspaceStore()
@@ -73,12 +74,24 @@ const scoutingStore = useScoutingStore()
 const authStore = useAuthStore()
 const route = useRoute()
 
-const showManagementModal = ref(false)
+const currentView = ref('summary') // 'summary' | 'manage-players'
+
+const handleViewChange = (view) => {
+  currentView.value = view
+}
 
 onMounted(async () => {
   if (workspaceStore.hasWorkspace) {
-    await scoutingStore.loadPlayers()
-    await scoutingStore.loadTeamNames()
+    try {
+      await scoutingStore.loadTeams()
+      await scoutingStore.loadPlayers()
+      // Legacy: load team names for backward compatibility
+      await scoutingStore.loadTeamNames()
+    } catch (error) {
+      console.error('Error loading scouting data:', error)
+      // Ensure loading state is cleared even if there's an error
+      scoutingStore.resetLoadingState()
+    }
   }
 })
 
@@ -94,37 +107,6 @@ onBeforeUnmount(() => {
   scoutingStore.resetLoadingState()
 })
 
-const scoutAllPlayers = async () => {
-  try {
-    await scoutingService.scoutAllPlayers({ delay: 2000 })
-    // Reload all scouting data
-    for (const player of scoutingStore.players) {
-      try {
-        await scoutingStore.loadScoutingData(player.id)
-      } catch (error) {
-        console.error(`Error loading data for ${player.name}:`, error)
-      }
-    }
-  } catch (error) {
-    console.error('Error scouting all players:', error)
-  }
-}
-
-const handlePlayerAdded = () => {
-  // Player was added, modal will handle closing
-}
-
-const handlePlayerUpdated = () => {
-  // Player was updated
-}
-
-const handlePlayerDeleted = () => {
-  // Player was deleted
-}
-
-const handleTeamNameUpdated = () => {
-  // Team name was updated
-}
 </script>
 
 <style scoped>
@@ -133,6 +115,52 @@ const handleTeamNameUpdated = () => {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* View transition - optimized with GPU acceleration */
+.view-fade-enter-active {
+  transition: opacity 0.25s ease-out;
+}
+
+.view-fade-leave-active {
+  transition: opacity 0.2s ease-in;
+}
+
+.view-fade-enter-from,
+.view-fade-leave-to {
+  opacity: 0;
+}
+
+/* Scouting view container - accounts for fixed navbar (40px) + expanded nav (40px) */
+.scouting-view-container {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-top: 80px; /* Navbar (40px) + Expanded nav (40px) */
+}
+
+/* Error message positioning */
+.scouting-error-message {
+  position: fixed;
+  top: 80px; /* Below navbar + expanded nav */
+  left: 0;
+  right: 0;
+  flex-shrink: 0;
+  padding: 1rem;
+  background-color: rgba(127, 29, 29, 0.5);
+  border-bottom: 1px solid #b91c1c;
+  color: #fecaca;
+  z-index: 98;
+}
+
+/* Content area - takes remaining space */
+.scouting-content-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
 }
 </style>
 

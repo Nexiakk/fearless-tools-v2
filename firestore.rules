@@ -106,6 +106,13 @@ service cloud.firestore {
         allow write: if isAdmin();
       }
       
+      match /scoutingTeams/{teamId} {
+        // Workspace members can read teams
+        allow read: if isAuthenticated();
+        // Only admins can write teams
+        allow write: if isAdmin();
+      }
+      
       // SERIES COLLECTION
       match /series/{seriesId} {
         // Workspace members can read series

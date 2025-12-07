@@ -8,13 +8,17 @@ import { useAuthStore } from './auth'
 export const useScoutingStore = defineStore('scouting', () => {
   // State
   const players = ref([])
+  const teams = ref([]) // Array of team objects: { id, name, createdAt, updatedAt }
   const scoutingData = ref({}) // playerId -> ScoutingData
   const isLoading = ref(false)
   const isScouting = ref(false) // Currently scraping/fetching data
   const selectedPlayer = ref(null)
+  const selectedTeamId = ref(null) // Currently selected team ID
   const error = ref('')
+  const isLoadingTeams = ref(false) // Prevent concurrent team loads
+  const teamsLoadedForWorkspace = ref(null) // Track which workspace teams were loaded for
   
-  // Team names
+  // Legacy team names (for backward compatibility during migration)
   const ownTeamName = ref('Your Team')
   const enemyTeamName = ref('Enemy Team')
   
@@ -66,48 +70,25 @@ export const useScoutingStore = defineStore('scouting', () => {
     return Array.from(champions)
   })
   
-  // Players organized by team and role
-  const playersByTeamAndRole = computed(() => {
+  // Team completeness (for selected team)
+  const teamCompleteness = computed(() => {
     const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
-    const result = {
-      own: {},
-      enemy: {}
+    if (!selectedTeamId.value) {
+      return { complete: false, missingRoles: roles }
     }
     
+    const missingRoles = []
     roles.forEach(role => {
-      result.own[role] = null
-      result.enemy[role] = null
-    })
-    
-    players.value.forEach(player => {
-      if (player.role && (player.team === 'own' || player.team === 'enemy')) {
-        if (roles.includes(player.role)) {
-          result[player.team][player.role] = player
-        }
+      const player = players.value.find(p => p.teamId === selectedTeamId.value && p.role === role)
+      if (!player) {
+        missingRoles.push(role)
       }
     })
     
-    return result
-  })
-  
-  // Team completeness
-  const teamCompleteness = computed(() => {
-    const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
-    const result = {
-      own: { complete: false, missingRoles: [] },
-      enemy: { complete: false, missingRoles: [] }
+    return {
+      complete: missingRoles.length === 0,
+      missingRoles
     }
-    
-    ;['own', 'enemy'].forEach(team => {
-      roles.forEach(role => {
-        if (!playersByTeamAndRole.value[team][role]) {
-          result[team].missingRoles.push(role)
-        }
-      })
-      result[team].complete = result[team].missingRoles.length === 0
-    })
-    
-    return result
   })
   
   // Helper to get workspace scouting collection reference
@@ -119,7 +100,9 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error('No workspace selected')
     }
     // Use direct collection path like drafts: workspaces/{workspaceId}/scoutingPlayers
-    const collectionName = subcollection === 'players' ? 'scoutingPlayers' : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
+    const collectionName = subcollection === 'players' ? 'scoutingPlayers' 
+      : subcollection === 'teams' ? 'scoutingTeams'
+      : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
     return collection(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName)
   }
   
@@ -129,7 +112,9 @@ export const useScoutingStore = defineStore('scouting', () => {
     if (!workspaceStore.currentWorkspaceId) {
       throw new Error('No workspace selected')
     }
-    const collectionName = subcollection === 'players' ? 'scoutingPlayers' : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
+    const collectionName = subcollection === 'players' ? 'scoutingPlayers'
+      : subcollection === 'teams' ? 'scoutingTeams'
+      : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
     return doc(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName, docId)
   }
   
@@ -142,47 +127,150 @@ export const useScoutingStore = defineStore('scouting', () => {
     return doc(db, 'workspaces', workspaceStore.currentWorkspaceId, 'scoutingSettings', 'teamNames')
   }
   
-  // Validation helpers
-  function getPlayerByTeamAndRole(team, role) {
-    return playersByTeamAndRole.value[team]?.[role] || null
-  }
+  // Team-related getters
+  const selectedTeam = computed(() => {
+    if (!selectedTeamId.value) return null
+    return teams.value.find(t => t.id === selectedTeamId.value) || null
+  })
   
-  function isRoleTaken(team, role) {
-    return getPlayerByTeamAndRole(team, role) !== null
-  }
+  const selectedTeamPlayers = computed(() => {
+    if (!selectedTeamId.value) return []
+    return players.value.filter(p => p.teamId === selectedTeamId.value)
+  })
   
-  function getAvailableRoles(team) {
+  // Players organized by team and role (for selected team)
+  const playersByTeamAndRole = computed(() => {
     const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
-    return roles.filter(role => !isRoleTaken(team, role))
+    const result = {}
+    
+    if (!selectedTeamId.value) return result
+    
+    roles.forEach(role => {
+      result[role] = null
+    })
+    
+    players.value.forEach(player => {
+      if (player.role && player.teamId === selectedTeamId.value) {
+        if (roles.includes(player.role)) {
+          result[player.role] = player
+        }
+      }
+    })
+    
+    return result
+  })
+  
+  // Legacy support: getPlayerByTeamAndRole for backward compatibility
+  // Now works with selectedTeamId
+  function getPlayerByTeamAndRole(teamOrRole, roleOrNull) {
+    // If called with (team, role) - legacy format
+    if (roleOrNull && (teamOrRole === 'own' || teamOrRole === 'enemy')) {
+      // Legacy support: try to find team by name
+      const teamName = teamOrRole === 'own' ? ownTeamName.value : enemyTeamName.value
+      const team = teams.value.find(t => t.name === teamName)
+      if (team) {
+        return players.value.find(p => p.teamId === team.id && p.role === roleOrNull) || null
+      }
+      return null
+    }
+    // If called with just role (new format)
+    const role = teamOrRole
+    return playersByTeamAndRole.value[role] || null
+  }
+  
+  function isRoleTaken(teamId, role) {
+    return players.value.some(p => p.teamId === teamId && p.role === role)
+  }
+  
+  function getAvailableRoles(teamId) {
+    const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+    return roles.filter(role => !isRoleTaken(teamId, role))
   }
   
   function canAddPlayer(playerData) {
     // Check required fields
-    if (!playerData.name || !playerData.opggUrl || !playerData.team) {
+    if (!playerData.name || !playerData.opggUrl || !playerData.teamId) {
       return { valid: false, error: 'Name, op.gg URL, and team are required' }
     }
     
+    // Check team exists
+    const team = teams.value.find(t => t.id === playerData.teamId)
+    if (!team) {
+      return { valid: false, error: 'Team not found' }
+    }
+    
     // Check team limit (max 5 per team)
-    const teamPlayers = players.value.filter(p => p.team === playerData.team)
+    const teamPlayers = players.value.filter(p => p.teamId === playerData.teamId)
     if (teamPlayers.length >= 5) {
       return { valid: false, error: `Team already has 5 players (max allowed)` }
     }
     
     // Check role uniqueness per team
-    if (playerData.role && isRoleTaken(playerData.team, playerData.role)) {
-      const existingPlayer = getPlayerByTeamAndRole(playerData.team, playerData.role)
+    if (playerData.role && isRoleTaken(playerData.teamId, playerData.role)) {
+      const existingPlayer = players.value.find(p => p.teamId === playerData.teamId && p.role === playerData.role)
       return { valid: false, error: `Role ${playerData.role} is already taken by ${existingPlayer?.name || 'another player'}` }
-    }
-    
-    // Check total limit (max 10 players)
-    if (players.value.length >= 10) {
-      return { valid: false, error: 'Maximum of 10 players allowed (5 per team)' }
     }
     
     return { valid: true }
   }
   
   // Actions
+  async function loadTeams() {
+    // Prevent concurrent calls
+    if (isLoadingTeams.value) {
+      return
+    }
+    
+    // Check if we've already loaded teams for the current workspace
+    const workspaceStore = useWorkspaceStore()
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    
+    if (!currentWorkspaceId) {
+      return // No workspace selected
+    }
+    
+    // If teams are already loaded for this workspace, skip reloading
+    // This prevents infinite loops when components remount
+    if (teamsLoadedForWorkspace.value === currentWorkspaceId) {
+      return
+    }
+    
+    isLoadingTeams.value = true
+    isLoading.value = true
+    error.value = ''
+    try {
+      const teamsRef = getScoutingCollection('teams')
+      const snapshot = await getDocs(teamsRef)
+      
+      teams.value = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).sort((a, b) => {
+        // Sort by createdAt (newest first) or name
+        if (a.createdAt && b.createdAt) {
+          return b.createdAt.toMillis() - a.createdAt.toMillis()
+        }
+        return (a.name || '').localeCompare(b.name || '')
+      })
+      
+      // Mark teams as loaded for this workspace
+      teamsLoadedForWorkspace.value = currentWorkspaceId
+      
+      // Auto-select first team if none selected
+      if (!selectedTeamId.value && teams.value.length > 0) {
+        selectedTeamId.value = teams.value[0].id
+      }
+    } catch (err) {
+      console.error('Error loading teams:', err)
+      error.value = 'Failed to load teams'
+      // Don't throw - just log the error to prevent infinite loops
+      // The component can check error.value to display a message
+    } finally {
+      isLoading.value = false
+      isLoadingTeams.value = false
+    }
+  }
+  
   async function loadPlayers() {
     isLoading.value = true
     error.value = ''
@@ -197,10 +285,131 @@ export const useScoutingStore = defineStore('scouting', () => {
     } catch (err) {
       console.error('Error loading players:', err)
       error.value = 'Failed to load players'
+      // Don't throw - just log the error to prevent blocking UI
+      // The component can check error.value to display a message
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  async function addTeam(teamData) {
+    const authStore = useAuthStore()
+    if (!authStore.isAdmin) {
+      throw new Error('Admin access required')
+    }
+    
+    if (!teamData.name || teamData.name.trim() === '') {
+      throw new Error('Team name is required')
+    }
+    
+    isLoading.value = true
+    error.value = ''
+    try {
+      const teamsRef = getScoutingCollection('teams')
+      const newTeam = {
+        name: teamData.name.trim(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: authStore.user?.uid || 'unknown'
+      }
+      
+      const docRef = await addDoc(teamsRef, newTeam)
+      
+      teams.value.push({
+        id: docRef.id,
+        ...newTeam
+      })
+      
+      // Auto-select newly created team
+      selectedTeamId.value = docRef.id
+      
+      return docRef.id
+    } catch (err) {
+      console.error('Error adding team:', err)
+      error.value = err.message || 'Failed to add team'
       throw err
     } finally {
       isLoading.value = false
     }
+  }
+  
+  async function updateTeam(teamId, updates) {
+    const authStore = useAuthStore()
+    if (!authStore.isAdmin) {
+      throw new Error('Admin access required')
+    }
+    
+    const currentTeam = teams.value.find(t => t.id === teamId)
+    if (!currentTeam) {
+      throw new Error('Team not found')
+    }
+    
+    if (updates.name && updates.name.trim() === '') {
+      throw new Error('Team name cannot be empty')
+    }
+    
+    isLoading.value = true
+    error.value = ''
+    try {
+      const teamRef = getScoutingDoc('teams', teamId)
+      await updateDoc(teamRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      })
+      
+      // Update local state
+      const index = teams.value.findIndex(t => t.id === teamId)
+      if (index !== -1) {
+        teams.value[index] = {
+          ...teams.value[index],
+          ...updates
+        }
+      }
+    } catch (err) {
+      console.error('Error updating team:', err)
+      error.value = err.message || 'Failed to update team'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  async function deleteTeam(teamId) {
+    const authStore = useAuthStore()
+    if (!authStore.isAdmin) {
+      throw new Error('Admin access required')
+    }
+    
+    // Check if team has players
+    const teamPlayers = players.value.filter(p => p.teamId === teamId)
+    if (teamPlayers.length > 0) {
+      throw new Error('Cannot delete team with players. Please remove all players first.')
+    }
+    
+    isLoading.value = true
+    error.value = ''
+    try {
+      const teamRef = getScoutingDoc('teams', teamId)
+      await deleteDoc(teamRef)
+      
+      // Remove from local state
+      teams.value = teams.value.filter(t => t.id !== teamId)
+      
+      // If deleted team was selected, select another team or clear selection
+      if (selectedTeamId.value === teamId) {
+        selectedTeamId.value = teams.value.length > 0 ? teams.value[0].id : null
+      }
+    } catch (err) {
+      console.error('Error deleting team:', err)
+      error.value = err.message || 'Failed to delete team'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  function setSelectedTeamId(teamId) {
+    selectedTeamId.value = teamId
   }
   
   async function addPlayer(playerData) {
@@ -223,7 +432,7 @@ export const useScoutingStore = defineStore('scouting', () => {
       const newPlayer = {
         name: playerData.name,
         opggUrl: playerData.opggUrl,
-        team: playerData.team, // 'own' or 'enemy'
+        teamId: playerData.teamId, // Team ID reference
         role: playerData.role || null,
         leaguepediaUrl: playerData.leaguepediaUrl || null,
         createdAt: serverTimestamp(),
@@ -259,15 +468,15 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error('Player not found')
     }
     
-    // If role or team is being changed, validate
-    if (updates.role !== undefined || updates.team !== undefined) {
+    // If role or teamId is being changed, validate
+    if (updates.role !== undefined || updates.teamId !== undefined) {
       const updatedData = {
         ...currentPlayer,
         ...updates
       }
-      // Check if the new role/team combination is valid
-      if (updates.team && updates.role) {
-        const existingPlayer = getPlayerByTeamAndRole(updates.team, updates.role)
+      // Check if the new role/teamId combination is valid
+      if (updates.teamId && updates.role) {
+        const existingPlayer = players.value.find(p => p.teamId === updates.teamId && p.role === updates.role)
         if (existingPlayer && existingPlayer.id !== playerId) {
           error.value = `Role ${updates.role} is already taken by ${existingPlayer.name}`
           throw new Error(error.value)
@@ -439,9 +648,19 @@ export const useScoutingStore = defineStore('scouting', () => {
   
   function resetLoadingState() {
     isLoading.value = false
+    isLoadingTeams.value = false
     isScouting.value = false
     selectedPlayer.value = null
     error.value = ''
+    // Don't clear teamsLoadedForWorkspace here - it should persist across component remounts
+    // Only clear it when workspace actually changes
+  }
+  
+  // Reset teams when workspace changes
+  function resetTeamsForWorkspaceChange() {
+    teams.value = []
+    teamsLoadedForWorkspace.value = null
+    selectedTeamId.value = null
   }
   
   // Team names management
@@ -537,10 +756,12 @@ export const useScoutingStore = defineStore('scouting', () => {
     return Array.from(champions.values())
   }
   
-  // Get overlapping champions between teams
-  function getOverlappingChampions(team) {
-    const teamPlayers = team === 'own' ? ownTeamPlayers.value : enemyTeamPlayers.value
-    const otherTeamPlayers = team === 'own' ? enemyTeamPlayers.value : ownTeamPlayers.value
+  // Get overlapping champions between selected team and another team
+  function getOverlappingChampions(otherTeamId) {
+    if (!selectedTeamId.value) return []
+    
+    const teamPlayers = selectedTeamPlayers.value
+    const otherTeamPlayers = players.value.filter(p => p.teamId === otherTeamId)
     
     const teamChampions = new Set()
     const otherTeamChampions = new Set()
@@ -569,23 +790,33 @@ export const useScoutingStore = defineStore('scouting', () => {
   return {
     // State
     players,
+    teams,
     scoutingData,
     isLoading,
+    isLoadingTeams,
     isScouting,
     selectedPlayer,
+    selectedTeamId,
     error,
-    ownTeamName,
-    enemyTeamName,
+    ownTeamName, // Legacy
+    enemyTeamName, // Legacy
     
     // Getters
-    ownTeamPlayers,
-    enemyTeamPlayers,
+    selectedTeam,
+    selectedTeamPlayers,
+    ownTeamPlayers, // Legacy
+    enemyTeamPlayers, // Legacy
     playersByRole,
     allScoutedChampions,
     playersByTeamAndRole,
-    teamCompleteness,
+    teamCompleteness, // Legacy
     
     // Actions
+    loadTeams,
+    addTeam,
+    updateTeam,
+    deleteTeam,
+    setSelectedTeamId,
     loadPlayers,
     addPlayer,
     updatePlayer,
@@ -597,10 +828,11 @@ export const useScoutingStore = defineStore('scouting', () => {
     setError,
     clearError,
     resetLoadingState,
+    resetTeamsForWorkspaceChange,
     getPlayerChampions,
     getOverlappingChampions,
     
-    // Team names
+    // Team names (Legacy)
     loadTeamNames,
     updateTeamName,
     

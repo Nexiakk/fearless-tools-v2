@@ -1,7 +1,6 @@
 <template>
   <div 
-    class="bg-gray-800 rounded-lg border border-gray-700 p-2 cursor-pointer hover:bg-gray-750 transition-colors"
-    @click="$emit('open-management')"
+    class="bg-gray-800 rounded-lg border border-gray-700 p-2 transition-colors"
   >
     <!-- Header with Toggle -->
     <div class="mb-2 flex items-center justify-between">
@@ -81,7 +80,6 @@
 import { ref, computed } from 'vue'
 import { useScoutingStore } from '@/stores/scouting'
 
-const emit = defineEmits(['open-management'])
 
 const scoutingStore = useScoutingStore()
 const displayMode = ref('enemy-only') // 'enemy-only' | 'both-teams'

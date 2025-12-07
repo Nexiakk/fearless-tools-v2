@@ -7,7 +7,7 @@
   left: 0;
   right: 0;
   z-index: 100;
-  border-bottom: 1px solid #2a2a2a; /* Subtle separator */
+  border-bottom: none; /* Removed border globally */
   overflow: hidden;
   height: auto;
   min-height: 40px;
@@ -16,6 +16,10 @@
 /* Editor mode: orange bottom border on navbar */
 .top-navbar.editor-mode-active {
   border-bottom: 2px solid rgba(245, 158, 11, 0.8); /* Same orange as bottom border */
+}
+/* Remove shadow on scouting page to avoid shadow where border was */
+.top-navbar.scouting-page:not(.editor-mode-active) {
+  box-shadow: none;
 }
 .navbar-container {
   display: flex;

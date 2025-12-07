@@ -152,11 +152,6 @@ const props = defineProps({
     type: String,
     required: true,
     validator: (value) => ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].includes(value)
-  },
-  selectedTeam: {
-    type: String,
-    required: true,
-    validator: (value) => ['own', 'enemy'].includes(value)
   }
 })
 
@@ -167,7 +162,7 @@ const championsStore = useChampionsStore()
 const isLoadingData = ref(false)
 
 const currentPlayer = computed(() => {
-  return scoutingStore.getPlayerByTeamAndRole(props.selectedTeam, props.role)
+  return scoutingStore.getPlayerByTeamAndRole(props.role)
 })
 
 const roleIconUrl = computed(() => {

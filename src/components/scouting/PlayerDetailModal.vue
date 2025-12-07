@@ -5,7 +5,11 @@
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
         <div>
           <h2 class="text-2xl font-semibold text-white">{{ player?.name || 'Player Details' }}</h2>
-          <p v-if="player?.role" class="text-sm text-gray-400 mt-1">{{ player.role }} • {{ player.team === 'own' ? 'Own Team' : 'Enemy Team' }}</p>
+          <p v-if="player?.role" class="text-sm text-gray-400 mt-1">
+            {{ player.role }}
+            <span v-if="playerTeam"> • {{ playerTeam.name }}</span>
+            <span v-else-if="player?.teamId"> • Team ID: {{ player.teamId }}</span>
+          </p>
         </div>
         <div class="flex items-center gap-2">
           <button
@@ -187,6 +191,11 @@ const isRefreshing = ref(false)
 
 const player = computed(() => {
   return scoutingStore.players.find(p => p.id === props.playerId)
+})
+
+const playerTeam = computed(() => {
+  if (!player.value?.teamId) return null
+  return scoutingStore.teams.find(t => t.id === player.value.teamId) || null
 })
 
 const scoutingData = computed(() => {
