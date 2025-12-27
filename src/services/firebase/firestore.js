@@ -880,3 +880,87 @@ export function setupDrawingRealtimeSync(workspaceId, view, callback) {
   }
 }
 
+// ========== LCU DRAFTS FUNCTIONS ==========
+
+/**
+ * Fetch all LCU drafts from Firestore
+ */
+export async function fetchLcuDraftsFromFirestore(workspaceId) {
+  if (!workspaceId) {
+    console.warn('No workspace ID provided. Returning empty array.')
+    return []
+  }
+
+  try {
+    const workspaceRef = doc(db, 'workspaces', workspaceId)
+    const lcuDraftsRef = collection(workspaceRef, 'lcuDrafts')
+    const q = query(lcuDraftsRef, orderBy('updatedAt', 'desc'))
+    const querySnapshot = await getDocs(q)
+
+    const drafts = []
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data()
+      drafts.push({
+        id: docSnap.id,
+        lobbyId: data.lobbyId || null,
+        phase: data.phase || 'UNKNOWN',
+        blueSide: data.blueSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+        redSide: data.redSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+        isNewGame: data.isNewGame || false,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      })
+    })
+
+    return drafts
+  } catch (error) {
+    console.error('Error fetching LCU drafts:', error)
+    return []
+  }
+}
+
+/**
+ * Set up real-time listener for LCU drafts
+ */
+export function setupLcuDraftsRealtimeSync(workspaceId, callback) {
+  if (!workspaceId) {
+    console.warn('No workspace ID provided for LCU drafts real-time sync')
+    return () => {}
+  }
+
+  try {
+    const workspaceRef = doc(db, 'workspaces', workspaceId)
+    const lcuDraftsRef = collection(workspaceRef, 'lcuDrafts')
+    const q = query(lcuDraftsRef, orderBy('updatedAt', 'desc'))
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const drafts = []
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data()
+          drafts.push({
+            id: docSnap.id,
+            lobbyId: data.lobbyId || null,
+            phase: data.phase || 'UNKNOWN',
+            blueSide: data.blueSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+            redSide: data.redSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+            isNewGame: data.isNewGame || false,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+          })
+        })
+        callback(drafts)
+      },
+      (error) => {
+        console.error('Error listening to LCU draft updates:', error)
+      }
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error('Error setting up LCU drafts real-time sync:', error)
+    return () => {}
+  }
+}
+

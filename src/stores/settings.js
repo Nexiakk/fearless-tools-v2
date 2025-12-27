@@ -12,7 +12,8 @@ export const useSettingsStore = defineStore('settings', () => {
       unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
       disableAnimations: false,
       centerCards: true,
-      enableSearch: true // Enable search bar feature, default: enabled
+      enableSearch: true, // Enable search bar feature, default: enabled
+      showBannedChampions: false // Show banned champions container, default: hidden
     },
     drafting: {
       integrateUnavailableChampions: true // default: enabled
@@ -79,7 +80,8 @@ export const useSettingsStore = defineStore('settings', () => {
         unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
         disableAnimations: false,
         centerCards: true,
-        enableSearch: true // Enable search bar feature, default: enabled
+        enableSearch: true, // Enable search bar feature, default: enabled
+        showBannedChampions: false // Show banned champions container, default: hidden
       },
       drafting: {
         integrateUnavailableChampions: true // default: enabled

@@ -149,6 +149,22 @@
                 ></label>
               </div>
             </div>
+            <div class="flex items-center justify-between py-3 border-b border-gray-700">
+              <label for="toggle-show-banned" class="font-medium">Show Banned Champions</label>
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  v-model="settingsStore.settings.pool.showBannedChampions"
+                  name="toggle-show-banned"
+                  id="toggle-show-banned"
+                  class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  for="toggle-show-banned"
+                  class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"
+                ></label>
+              </div>
+            </div>
           </div>
 
           <!-- Admin Tab -->

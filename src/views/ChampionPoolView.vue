@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Show skeleton when workspace is loading OR when workspace exists OR when saved workspace exists -->
-    <div v-if="showSkeletonContainer" class="container-fluid mx-auto p-4">
+    <div v-if="showSkeletonContainer" class="container-fluid mx-auto p-6" :class="{ 'p-8': !shouldShowBannedChampions, 'p-6': shouldShowBannedChampions }">
       <!-- Editor Mode Bottom Border -->
       <div v-if="adminStore.isEditorModeActive && workspaceStore.hasWorkspace" class="editor-mode-banner-bottom-line"></div>
       
@@ -11,9 +11,22 @@
         
         <!-- Actual Content - Show only when workspace exists and all data is loaded -->
         <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
+          <!-- Banned Champions Container -->
+          <div 
+            v-if="shouldShowBannedChampions" 
+            class="banned-champions-container"
+          >
+            <ChampionCard
+              v-for="champion in bannedChampionsList"
+              :key="`banned-${champion.id}`"
+              :champion="champion"
+              role=""
+            />
+          </div>
+          
           <div 
             class="compact-view-container" 
-            :class="{ ...viewClasses, 'search-active': isSearchActive }"
+            :class="{ ...viewClasses, 'search-active': isSearchActive, 'has-banned': bannedChampionsList.length > 0 }"
             :style="cardSizeStyles"
           >
             <RolePillar
@@ -56,6 +69,7 @@ import { workspaceService } from '@/services/workspace'
 import RolePillar from '@/components/champion-pool/RolePillar.vue'
 import ChampionInfoModal from '@/components/champion-pool/ChampionInfoModal.vue'
 import ChampionPoolSkeleton from '@/components/champion-pool/ChampionPoolSkeleton.vue'
+import ChampionCard from '@/components/champion-pool/ChampionCard.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftStore = useDraftStore()
@@ -87,6 +101,25 @@ const hasSavedWorkspace = ref(initialSavedWorkspace)
 
 const championsByRole = computed(() => {
   return draftStore.championsByRoleForCompactView
+})
+
+// Get all banned champions as a list
+const bannedChampionsList = computed(() => {
+  const allBanned = new Set()
+  
+  // Combine manually banned and LCU banned
+  draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
+  draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
+  
+  // Convert to champion objects, sorted alphabetically
+  return championsStore.allChampions
+    .filter(champ => allBanned.has(champ.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+})
+
+// Determine if banned champions container should be shown
+const shouldShowBannedChampions = computed(() => {
+  return bannedChampionsList.value.length > 0 && settingsStore.settings.pool.showBannedChampions
 })
 
 const viewClasses = computed(() => ({

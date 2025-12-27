@@ -73,4 +73,19 @@ setTimeout(() => {
   initializeApp()
 }, 100)
 
+// Debug helpers - expose globally for console access
+if (typeof window !== 'undefined') {
+  window.debugLcuDrafts = async () => {
+    const { useDraftStore } = await import('./stores/draft')
+    const draftStore = useDraftStore()
+    await draftStore.debugPrintLcuDrafts()
+  }
+  
+  // Also expose a shorter alias
+  window.debugLCU = window.debugLcuDrafts
+  
+  console.log('🔧 Debug helpers available:')
+  console.log('   - debugLcuDrafts() or debugLCU() - Print LCU draft champions with names and sides')
+}
+
 
