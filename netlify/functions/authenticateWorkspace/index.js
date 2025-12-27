@@ -1,11 +1,15 @@
 // Workspace Authentication Handler
 // Validates workspace ID and password for LCU client
 
-const admin = require('firebase-admin')
+let admin = null
+let db = null
 
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  try {
+// Try to initialize Firebase Admin
+try {
+  admin = require('firebase-admin')
+  
+  // Initialize Firebase Admin if not already initialized
+  if (!admin.apps.length) {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
     
     if (privateKey && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
@@ -16,13 +20,18 @@ if (!admin.apps.length) {
           clientEmail: process.env.FIREBASE_CLIENT_EMAIL
         })
       })
+      db = admin.firestore()
+      console.log('[Authenticate Workspace] Firebase Admin initialized')
+    } else {
+      console.warn('[Authenticate Workspace] Firebase Admin credentials not found')
     }
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error)
+  } else {
+    db = admin.firestore()
   }
+} catch (error) {
+  console.error('[Authenticate Workspace] Firebase Admin initialization error:', error)
 }
 
-const db = admin.firestore()
 const crypto = require('crypto')
 
 // Hash password using SHA-256 (same as web app)
@@ -57,22 +66,45 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { workspaceId, password } = JSON.parse(event.body)
+    // Parse request body
+    let requestData
+    try {
+      requestData = JSON.parse(event.body || '{}')
+    } catch (parseError) {
+      console.error('[Authenticate Workspace] JSON parse error:', parseError)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          success: false,
+          error: 'Invalid JSON in request body' 
+        })
+      }
+    }
+    
+    const { workspaceId, password } = requestData
     
     // Validate required fields
     if (!workspaceId || !password) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'workspaceId and password are required' })
+        body: JSON.stringify({ 
+          success: false,
+          error: 'workspaceId and password are required' 
+        })
       }
     }
 
-    if (!db) {
+    if (!db || !admin) {
+      console.error('[Authenticate Workspace] Database not available - Firebase Admin not initialized')
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Database not available' })
+        body: JSON.stringify({ 
+          success: false,
+          error: 'Database not available. Please check server configuration.' 
+        })
       }
     }
 
@@ -119,13 +151,15 @@ exports.handler = async (event, context) => {
     }
   } catch (error) {
     console.error('[Authenticate Workspace] Error:', error)
+    console.error('[Authenticate Workspace] Error stack:', error.stack)
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         success: false,
         error: 'Failed to authenticate workspace',
-        message: error.message
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       })
     }
   }
