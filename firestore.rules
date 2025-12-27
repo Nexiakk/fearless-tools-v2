@@ -86,8 +86,10 @@ service cloud.firestore {
       match /lcuDrafts/{lobbyId} {
         // Workspace members can read LCU draft data
         allow read: if isAuthenticated();
-        // Writes are handled server-side via Netlify function (bypasses rules)
-        allow write: if false; // Explicitly deny client-side writes
+        // Create/update are handled server-side via Netlify function (bypasses rules)
+        allow create, update: if false; // Explicitly deny client-side create/update
+        // Allow authenticated users to delete (for "Reset Unavailable" functionality)
+        allow delete: if isAuthenticated();
       }
       
       // Scouting data - direct collections under workspace (like drafts)
