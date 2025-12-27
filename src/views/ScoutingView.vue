@@ -80,20 +80,42 @@ const handleViewChange = (view) => {
   currentView.value = view
 }
 
+// Function to load scouting data
+const loadScoutingData = async () => {
+  if (!workspaceStore.hasWorkspace) {
+    return
+  }
+  
+  try {
+    await scoutingStore.loadTeams()
+    await scoutingStore.loadPlayers()
+    // Legacy: load team names for backward compatibility
+    await scoutingStore.loadTeamNames()
+  } catch (error) {
+    console.error('Error loading scouting data:', error)
+    // Ensure loading state is cleared even if there's an error
+    scoutingStore.resetLoadingState()
+  }
+}
+
 onMounted(async () => {
+  // Load data if workspace is already available
   if (workspaceStore.hasWorkspace) {
-    try {
-      await scoutingStore.loadTeams()
-      await scoutingStore.loadPlayers()
-      // Legacy: load team names for backward compatibility
-      await scoutingStore.loadTeamNames()
-    } catch (error) {
-      console.error('Error loading scouting data:', error)
-      // Ensure loading state is cleared even if there's an error
-      scoutingStore.resetLoadingState()
-    }
+    await loadScoutingData()
   }
 })
+
+// Watch for workspace availability (handles page refresh case)
+watch(() => workspaceStore.currentWorkspaceId, async (newWorkspaceId, oldWorkspaceId) => {
+  // If workspace changed or became available, load data
+  if (newWorkspaceId) {
+    // Reset scouting store when workspace changes
+    if (oldWorkspaceId && oldWorkspaceId !== newWorkspaceId) {
+      scoutingStore.resetTeamsForWorkspaceChange()
+    }
+    await loadScoutingData()
+  }
+}, { immediate: true })
 
 watch(() => route.name, (newName, oldName) => {
   // If navigating away from scouting view, reset loading state

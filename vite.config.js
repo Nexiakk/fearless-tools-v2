@@ -32,8 +32,9 @@ export default defineConfig({
     include: ['localforage', 'poro']
   },
   server: {
-    port: 3000,
-    open: true
+    port: 3001,
+    open: true,
+    strictPort: false
   },
   build: {
     outDir: 'dist',

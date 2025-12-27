@@ -13,7 +13,7 @@
         <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
           <div 
             class="compact-view-container" 
-            :class="viewClasses"
+            :class="{ ...viewClasses, 'search-active': isSearchActive }"
             :style="cardSizeStyles"
           >
             <RolePillar
@@ -21,6 +21,7 @@
               :key="role"
               :role="role"
               :champions="championsByRole[role]"
+              :ref="(el) => setPillarRef(el, role)"
             />
           </div>
         </div>
@@ -43,12 +44,14 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDraftStore } from '@/stores/draft'
 import { useChampionsStore } from '@/stores/champions'
 import { useSettingsStore } from '@/stores/settings'
 import { useAdminStore } from '@/stores/admin'
+import { useChampionSearchStore } from '@/stores/championSearch'
 import { workspaceService } from '@/services/workspace'
 import RolePillar from '@/components/champion-pool/RolePillar.vue'
 import ChampionInfoModal from '@/components/champion-pool/ChampionInfoModal.vue'
@@ -59,6 +62,19 @@ const draftStore = useDraftStore()
 const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
 const adminStore = useAdminStore()
+
+// Get search active state for CSS class - use storeToRefs to ensure reactivity
+const championSearchStore = useChampionSearchStore()
+const { isSearchActive, searchQuery } = storeToRefs(championSearchStore)
+
+// Store pillar refs for scrolling
+const pillarRefs = ref(new Map()) // Map of role -> RolePillar component instance
+
+const setPillarRef = (el, role) => {
+  if (el) {
+    pillarRefs.value.set(role, el)
+  }
+}
 
 const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 
@@ -118,6 +134,73 @@ watch(() => workspaceStore.hasWorkspace, (hasWorkspace) => {
   if (hasWorkspace) {
     hasSavedWorkspace.value = false
   }
+})
+
+// Debounce function for scroll
+let scrollTimeout = null
+
+// Auto-scroll to matching champions when searching
+watch(searchQuery, async (newQuery) => {
+  // Clear any pending scroll
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout)
+  }
+  
+  if (!newQuery || !newQuery.trim() || !championSearchStore.isSearchActive) {
+    return
+  }
+  
+  // Debounce scrolling to avoid excessive scrolling while typing
+  scrollTimeout = setTimeout(async () => {
+    // Wait for DOM to update
+    await nextTick()
+    
+    // Find all champions that match the search
+    const matchingChampions = championsStore.allChampions.filter(champ => 
+      championSearchStore.matchesSearch(champ.name)
+    )
+    
+    if (matchingChampions.length === 0) return
+    
+    // For each role, check if any matching champion exists in that role
+    for (const role of roles) {
+      const pillar = pillarRefs.value.get(role)
+      if (!pillar || !pillar.scrollToChampion) continue
+      
+      // Get champions for this role from championsByRole
+      const roleChampions = championsByRole.value[role]
+      if (!roleChampions) continue
+      
+      // Check if this role contains any matching champion
+      let roleHasMatchingChampion = false
+      let matchingChampionInRole = null
+      
+      if (Array.isArray(roleChampions)) {
+        // Non-frozen view: simple array
+        matchingChampionInRole = roleChampions.find(champ => 
+          championSearchStore.matchesSearch(champ.name)
+        )
+        roleHasMatchingChampion = !!matchingChampionInRole
+      } else if (roleChampions.sticky || roleChampions.scrollable) {
+        // Frozen view: check both sticky and scrollable
+        const allRoleChampions = [
+          ...(roleChampions.sticky || []),
+          ...(roleChampions.scrollable || [])
+        ]
+        matchingChampionInRole = allRoleChampions.find(champ => 
+          championSearchStore.matchesSearch(champ.name)
+        )
+        roleHasMatchingChampion = !!matchingChampionInRole
+      }
+      
+      // Only scroll if this role actually contains a matching champion
+      if (roleHasMatchingChampion && matchingChampionInRole) {
+        setTimeout(() => {
+          pillar.scrollToChampion(matchingChampionInRole.name)
+        }, 50 * roles.indexOf(role))
+      }
+    }
+  }, 300) // 300ms debounce
 })
 </script>
 

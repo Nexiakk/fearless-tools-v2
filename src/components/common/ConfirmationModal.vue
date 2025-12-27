@@ -3,12 +3,12 @@
     <Transition name="fade">
       <div
         v-if="confirmationStore.isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[60] flex items-center justify-center p-4"
         @click.self="confirmationStore.close()"
       >
         <div class="fixed inset-0 bg-black/60" @click="confirmationStore.close()"></div>
         <div
-          class="relative w-full max-w-md rounded-lg bg-gray-800 border border-gray-700 p-6 shadow-lg"
+          class="relative w-full max-w-md rounded-lg bg-[#1a1a1a] p-6 shadow-lg"
           @click.stop
         >
           <h3 class="text-xl font-semibold text-white mb-2">Confirm Action</h3>

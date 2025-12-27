@@ -46,6 +46,15 @@ service cloud.firestore {
 
     }
 
+    // LCU DRAFT DATA (from external LCU client)
+    // Server-side writes via Firebase Admin SDK bypass rules
+    // Frontend reads need authentication
+    match /lcuDrafts/{lobbyId} {
+      allow read: if isAuthenticated();
+      // Writes are handled server-side via Netlify function (bypasses rules)
+      allow write: if false; // Explicitly deny client-side writes
+    }
+
     
 
     // WORKSPACES

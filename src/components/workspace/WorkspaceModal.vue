@@ -12,7 +12,7 @@
           @click="handleClose"
         ></div>
         <div
-          class="relative w-full max-w-md rounded-lg bg-gray-800 border border-gray-700 shadow-lg"
+          class="relative w-full max-w-md rounded-lg bg-[#1a1a1a] shadow-lg"
           @click.stop
         >
           <!-- Tabs -->
@@ -62,7 +62,7 @@
                   v-model="joinWorkspaceId"
                   @keyup.enter="handleJoinWorkspace"
                   placeholder="my-team"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                  class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
                 />
               </div>
               <div>
@@ -72,7 +72,7 @@
                   v-model="joinWorkspacePassword"
                   @keyup.enter="handleJoinWorkspace"
                   placeholder="Enter password"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                  class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
                 />
               </div>
               <p v-if="workspaceError" class="text-red-400 text-sm">{{ workspaceError }}</p>

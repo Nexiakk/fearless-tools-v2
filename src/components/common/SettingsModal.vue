@@ -8,7 +8,7 @@
       >
         <div class="fixed inset-0 bg-black/60" @click="settingsStore.closeSettings()"></div>
         <div
-          class="relative w-full max-w-lg rounded-lg bg-gray-800 border border-gray-700 p-6 shadow-lg"
+          class="relative w-full max-w-lg rounded-lg bg-[#1a1a1a] p-6 shadow-lg"
           @click.stop
         >
           <h3 class="text-xl font-semibold text-white mb-4">Settings</h3>
@@ -19,7 +19,7 @@
               class="settings-tab-button"
               :class="{ active: settingsStore.settingsTab === 'pool' }"
             >
-              Champion Pool
+              Fearless Pool
             </button>
             <button
               @click="settingsStore.settingsTab = 'admin'"
@@ -33,8 +33,8 @@
           <!-- Pool Settings Tab -->
           <div v-if="settingsStore.settingsTab === 'pool'" class="space-y-2 text-gray-300">
             <div class="flex items-center justify-between py-3 border-b border-gray-700">
-              <label for="toggle-frozen-champions" class="font-medium">Frozen Champions in Compact View</label>
-              <div class="relative inline-block w-10 mr-2 align-middle select-none">
+              <label for="toggle-frozen-champions" class="font-medium">Frozen OP/Highlighted Cards</label>
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
                 <input
                   type="checkbox"
                   v-model="settingsStore.settings.pool.frozenChampions"
@@ -103,7 +103,7 @@
             </div>
             <div class="flex items-center justify-between py-3 border-b border-gray-700">
               <label for="toggle-disable-animations" class="font-medium">Disable UI Animations</label>
-              <div class="relative inline-block w-10 mr-2 align-middle select-none">
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
                 <input
                   type="checkbox"
                   v-model="settingsStore.settings.pool.disableAnimations"
@@ -119,7 +119,7 @@
             </div>
             <div class="flex items-center justify-between py-3 border-b border-gray-700">
               <label for="toggle-center-cards" class="font-medium">Center Cards in Rows</label>
-              <div class="relative inline-block w-10 mr-2 align-middle select-none">
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
                 <input
                   type="checkbox"
                   v-model="settingsStore.settings.pool.centerCards"
@@ -129,6 +129,22 @@
                 />
                 <label
                   for="toggle-center-cards"
+                  class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"
+                ></label>
+              </div>
+            </div>
+            <div class="flex items-center justify-between py-3 border-b border-gray-700">
+              <label for="toggle-enable-search" class="font-medium">Enable Champion Search</label>
+              <div class="relative inline-block w-12 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  v-model="settingsStore.settings.pool.enableSearch"
+                  name="toggle-enable-search"
+                  id="toggle-enable-search"
+                  class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  for="toggle-enable-search"
                   class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"
                 ></label>
               </div>
@@ -161,10 +177,18 @@
             </div>
           </div>
 
-          <div class="mt-6 flex justify-end gap-3">
-            <button @click="settingsStore.closeSettings()" class="modal-button modal-button-confirm">
-              Close
+          <div class="mt-6 flex justify-between items-center">
+            <button 
+              @click="handleReset" 
+              class="modal-button modal-button-cancel"
+            >
+              Reset
             </button>
+            <div class="flex gap-3">
+              <button @click="settingsStore.closeSettings()" class="modal-button modal-button-confirm">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -179,16 +203,27 @@
 import { ref } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmationStore } from '@/stores/confirmation'
 import { useAuth } from '@/composables/useAuth'
 import AuthModal from './AuthModal.vue'
 
 const settingsStore = useSettingsStore()
 const authStore = useAuthStore()
+const confirmationStore = useConfirmationStore()
 const { signOut } = useAuth()
 
 const handleSignOut = async () => {
   await signOut()
   settingsStore.closeSettings()
+}
+
+const handleReset = () => {
+  confirmationStore.open({
+    message: 'Are you sure you want to reset all settings to their default values?',
+    confirmAction: () => {
+      settingsStore.resetSettings()
+    }
+  })
 }
 
 const isAuthModalOpen = ref(false)
@@ -237,7 +272,7 @@ const openAuthModal = () => {
 }
 
 .toggle-checkbox:checked {
-  transform: translateX(1rem);
+  transform: translateX(0.5rem);
 }
 
 .slider::-webkit-slider-thumb {

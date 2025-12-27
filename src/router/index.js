@@ -12,7 +12,7 @@ const routes = [
     path: '/pool', 
     name: 'pool', 
     component: ChampionPoolView,
-    meta: { title: 'Champion Pool' }
+    meta: { title: 'Fearless Pool' }
   },
   { 
     path: '/drafting', 

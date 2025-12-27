@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { collection, doc, getDocs, getDoc, addDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore'
-import { db } from '@/services/firebase/config'
 import { useWorkspaceStore } from './workspace'
 import { useAuthStore } from './auth'
+import { scoutingApi } from '@/services/scouting/scoutingApi'
 
 export const useScoutingStore = defineStore('scouting', () => {
+  const workspaceStore = useWorkspaceStore()
+  const authStore = useAuthStore()
   // State
   const players = ref([])
   const teams = ref([]) // Array of team objects: { id, name, createdAt, updatedAt }
@@ -90,42 +91,6 @@ export const useScoutingStore = defineStore('scouting', () => {
       missingRoles
     }
   })
-  
-  // Helper to get workspace scouting collection reference
-  // Structure: workspaces/{workspaceId}/scoutingPlayers/{playerId}
-  // Direct collection under workspace (like drafts)
-  function getScoutingCollection(subcollection) {
-    const workspaceStore = useWorkspaceStore()
-    if (!workspaceStore.currentWorkspaceId) {
-      throw new Error('No workspace selected')
-    }
-    // Use direct collection path like drafts: workspaces/{workspaceId}/scoutingPlayers
-    const collectionName = subcollection === 'players' ? 'scoutingPlayers' 
-      : subcollection === 'teams' ? 'scoutingTeams'
-      : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
-    return collection(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName)
-  }
-  
-  // Helper to get workspace scouting document reference
-  function getScoutingDoc(subcollection, docId) {
-    const workspaceStore = useWorkspaceStore()
-    if (!workspaceStore.currentWorkspaceId) {
-      throw new Error('No workspace selected')
-    }
-    const collectionName = subcollection === 'players' ? 'scoutingPlayers'
-      : subcollection === 'teams' ? 'scoutingTeams'
-      : `scouting${subcollection.charAt(0).toUpperCase() + subcollection.slice(1)}`
-    return doc(db, 'workspaces', workspaceStore.currentWorkspaceId, collectionName, docId)
-  }
-  
-  // Helper to get scouting settings document reference
-  function getScoutingSettingsDoc() {
-    const workspaceStore = useWorkspaceStore()
-    if (!workspaceStore.currentWorkspaceId) {
-      throw new Error('No workspace selected')
-    }
-    return doc(db, 'workspaces', workspaceStore.currentWorkspaceId, 'scoutingSettings', 'teamNames')
-  }
   
   // Team-related getters
   const selectedTeam = computed(() => {
@@ -222,7 +187,6 @@ export const useScoutingStore = defineStore('scouting', () => {
     }
     
     // Check if we've already loaded teams for the current workspace
-    const workspaceStore = useWorkspaceStore()
     const currentWorkspaceId = workspaceStore.currentWorkspaceId
     
     if (!currentWorkspaceId) {
@@ -239,13 +203,9 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const teamsRef = getScoutingCollection('teams')
-      const snapshot = await getDocs(teamsRef)
+      const loadedTeams = await scoutingApi.fetchTeams(currentWorkspaceId)
       
-      teams.value = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })).sort((a, b) => {
+      teams.value = loadedTeams.sort((a, b) => {
         // Sort by createdAt (newest first) or name
         if (a.createdAt && b.createdAt) {
           return b.createdAt.toMillis() - a.createdAt.toMillis()
@@ -275,13 +235,13 @@ export const useScoutingStore = defineStore('scouting', () => {
     isLoading.value = true
     error.value = ''
     try {
-      const playersRef = getScoutingCollection('players')
-      const snapshot = await getDocs(playersRef)
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId
+      if (!currentWorkspaceId) {
+        return
+      }
       
-      players.value = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      const loadedPlayers = await scoutingApi.fetchPlayers(currentWorkspaceId)
+      players.value = loadedPlayers
     } catch (err) {
       console.error('Error loading players:', err)
       error.value = 'Failed to load players'
@@ -293,7 +253,6 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function addTeam(teamData) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
     }
@@ -302,28 +261,28 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error('Team name is required')
     }
     
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    
     isLoading.value = true
     error.value = ''
     try {
-      const teamsRef = getScoutingCollection('teams')
-      const newTeam = {
+      const { id, data } = await scoutingApi.createTeam(currentWorkspaceId, {
         name: teamData.name.trim(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
         createdBy: authStore.user?.uid || 'unknown'
-      }
-      
-      const docRef = await addDoc(teamsRef, newTeam)
+      })
       
       teams.value.push({
-        id: docRef.id,
-        ...newTeam
+        id,
+        ...data
       })
       
       // Auto-select newly created team
-      selectedTeamId.value = docRef.id
+      selectedTeamId.value = id
       
-      return docRef.id
+      return id
     } catch (err) {
       console.error('Error adding team:', err)
       error.value = err.message || 'Failed to add team'
@@ -334,7 +293,6 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function updateTeam(teamId, updates) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
     }
@@ -348,14 +306,15 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error('Team name cannot be empty')
     }
     
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    
     isLoading.value = true
     error.value = ''
     try {
-      const teamRef = getScoutingDoc('teams', teamId)
-      await updateDoc(teamRef, {
-        ...updates,
-        updatedAt: serverTimestamp()
-      })
+      await scoutingApi.updateTeam(currentWorkspaceId, teamId, updates)
       
       // Update local state
       const index = teams.value.findIndex(t => t.id === teamId)
@@ -375,7 +334,6 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function deleteTeam(teamId) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
     }
@@ -386,11 +344,15 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error('Cannot delete team with players. Please remove all players first.')
     }
     
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    
     isLoading.value = true
     error.value = ''
     try {
-      const teamRef = getScoutingDoc('teams', teamId)
-      await deleteDoc(teamRef)
+      await scoutingApi.deleteTeam(currentWorkspaceId, teamId)
       
       // Remove from local state
       teams.value = teams.value.filter(t => t.id !== teamId)
@@ -413,7 +375,6 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function addPlayer(playerData) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
     }
@@ -425,29 +386,30 @@ export const useScoutingStore = defineStore('scouting', () => {
       throw new Error(validation.error)
     }
     
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    
     isLoading.value = true
     error.value = ''
     try {
-      const playersRef = getScoutingCollection('players')
-      const newPlayer = {
+      const { id, data } = await scoutingApi.createPlayer(currentWorkspaceId, {
         name: playerData.name,
         opggUrl: playerData.opggUrl,
-        teamId: playerData.teamId, // Team ID reference
+        teamId: playerData.teamId,
         role: playerData.role || null,
         leaguepediaUrl: playerData.leaguepediaUrl || null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        golUrl: playerData.golUrl || null,
         createdBy: authStore.user?.uid || 'unknown'
-      }
-      
-      const docRef = await addDoc(playersRef, newPlayer)
-      
-      players.value.push({
-        id: docRef.id,
-        ...newPlayer
       })
       
-      return docRef.id
+      players.value.push({
+        id,
+        ...data
+      })
+      
+      return id
     } catch (err) {
       console.error('Error adding player:', err)
       error.value = err.message || 'Failed to add player'
@@ -458,7 +420,6 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function updatePlayer(playerId, updates) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
     }
@@ -484,14 +445,15 @@ export const useScoutingStore = defineStore('scouting', () => {
       }
     }
     
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
+    }
+    
     isLoading.value = true
     error.value = ''
     try {
-      const playerRef = getScoutingDoc('players', playerId)
-      await updateDoc(playerRef, {
-        ...updates,
-        updatedAt: serverTimestamp()
-      })
+      await scoutingApi.updatePlayer(currentWorkspaceId, playerId, updates)
       
       // Update local state
       const index = players.value.findIndex(p => p.id === playerId)
@@ -511,33 +473,20 @@ export const useScoutingStore = defineStore('scouting', () => {
   }
   
   async function deletePlayer(playerId) {
-    const authStore = useAuthStore()
     if (!authStore.isAdmin) {
       throw new Error('Admin access required')
+    }
+    
+    const currentWorkspaceId = workspaceStore.currentWorkspaceId
+    if (!currentWorkspaceId) {
+      throw new Error('No workspace selected')
     }
     
     isLoading.value = true
     error.value = ''
     try {
-      // Delete player document
-      const playerRef = getScoutingDoc('players', playerId)
-      await deleteDoc(playerRef)
-      console.log(`[ScoutingStore] Deleted player document: ${playerId}`)
-      
-      // Delete scouting data document if it exists
-      try {
-        const dataRef = getScoutingDoc('data', playerId)
-        const dataSnap = await getDoc(dataRef)
-        if (dataSnap.exists()) {
-          await deleteDoc(dataRef)
-          console.log(`[ScoutingStore] Deleted scouting data document: ${playerId}`)
-        } else {
-          console.log(`[ScoutingStore] No scouting data document found for player: ${playerId}`)
-        }
-      } catch (dataErr) {
-        // Log but don't fail if scouting data deletion fails
-        console.warn(`[ScoutingStore] Error deleting scouting data for player ${playerId}:`, dataErr)
-      }
+      await scoutingApi.deletePlayer(currentWorkspaceId, playerId)
+      await scoutingApi.deletePlayerDataIfExists(currentWorkspaceId, playerId)
       
       // Remove from local state
       players.value = players.value.filter(p => p.id !== playerId)
@@ -545,7 +494,6 @@ export const useScoutingStore = defineStore('scouting', () => {
       // Remove scouting data from local state if exists
       if (scoutingData.value[playerId]) {
         delete scoutingData.value[playerId]
-        console.log(`[ScoutingStore] Removed scouting data from local state: ${playerId}`)
       }
     } catch (err) {
       console.error('Error deleting player:', err)
@@ -559,11 +507,14 @@ export const useScoutingStore = defineStore('scouting', () => {
   async function loadScoutingData(playerId) {
     try {
       console.log('[ScoutingStore] Loading scouting data for player:', playerId)
-      const dataRef = getScoutingDoc('data', playerId)
-      const dataSnap = await getDoc(dataRef)
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId
+      if (!currentWorkspaceId) {
+        throw new Error('No workspace selected')
+      }
       
-      if (dataSnap.exists()) {
-        const loadedData = dataSnap.data()
+      const loadedData = await scoutingApi.fetchScoutingData(currentWorkspaceId, playerId)
+      
+      if (loadedData) {
         console.log('[ScoutingStore] Loaded data from Firestore:', loadedData)
         console.log('[ScoutingStore] SoloQ champions in loaded data:', loadedData.soloq?.currentSeason?.champions)
         console.log('[ScoutingStore] SoloQ champions count:', loadedData.soloq?.currentSeason?.champions?.length || 0)
@@ -586,32 +537,15 @@ export const useScoutingStore = defineStore('scouting', () => {
       console.log('[ScoutingStore] SoloQ champions in data:', data.soloq?.currentSeason?.champions)
       console.log('[ScoutingStore] SoloQ champions count:', data.soloq?.currentSeason?.champions?.length || 0)
       
-      const dataRef = getScoutingDoc('data', playerId)
-      
-      // Prepare data for Firestore (convert Date objects to timestamps)
-      const firestoreData = {
-        ...data,
-        lastUpdated: serverTimestamp()
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId
+      if (!currentWorkspaceId) {
+        throw new Error('No workspace selected')
       }
       
-      // Handle nested Date objects
-      if (data.soloq?.lastUpdated) {
-        firestoreData.soloq = {
-          ...data.soloq,
-          lastUpdated: serverTimestamp()
-        }
-      }
-      if (data.proplay?.lastUpdated) {
-        firestoreData.proplay = {
-          ...data.proplay,
-          lastUpdated: serverTimestamp()
-        }
-      }
+      console.log('[ScoutingStore] Firestore data to save:', data)
+      console.log('[ScoutingStore] SoloQ champions in Firestore data:', data.soloq?.currentSeason?.champions)
       
-      console.log('[ScoutingStore] Firestore data to save:', firestoreData)
-      console.log('[ScoutingStore] SoloQ champions in Firestore data:', firestoreData.soloq?.currentSeason?.champions)
-      
-      await setDoc(dataRef, firestoreData, { merge: true })
+      await scoutingApi.saveScoutingData(currentWorkspaceId, playerId, data)
       console.log('[ScoutingStore] Data saved to Firestore successfully')
       
       // Update local state
@@ -659,18 +593,24 @@ export const useScoutingStore = defineStore('scouting', () => {
   // Reset teams when workspace changes
   function resetTeamsForWorkspaceChange() {
     teams.value = []
+    players.value = []
+    scoutingData.value = {}
     teamsLoadedForWorkspace.value = null
     selectedTeamId.value = null
+    selectedPlayer.value = null
   }
   
   // Team names management
   async function loadTeamNames() {
     try {
-      const settingsRef = getScoutingSettingsDoc()
-      const settingsSnap = await getDoc(settingsRef)
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId
+      if (!currentWorkspaceId) {
+        throw new Error('No workspace selected')
+      }
       
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data()
+      const data = await scoutingApi.fetchTeamNames(currentWorkspaceId)
+      
+      if (data) {
         ownTeamName.value = data.ownTeamName || 'Your Team'
         enemyTeamName.value = data.enemyTeamName || 'Enemy Team'
       }
@@ -695,12 +635,16 @@ export const useScoutingStore = defineStore('scouting', () => {
     }
     
     try {
-      const settingsRef = getScoutingSettingsDoc()
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId
+      if (!currentWorkspaceId) {
+        throw new Error('No workspace selected')
+      }
+      
       const updateData = team === 'own' 
         ? { ownTeamName: name.trim() }
         : { enemyTeamName: name.trim() }
       
-      await setDoc(settingsRef, updateData, { merge: true })
+      await scoutingApi.saveTeamNames(currentWorkspaceId, updateData)
       
       // Update local state
       if (team === 'own') {

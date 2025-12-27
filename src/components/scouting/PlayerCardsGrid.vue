@@ -1,7 +1,7 @@
 <template>
-  <div class="w-full h-full flex flex-col">
+  <div class="w-full h-full flex flex-col min-h-0">
     <!-- Player Cards Grid -->
-    <div class="grid grid-cols-5 gap-4 w-full flex-1 min-h-0">
+    <div class="grid grid-cols-5 grid-rows-1 gap-4 w-full h-full min-h-0">
       <PlayerCard
         v-for="role in roles"
         :key="role"

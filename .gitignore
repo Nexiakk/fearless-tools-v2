@@ -7,6 +7,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+python-lcu-client
+
 node_modules
 dist
 dist-ssr

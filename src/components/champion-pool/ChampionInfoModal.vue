@@ -8,7 +8,7 @@
       >
         <div class="fixed inset-0 bg-black/60" @click="close"></div>
         <div
-          class="relative w-full max-w-2xl max-h-[90vh] rounded-lg bg-gray-800 border border-gray-700 shadow-lg overflow-hidden flex flex-col"
+          class="relative w-full max-w-2xl max-h-[90vh] rounded-lg bg-[#1a1a1a] shadow-lg overflow-hidden flex flex-col"
           @click.stop
         >
           <!-- Header -->
@@ -60,7 +60,7 @@
                   <input
                     type="text"
                     v-model="adminStore.editedChampion.name"
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                    class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 
@@ -69,7 +69,7 @@
                   <input
                     type="text"
                     v-model="adminStore.editedChampion.imageName"
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                    class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 
@@ -96,7 +96,7 @@
                   <select
                     v-model="adminStore.editedChampion.mainRole"
                     @change="adminStore.setMainRole(adminStore.editedChampion.mainRole)"
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                    class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white focus:outline-none focus:border-amber-500"
                     :disabled="!adminStore.editedChampion.roles || adminStore.editedChampion.roles.length === 0"
                   >
                     <option

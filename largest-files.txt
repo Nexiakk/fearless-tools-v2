@@ -1,0 +1,31 @@
+﻿
+Lines Path                                                                                            
+----- ----                                                                                            
+ 1534 C:\Users\Mietek\Documents\Code\fearless-tools\netlify\functions\scoutOpgg\index.js              
+  848 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\scouting.js                            
+  804 C:\Users\Mietek\Documents\Code\fearless-tools\src\services\firebase\firestore.js                
+  738 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\admin.js                               
+  717 C:\Users\Mietek\Documents\Code\fearless-tools\src\views\AdminView.vue                           
+  702 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\draft.js                               
+  647 C:\Users\Mietek\Documents\Code\fearless-tools\netlify\functions\scoutOpggHeadless\index.js      
+  601 C:\Users\Mietek\Documents\Code\fearless-tools\src\views\DraftingView.vue                        
+  580 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\scouting\ManagePlayersView.vue     
+  557 C:\Users\Mietek\Documents\Code\fearless-tools\netlify\functions\leaguepedia\index.js            
+  506 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\series.js                              
+  489 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\scouting\PlayerCard.vue            
+  387 C:\Users\Mietek\Documents\Code\fearless-tools\src\services\workspace.js                         
+  378 C:\Users\Mietek\Documents\Code\fearless-tools\src\services\scouting\scoutingService.js          
+  368 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\drafting\DrawingCanvas.vue         
+  350 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\drafting\SeriesManager.vue         
+  350 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\drafting.js                            
+  294 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\common\RightSidePanel.vue          
+  273 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\drafting\SeriesNavigator.vue       
+  266 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\common\SettingsModal.vue           
+  248 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\champion-pool\ChampionInfoModal.vue
+  245 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\workspace.js                           
+  224 C:\Users\Mietek\Documents\Code\fearless-tools\src\stores\drawing.js                             
+  212 C:\Users\Mietek\Documents\Code\fearless-tools\src\components\scouting\PlayerDetailModal.vue     
+  198 C:\Users\Mietek\Documents\Code\fearless-tools\src\services\notes.js                             
+
+
+

@@ -8,7 +8,7 @@
       >
         <div class="fixed inset-0 bg-black/60" @click="close"></div>
         <div
-          class="relative w-full max-w-md rounded-lg bg-gray-800 border border-gray-700 p-6 shadow-lg"
+          class="relative w-full max-w-md rounded-lg bg-[#1a1a1a] p-6 shadow-lg"
           @click.stop
         >
           <h3 class="text-xl font-semibold text-white mb-4">Admin Login</h3>
@@ -25,7 +25,7 @@
                 v-model="email"
                 @keyup.enter="handleSignIn"
                 placeholder="admin@example.com"
-                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
@@ -35,7 +35,7 @@
                 v-model="password"
                 @keyup.enter="handleSignIn"
                 placeholder="Enter password"
-                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                class="w-full px-3 py-2 bg-[#1a1a1a] border border-gray-700 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
               />
             </div>
             <p v-if="error" class="text-red-400 text-sm">{{ error }}</p>

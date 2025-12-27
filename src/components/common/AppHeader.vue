@@ -1,15 +1,44 @@
 <template>
   <header class="top-navbar" :class="{ 'editor-mode-active': adminStore.isEditorModeActive, 'scouting-page': $route.name === 'scouting' }">
     <div class="navbar-container">
+      <!-- Search Bar (aligned with Top lane container, only visible on pool route when enabled) -->
+      <div 
+        v-if="$route.name === 'pool' && settingsStore.settings.pool.enableSearch" 
+        class="navbar-search-container"
+      >
+        <svg class="navbar-search-icon"><use href="#icon-search"></use></svg>
+        <div class="navbar-search-input-wrapper">
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            type="text"
+            class="navbar-search-input"
+            placeholder="Search..."
+            @keydown.escape="clearSearch"
+            @input="updateCursorPosition"
+            @focus="handleFocus"
+            @blur="handleBlur"
+            @click="updateCursorPosition"
+            @keyup="updateCursorPosition"
+          />
+          <span 
+            v-if="isInputFocused" 
+            class="static-cursor"
+            :style="cursorStyle"
+          >|</span>
+        </div>
+      </div>
+      
       <nav class="navbar-nav">
         <router-link
           to="/pool"
           class="nav-link"
           :class="{ active: $route.name === 'pool' }"
         >
-          Champion Pool
+          Fearless Pool
         </router-link>
         <router-link
+          v-if="authStore.isAdmin"
           to="/drafting"
           class="nav-link"
           :class="{ active: $route.name === 'drafting' }"
@@ -113,15 +142,153 @@
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useAdminStore } from '@/stores/admin'
+import { useChampionSearchStore } from '@/stores/championSearch'
+import { storeToRefs } from 'pinia'
 
+const route = useRoute()
 const workspaceStore = useWorkspaceStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const adminStore = useAdminStore()
+
+// Search functionality
+const championSearchStore = useChampionSearchStore()
+const { searchQuery } = storeToRefs(championSearchStore)
+const isSearchActive = championSearchStore.isSearchActive
+const clearSearch = championSearchStore.clearSearch
+const searchInputRef = ref(null)
+const cursorStyle = ref({ left: '36px' })
+const isInputFocused = ref(false)
+
+// Update cursor position for static cursor
+const updateCursorPosition = () => {
+  if (!searchInputRef.value) return
+  nextTick(() => {
+    const input = searchInputRef.value
+    if (isInputFocused.value) {
+      // Create a temporary span to measure text width
+      const tempSpan = document.createElement('span')
+      tempSpan.style.visibility = 'hidden'
+      tempSpan.style.position = 'absolute'
+      tempSpan.style.fontSize = window.getComputedStyle(input).fontSize
+      tempSpan.style.fontFamily = window.getComputedStyle(input).fontFamily
+      tempSpan.textContent = input.value.substring(0, input.selectionStart || input.value.length)
+      document.body.appendChild(tempSpan)
+      const textWidth = tempSpan.offsetWidth
+      document.body.removeChild(tempSpan)
+      cursorStyle.value = { left: `${36 + textWidth}px` }
+    }
+  })
+}
+
+// Handle focus events
+const handleFocus = () => {
+  isInputFocused.value = true
+  updateCursorPosition()
+}
+
+const handleBlur = () => {
+  isInputFocused.value = false
+}
+
+// Watch searchQuery to update cursor position
+watch(searchQuery, () => {
+  updateCursorPosition()
+})
+
+// Auto-focus logic - maintain focus when on pool route
+let focusInterval = null
+let clickHandler = null
+
+const maintainFocus = () => {
+  if (route.name === 'pool' && 
+      settingsStore.settings.pool.enableSearch && 
+      searchInputRef.value &&
+      document.activeElement !== searchInputRef.value) {
+    searchInputRef.value.focus()
+    isInputFocused.value = true
+  }
+}
+
+const setupAutoFocus = () => {
+  if (route.name === 'pool' && settingsStore.settings.pool.enableSearch) {
+    // Focus immediately
+    nextTick(() => {
+      if (searchInputRef.value) {
+        searchInputRef.value.focus()
+        isInputFocused.value = true
+      }
+    })
+    
+    // Set up interval to maintain focus
+    focusInterval = setInterval(maintainFocus, 100)
+    
+    // Handle clicks to refocus
+    clickHandler = (e) => {
+      // Don't refocus if clicking on the search input itself or its container
+      if (e.target === searchInputRef.value || 
+          searchInputRef.value?.contains(e.target) ||
+          e.target.closest('.navbar-search-container')) {
+        return
+      }
+      // Refocus after a short delay to allow the click to complete
+      setTimeout(() => {
+        maintainFocus()
+      }, 10)
+    }
+    document.addEventListener('click', clickHandler)
+  }
+}
+
+const cleanupAutoFocus = () => {
+  if (focusInterval) {
+    clearInterval(focusInterval)
+    focusInterval = null
+  }
+  if (clickHandler) {
+    document.removeEventListener('click', clickHandler)
+    clickHandler = null
+  }
+}
+
+// Watch for route changes
+watch(() => route.name, (newRoute, oldRoute) => {
+  cleanupAutoFocus()
+  // Clear search when leaving pool route
+  if (oldRoute === 'pool' && newRoute !== 'pool') {
+    clearSearch()
+  }
+  if (newRoute === 'pool' && settingsStore.settings.pool.enableSearch) {
+    setupAutoFocus()
+  }
+})
+
+// Watch for settings changes
+watch(() => settingsStore.settings.pool.enableSearch, (enabled) => {
+  cleanupAutoFocus()
+  if (!enabled) {
+    // Clear search when disabling the feature
+    clearSearch()
+  } else if (enabled && route.name === 'pool') {
+    setupAutoFocus()
+  }
+})
+
+onMounted(() => {
+  if (route.name === 'pool' && settingsStore.settings.pool.enableSearch) {
+    setupAutoFocus()
+  }
+})
+
+onUnmounted(() => {
+  cleanupAutoFocus()
+})
 
 const openWorkspaceSwitcher = () => {
   workspaceStore.isWorkspaceSwitcherOpen = true

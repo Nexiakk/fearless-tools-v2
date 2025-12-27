@@ -248,6 +248,15 @@
               />
             </div>
             <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Gol.gg URL</label>
+              <input
+                v-model="playerForm.golUrl"
+                type="url"
+                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-amber-500"
+                placeholder="https://gol.gg/player/..."
+              />
+            </div>
+            <div>
               <label class="block text-sm font-medium text-gray-300 mb-2">Team</label>
               <input
                 :value="scoutingStore.selectedTeam?.name || 'No team selected'"
@@ -327,6 +336,7 @@ const playerForm = ref({
   name: '',
   opggUrl: '',
   leaguepediaUrl: '',
+  golUrl: '',
   role: 'Top'
 })
 
@@ -368,6 +378,7 @@ const openPlayerForm = (role) => {
       name: existingPlayer.name,
       opggUrl: existingPlayer.opggUrl || '',
       leaguepediaUrl: existingPlayer.leaguepediaUrl || '',
+      golUrl: existingPlayer.golUrl || '',
       role: role
     }
   } else {
@@ -376,6 +387,7 @@ const openPlayerForm = (role) => {
       name: '',
       opggUrl: '',
       leaguepediaUrl: '',
+      golUrl: '',
       role: role
     }
   }
@@ -392,6 +404,7 @@ const closePlayerForm = () => {
     name: '',
     opggUrl: '',
     leaguepediaUrl: '',
+    golUrl: '',
     role: 'Top'
   }
 }
@@ -412,7 +425,8 @@ const handleSubmitPlayer = async () => {
       await scoutingStore.updatePlayer(editingPlayerId.value, {
         name: playerForm.value.name,
         opggUrl: playerForm.value.opggUrl,
-        leaguepediaUrl: playerForm.value.leaguepediaUrl || null
+        leaguepediaUrl: playerForm.value.leaguepediaUrl || null,
+        golUrl: playerForm.value.golUrl || null
       })
     } else {
       // Add new player
@@ -420,6 +434,7 @@ const handleSubmitPlayer = async () => {
         name: playerForm.value.name,
         opggUrl: playerForm.value.opggUrl,
         leaguepediaUrl: playerForm.value.leaguepediaUrl || null,
+        golUrl: playerForm.value.golUrl || null,
         teamId: scoutingStore.selectedTeamId,
         role: playerForm.value.role
       })

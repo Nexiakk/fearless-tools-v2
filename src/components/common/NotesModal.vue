@@ -9,7 +9,7 @@
       >
         <div class="fixed inset-0 bg-black/60" @click="handleClose"></div>
         <div
-          class="relative w-full max-w-md rounded-lg bg-gray-800 border border-gray-700 p-6 shadow-lg"
+          class="relative w-full max-w-md rounded-lg bg-[#1a1a1a] p-6 shadow-lg"
           @click.stop
         >
           <h3 class="text-xl font-semibold text-white mb-4">{{ notesStore.title }}</h3>
@@ -58,7 +58,7 @@
           <textarea
             ref="textareaRef"
             v-model="notesStore.currentNote"
-            class="w-full min-h-[150px] px-3 py-2 rounded border border-gray-600 bg-gray-700 text-white placeholder-gray-400 resize-y focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+            class="w-full min-h-[150px] px-3 py-2 rounded border border-gray-700 bg-[#1a1a1a] text-white placeholder-gray-400 resize-y focus:outline-none focus:border-amber-500"
             placeholder="Enter notes here..."
             @keydown.ctrl.enter="handleSave"
             @keydown.meta.enter="handleSave"

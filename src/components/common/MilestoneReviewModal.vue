@@ -9,7 +9,7 @@
       >
         <div class="fixed inset-0 bg-black/60" @click="milestoneStore.close()"></div>
         <div
-          class="relative w-full max-w-7xl max-h-[90vh] rounded-lg bg-gray-800 border border-gray-700 shadow-lg flex flex-col"
+          class="relative w-full max-w-7xl max-h-[90vh] rounded-lg bg-[#1a1a1a] shadow-lg flex flex-col"
           @click.stop
         >
           <!-- Header -->
@@ -31,7 +31,7 @@
               <div
                 v-for="role in roles"
                 :key="role"
-                class="flex-1 flex flex-col border border-gray-700 rounded-lg bg-gray-900"
+                class="flex-1 flex flex-col border border-gray-700 rounded-lg bg-[#1a1a1a]"
               >
                 <!-- Role Header -->
                 <div class="p-3 border-b border-gray-700 flex items-center gap-2">
@@ -51,7 +51,7 @@
                         v-for="row in 5"
                         :key="`${role}-col-${col}-row-${row}`"
                         @click="handleSlotClick(role, (col - 1) * 5 + (row - 1))"
-                        class="milestone-review-slot rounded cursor-pointer transition-all relative overflow-hidden bg-gray-800 border border-gray-600 hover:border-amber-500"
+                        class="milestone-review-slot rounded cursor-pointer transition-all relative overflow-hidden bg-[#1a1a1a] border border-gray-700 hover:border-amber-500"
                         :class="{
                           'ring-2 ring-amber-500 border-amber-500': milestoneStore.selectedChampionFromPanel?.role === role && milestoneStore.selectedChampionFromPanel?.index === ((col - 1) * 5 + (row - 1))
                         }"

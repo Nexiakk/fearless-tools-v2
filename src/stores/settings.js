@@ -11,7 +11,8 @@ export const useSettingsStore = defineStore('settings', () => {
       highlightCardSize: 100, // Percentage scale (50-200), default 100
       unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
       disableAnimations: false,
-      centerCards: true
+      centerCards: true,
+      enableSearch: true // Enable search bar feature, default: enabled
     },
     drafting: {
       integrateUnavailableChampions: true // default: enabled
@@ -67,6 +68,27 @@ export const useSettingsStore = defineStore('settings', () => {
     isSettingsOpen.value = false
   }
   
+  function resetSettings() {
+    // Reset to default values
+    settings.value = {
+      pool: {
+        frozenChampions: false,
+        compactMode: false, // Deprecated, kept for backward compatibility
+        normalCardSize: 100, // Percentage scale (50-200), default 100
+        highlightCardSize: 100, // Percentage scale (50-200), default 100
+        unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
+        disableAnimations: false,
+        centerCards: true,
+        enableSearch: true // Enable search bar feature, default: enabled
+      },
+      drafting: {
+        integrateUnavailableChampions: true // default: enabled
+      }
+    }
+    // Save the reset settings
+    saveSettings()
+  }
+  
   // Initialize
   loadSettings()
   
@@ -79,7 +101,8 @@ export const useSettingsStore = defineStore('settings', () => {
     loadSettings,
     saveSettings,
     openSettings,
-    closeSettings
+    closeSettings,
+    resetSettings
   }
 })
 

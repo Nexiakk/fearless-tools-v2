@@ -81,6 +81,106 @@
   z-index: 101; /* Above navbar */
 }
 
+/* Search Bar (aligned with Top lane container) */
+.navbar-search-container {
+  position: fixed; /* Use fixed to position relative to viewport, not navbar-container */
+  /* Calculate position: viewport center - half container width + container padding + pillar padding */
+  /* container-fluid: max-width 1800px, width 98%, margin auto, padding p-4 (1rem) */
+  /* The container is centered, so: (100vw - min(98vw, 1800px)) / 2 gives left edge */
+  /* Then add padding (1rem) and pillar padding (8px) */
+  left: calc((100vw - min(98vw, 1800px)) / 2 + 1rem + 8px);
+  top: 6px; /* Match navbar-container padding */
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  width: 200px;
+  height: 28px; /* Constrain height to fit within navbar */
+  box-sizing: border-box;
+}
+
+.navbar-search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.static-cursor {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #ffffff;
+  pointer-events: none;
+  font-size: 0.875rem;
+  line-height: 1;
+  animation: none !important;
+  opacity: 0.15; /* Match search bar opacity when empty */
+  transition: opacity 0.3s ease;
+}
+
+/* Make cursor visible when search has content */
+.navbar-search-container:has(.navbar-search-input:not(:placeholder-shown)) .static-cursor {
+  opacity: 1;
+}
+
+.navbar-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  fill: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  z-index: 1;
+  transition: fill 0.3s ease;
+}
+
+.navbar-search-input {
+  background-color: rgba(40, 40, 40, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 12px 4px 36px; /* Reduced vertical padding to fit navbar */
+  color: #ffffff;
+  font-size: 0.875rem;
+  width: 100%;
+  height: 100%; /* Fill container height */
+  transition: opacity 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+  opacity: 0.15; /* Nearly invisible when empty */
+  outline: none;
+  caret-color: transparent; /* Hide the blinking cursor completely */
+  box-sizing: border-box;
+  line-height: 1.2;
+}
+
+.navbar-search-input::selection {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.navbar-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Only show full opacity when input has content, not when focused */
+.navbar-search-input:not(:placeholder-shown) {
+  opacity: 1;
+  background-color: rgba(40, 40, 40, 0.8);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.navbar-search-container:has(.navbar-search-input:not(:placeholder-shown)) .navbar-search-icon {
+  fill: rgba(255, 255, 255, 0.6);
+}
+
+.navbar-search-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(40, 40, 40, 0.8);
+}
+
+/* When focused but empty, still keep low opacity */
+.navbar-search-input:focus:placeholder-shown {
+  opacity: 0.3; /* Slightly more visible when focused but empty */
+}
+
 /* --- [NEW] View Switcher in Navbar --- */
 .view-switcher-navbar-container {
   position: absolute;

@@ -1,6 +1,6 @@
 <template>
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="$emit('close')">
-    <div class="bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
+    <div class="bg-[#1a1a1a] rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-lg">
       <!-- Header -->
       <div class="flex items-center justify-between p-6 border-b border-gray-700">
         <div>
@@ -46,7 +46,7 @@
 
         <div v-else class="space-y-6">
           <!-- SoloQ Data -->
-          <div v-if="scoutingData.soloq" class="bg-gray-700 rounded-lg p-4">
+          <div v-if="scoutingData.soloq" class="bg-[#1a1a1a] border border-gray-700 rounded-lg p-4">
             <h3 class="text-lg font-semibold text-white mb-4">SoloQ Stats</h3>
             <div v-if="scoutingData.soloq.currentSeason" class="space-y-4">
               <div class="flex items-center gap-4 text-sm">
@@ -64,7 +64,7 @@
                   <div
                     v-for="champ in scoutingData.soloq.currentSeason.champions.slice(0, 12)"
                     :key="champ.championName"
-                    class="p-2 bg-gray-600 rounded text-sm"
+                    class="p-2 bg-[#1a1a1a] border border-gray-700 rounded text-sm"
                   >
                     <p class="text-white font-medium">{{ champ.championName }}</p>
                     <p class="text-gray-400 text-xs">
@@ -81,7 +81,7 @@
           </div>
 
           <!-- Pro Play Data -->
-          <div v-if="scoutingData.proplay" class="bg-gray-700 rounded-lg p-4">
+          <div v-if="scoutingData.proplay" class="bg-[#1a1a1a] border border-gray-700 rounded-lg p-4">
             <h3 class="text-lg font-semibold text-white mb-4">Pro Play Stats</h3>
             <div v-if="scoutingData.proplay.playerInfo" class="mb-4">
               <div class="flex items-center gap-4 text-sm">
@@ -99,7 +99,7 @@
                 <div
                   v-for="champ in scoutingData.proplay.championPool.slice(0, 12)"
                   :key="champ.championName"
-                  class="p-2 bg-gray-600 rounded text-sm"
+                  class="p-2 bg-[#1a1a1a] border border-amber-500/20 rounded text-sm"
                 >
                   <p class="text-white font-medium">{{ champ.championName }}</p>
                   <p class="text-gray-400 text-xs">
@@ -114,7 +114,7 @@
                 <div
                   v-for="(match, index) in scoutingData.proplay.recentMatches.slice(0, 5)"
                   :key="index"
-                  class="p-2 bg-gray-600 rounded text-sm flex items-center justify-between"
+                  class="p-2 bg-[#1a1a1a] border border-amber-500/20 rounded text-sm flex items-center justify-between"
                 >
                   <div class="flex items-center gap-2">
                     <span :class="match.win ? 'text-green-400' : 'text-red-400'">
@@ -131,7 +131,7 @@
           </div>
 
           <!-- Analytics -->
-          <div v-if="scoutingData.analytics" class="bg-gray-700 rounded-lg p-4">
+          <div v-if="scoutingData.analytics" class="bg-[#1a1a1a] border border-gray-700 rounded-lg p-4">
             <h3 class="text-lg font-semibold text-white mb-4">Analytics</h3>
             <div v-if="scoutingData.analytics.soloqVsProplay" class="mb-4">
               <h4 class="text-md font-medium text-white mb-2">SoloQ vs Pro Play</h4>
@@ -156,7 +156,7 @@
                 <span
                   v-for="champ in scoutingData.analytics.mostPlayed.slice(0, 10)"
                   :key="champ.championName"
-                  class="px-2 py-1 bg-gray-600 rounded text-sm text-white"
+                  class="px-2 py-1 bg-[#1a1a1a] border border-amber-500/20 rounded text-sm text-white"
                 >
                   {{ champ.championName }} ({{ champ.totalGames }})
                 </span>
