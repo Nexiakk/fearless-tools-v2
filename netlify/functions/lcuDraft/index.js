@@ -72,10 +72,76 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const { lobbyId, phase, blue_side, red_side } = draftData
+    if (!draftData.workspaceId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'workspaceId is required' })
+      }
+    }
+
+    // Validate workspace exists (if database is available)
+    if (db) {
+      const workspaceRef = db.collection('workspaces').doc(draftData.workspaceId)
+      const metadataRef = workspaceRef.collection('metadata').doc('info')
+      const metadataDoc = await metadataRef.get()
+      
+      if (!metadataDoc.exists()) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Workspace not found' })
+        }
+      }
+    }
+
+    // Handle delete request (champion select cancelled)
+    if (draftData.action === 'delete') {
+      const { lobbyId, workspaceId } = draftData
+      
+      if (!workspaceId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'workspaceId is required for delete' })
+        }
+      }
+      
+      if (db) {
+        const draftRef = db.collection('workspaces')
+          .doc(String(workspaceId))
+          .collection('lcuDrafts')
+          .doc(String(lobbyId))
+        await draftRef.delete()
+        console.log(`[LCU Draft] Deleted draft for lobby ${lobbyId} (champion select cancelled)`)
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            lobbyId: String(lobbyId),
+            message: 'Draft deleted (champion select cancelled)'
+          })
+        }
+      } else {
+        console.log(`[LCU Draft] Test mode - would delete draft for lobby ${lobbyId}`)
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            lobbyId: String(lobbyId),
+            message: 'Delete request received (test mode)'
+          })
+        }
+      }
+    }
+
+    const { lobbyId, workspaceId, phase, blue_side, red_side } = draftData
 
     // Prepare data for Firestore
-    // Structure: lcuDrafts/{lobbyId}
+    // Structure: workspaces/{workspaceId}/lcuDrafts/{lobbyId}
     const draftDoc = {
       lobbyId: String(lobbyId),
       phase: phase || 'UNKNOWN',
@@ -91,9 +157,9 @@ exports.handler = async (event, context) => {
         picksOrdered: red_side?.picks_ordered || [],
         bansOrdered: red_side?.bans_ordered || []
       },
-      // If phase is PLANNING or early phase, treat as new game (overwrite existing)
-      // This handles quit/restart scenarios
-      isNewGame: phase === 'PLANNING' || phase === 'UNKNOWN'
+      // Use isNewGame flag from client (more reliable than phase check)
+      // Client detects CREATE events and phase changes
+      isNewGame: draftData.isNewGame === true
     }
 
     // Save to Firestore if available, otherwise just log
@@ -101,9 +167,12 @@ exports.handler = async (event, context) => {
     if (db) {
       draftDoc.updatedAt = admin.firestore.FieldValue.serverTimestamp()
       
-      // Use lobbyId as document ID to ensure uniqueness
+      // Use workspace-scoped path: workspaces/{workspaceId}/lcuDrafts/{lobbyId}
       // This prevents duplicates when multiple clients send data for the same lobby
-      const draftRef = db.collection('lcuDrafts').doc(String(lobbyId))
+      const draftRef = db.collection('workspaces')
+        .doc(String(workspaceId))
+        .collection('lcuDrafts')
+        .doc(String(lobbyId))
 
       // Check if document exists
       const docSnapshot = await draftRef.get()
