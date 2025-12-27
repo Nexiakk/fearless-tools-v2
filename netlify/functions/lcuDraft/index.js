@@ -108,21 +108,39 @@ exports.handler = async (event, context) => {
       }
       
       if (db) {
-        const draftRef = db.collection('workspaces')
+        const lcuDraftsRef = db.collection('workspaces')
           .doc(String(workspaceId))
           .collection('lcuDrafts')
-          .doc(String(lobbyId))
-        await draftRef.delete()
-        console.log(`[LCU Draft] Deleted draft for lobby ${lobbyId} (champion select cancelled)`)
         
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: true,
-            lobbyId: String(lobbyId),
-            message: 'Draft deleted (champion select cancelled)'
-          })
+        // Find document by lobbyId field (since doc ID might be lobbyId_{number})
+        const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
+        
+        if (!existingDocs.empty) {
+          const docId = existingDocs.docs[0].id
+          await lcuDraftsRef.doc(docId).delete()
+          console.log(`[LCU Draft] Deleted draft for lobby ${lobbyId} (doc: ${docId}, champion select cancelled)`)
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              lobbyId: String(lobbyId),
+              docId: docId,
+              message: 'Draft deleted (champion select cancelled)'
+            })
+          }
+        } else {
+          console.log(`[LCU Draft] No document found for lobby ${lobbyId} to delete`)
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              lobbyId: String(lobbyId),
+              message: 'Draft not found'
+            })
+          }
         }
       } else {
         console.log(`[LCU Draft] Test mode - would delete draft for lobby ${lobbyId}`)
@@ -167,35 +185,59 @@ exports.handler = async (event, context) => {
     if (db) {
       draftDoc.updatedAt = admin.firestore.FieldValue.serverTimestamp()
       
-      // Use workspace-scoped path: workspaces/{workspaceId}/lcuDrafts/{lobbyId}
-      // This prevents duplicates when multiple clients send data for the same lobby
-      const draftRef = db.collection('workspaces')
+      // Get collection reference
+      const lcuDraftsRef = db.collection('workspaces')
         .doc(String(workspaceId))
         .collection('lcuDrafts')
-        .doc(String(lobbyId))
+      
+      // Determine document ID: use sequential number for new games, or find existing by lobbyId
+      let docId = null
+      
+      // First, check if a document with this lobbyId already exists (query by lobbyId field)
+      // This handles updates to existing drafts
+      const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
+      if (!existingDocs.empty) {
+        docId = existingDocs.docs[0].id
+        docExists = true
+        console.log(`[LCU Draft] Found existing document ${docId} for lobby ${lobbyId}`)
+      }
+      
+      // If it's a new game and no existing document found, get next sequential number
+      if (!docId && draftDoc.isNewGame) {
+        // Count existing documents to get next number
+        const allDocs = await lcuDraftsRef.get()
+        const nextNumber = allDocs.size + 1
+        docId = `lobbyId_${nextNumber}`
+        console.log(`[LCU Draft] New game - assigning document ID: ${docId} (total drafts: ${allDocs.size})`)
+      } else if (!docId) {
+        // Not a new game but no existing document - this shouldn't happen, but fallback to sequential number
+        const allDocs = await lcuDraftsRef.get()
+        const nextNumber = allDocs.size + 1
+        docId = `lobbyId_${nextNumber}`
+        console.warn(`[LCU Draft] Warning: No existing document found for lobby ${lobbyId}, creating new with ID: ${docId}`)
+      }
+      
+      const draftRef = lcuDraftsRef.doc(docId)
 
-      // Check if document exists
-      const docSnapshot = await draftRef.get()
-      docExists = docSnapshot.exists
-
-      if (docSnapshot.exists && draftDoc.isNewGame) {
-        // New game detected - overwrite existing data
+      if (docExists && draftDoc.isNewGame) {
+        // New game detected - overwrite existing data (same lobbyId but new game)
         await draftRef.set({
           ...draftDoc,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: false }) // Overwrite completely
         
-        console.log(`[LCU Draft] New game detected for lobby ${lobbyId} - overwrote existing data`)
+        console.log(`[LCU Draft] New game detected for lobby ${lobbyId} (doc: ${docId}) - overwrote existing data`)
       } else {
         // Update existing or create new
+        if (!docExists) {
+          draftDoc.createdAt = admin.firestore.FieldValue.serverTimestamp()
+        }
         await draftRef.set(draftDoc, { merge: true })
         
-        if (docSnapshot.exists) {
-          console.log(`[LCU Draft] Updated draft for lobby ${lobbyId}`)
+        if (docExists) {
+          console.log(`[LCU Draft] Updated draft for lobby ${lobbyId} (doc: ${docId})`)
         } else {
-          draftDoc.createdAt = admin.firestore.FieldValue.serverTimestamp()
-          await draftRef.set(draftDoc, { merge: true })
-          console.log(`[LCU Draft] Created new draft for lobby ${lobbyId}`)
+          console.log(`[LCU Draft] Created new draft for lobby ${lobbyId} (doc: ${docId})`)
         }
       }
     } else {
