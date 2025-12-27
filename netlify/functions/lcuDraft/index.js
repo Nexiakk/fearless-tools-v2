@@ -190,7 +190,7 @@ exports.handler = async (event, context) => {
         .doc(String(workspaceId))
         .collection('lcuDrafts')
       
-      // Determine document ID: use sequential number for new games, or find existing by lobbyId
+      // Determine document ID: use format {lobbyId}_{number} for sequential ordering
       let docId = null
       
       // First, check if a document with this lobbyId already exists (query by lobbyId field)
@@ -207,13 +207,13 @@ exports.handler = async (event, context) => {
         // Count existing documents to get next number
         const allDocs = await lcuDraftsRef.get()
         const nextNumber = allDocs.size + 1
-        docId = `lobbyId_${nextNumber}`
+        docId = `${lobbyId}_${nextNumber}`
         console.log(`[LCU Draft] New game - assigning document ID: ${docId} (total drafts: ${allDocs.size})`)
       } else if (!docId) {
         // Not a new game but no existing document - this shouldn't happen, but fallback to sequential number
         const allDocs = await lcuDraftsRef.get()
         const nextNumber = allDocs.size + 1
-        docId = `lobbyId_${nextNumber}`
+        docId = `${lobbyId}_${nextNumber}`
         console.warn(`[LCU Draft] Warning: No existing document found for lobby ${lobbyId}, creating new with ID: ${docId}`)
       }
       
