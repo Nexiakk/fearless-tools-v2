@@ -739,7 +739,146 @@ export function setupNotesRealtimeSync(workspaceId, seriesId, callback) {
   }
 }
 
+// ========== DRAWING FUNCTIONS ==========
 
+/**
+ * Save drawing stroke
+ */
+export async function saveDrawingStroke(workspaceId, view, stroke, isPartial = false) {
+  if (!workspaceId || !view || !stroke) {
+    throw new Error('Workspace ID, view, and stroke are required')
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const strokeRef = doc(strokesRef, stroke.id)
+    
+    const dataToSave = {
+      points: stroke.points || [],
+      color: stroke.color || '#ffffff',
+      width: stroke.width || 3,
+      userId: stroke.userId || 'unknown',
+      view,
+      createdAt: stroke.createdAt ? (stroke.createdAt instanceof Date ? Timestamp.fromDate(stroke.createdAt) : stroke.createdAt) : serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }
+    
+    if (isPartial) {
+      // Partial update - merge with existing
+      await updateDoc(strokeRef, {
+        points: dataToSave.points,
+        updatedAt: dataToSave.updatedAt
+      })
+    } else {
+      // Full document
+      await setDoc(strokeRef, dataToSave, { merge: true })
+    }
+    
+    return { id: stroke.id, ...dataToSave }
+  } catch (error) {
+    console.error('Error saving drawing stroke:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all drawing strokes for a view
+ */
+export async function getDrawingStrokes(workspaceId, view) {
+  if (!workspaceId || !view) {
+    console.warn('Workspace ID and view are required')
+    return []
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const q = query(strokesRef, orderBy('createdAt', 'asc'))
+    const querySnapshot = await getDocs(q)
+
+    return querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        points: data.points || [],
+        color: data.color || '#ffffff',
+        width: data.width || 3,
+        userId: data.userId || 'unknown',
+        view: data.view || view,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching drawing strokes:', error)
+    return []
+  }
+}
+
+/**
+ * Clear drawing canvas (delete all strokes)
+ */
+export async function clearDrawingCanvas(workspaceId, view) {
+  if (!workspaceId || !view) {
+    throw new Error('Workspace ID and view are required')
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const querySnapshot = await getDocs(strokesRef)
+
+    // Delete all strokes
+    const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref))
+    await Promise.all(deletePromises)
+    
+    return true
+  } catch (error) {
+    console.error('Error clearing drawing canvas:', error)
+    throw error
+  }
+}
+
+/**
+ * Set up real-time sync for drawing strokes
+ */
+export function setupDrawingRealtimeSync(workspaceId, view, callback) {
+  if (!workspaceId || !view) {
+    console.warn('Workspace ID and view are required for drawing real-time sync')
+    return () => {}
+  }
+
+  try {
+    const strokesRef = collection(db, 'workspaces', workspaceId, 'drawing', view, 'strokes')
+    const q = query(strokesRef, orderBy('createdAt', 'asc'))
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const strokes = querySnapshot.docs.map(docSnap => {
+          const data = docSnap.data()
+          return {
+            id: docSnap.id,
+            points: data.points || [],
+            color: data.color || '#ffffff',
+            width: data.width || 3,
+            userId: data.userId || 'unknown',
+            view: data.view || view,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+          }
+        })
+        callback(strokes)
+      },
+      (error) => {
+        console.error('Error listening to drawing updates:', error)
+      }
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error('Error setting up drawing real-time sync:', error)
+    return () => {}
+  }
+}
 
 // ========== LCU DRAFTS FUNCTIONS ==========
 

@@ -1,62 +1,87 @@
 <template>
-  <Dialog :open="notesStore.isOpen" @update:open="handleOpenChange">
-    <DialogContent class="max-w-md">
-      <DialogHeader>
-        <DialogTitle>{{ notesStore.title }}</DialogTitle>
-      </DialogHeader>
-
-      <!-- Note Type Indicator -->
-      <div v-if="notesStore.noteType !== 'general'" class="flex items-center gap-2 text-sm text-muted-foreground">
-        <span class="px-2 py-1 rounded bg-muted">
-          {{ notesStore.noteType === 'champion' ? 'Champion Note' : 'Slot Note' }}
-        </span>
-      </div>
-
-      <!-- Scope Selector (only for slot and champion notes, not general) -->
-      <div v-if="notesStore.noteType !== 'general' && seriesStore.hasSeries" class="space-y-2">
-        <label class="text-sm font-medium">Scope:</label>
-        <div class="flex gap-2">
-          <Button
-            @click="notesStore.setScope('local')"
-            :variant="notesStore.scope === 'local' ? 'default' : 'outline'"
-            size="sm"
-          >
-            This Game Only
-          </Button>
-          <Button
-            @click="notesStore.setScope('global')"
-            :variant="notesStore.scope === 'global' ? 'default' : 'outline'"
-            size="sm"
-          >
-            All Games (Global)
-          </Button>
+  <Teleport to="body">
+    <Transition name="fade">
+      <div
+        v-if="notesStore.isOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="handleClose"
+        @keydown.escape="handleClose"
+      >
+        <div class="fixed inset-0 bg-black/60" @click="handleClose"></div>
+        <div
+          class="relative w-full max-w-md rounded-lg bg-[#1a1a1a] p-6 shadow-lg"
+          @click.stop
+        >
+          <h3 class="text-xl font-semibold text-white mb-4">{{ notesStore.title }}</h3>
+          
+          <!-- Note Type Indicator -->
+          <div v-if="notesStore.noteType !== 'general'" class="mb-3 flex items-center gap-2 text-sm text-gray-400">
+            <span class="px-2 py-1 rounded bg-gray-700">
+              {{ notesStore.noteType === 'champion' ? 'Champion Note' : 'Slot Note' }}
+            </span>
+          </div>
+          
+          <!-- Scope Selector (only for slot and champion notes, not general) -->
+          <div v-if="notesStore.noteType !== 'general' && seriesStore.hasSeries" class="mb-3">
+            <label class="block text-sm font-medium text-gray-300 mb-2">Scope:</label>
+            <div class="flex gap-2">
+              <button
+                @click="notesStore.setScope('local')"
+                :class="[
+                  'px-4 py-2 rounded text-sm font-medium transition-colors',
+                  notesStore.scope === 'local'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ]"
+              >
+                This Game Only
+              </button>
+              <button
+                @click="notesStore.setScope('global')"
+                :class="[
+                  'px-4 py-2 rounded text-sm font-medium transition-colors',
+                  notesStore.scope === 'global'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ]"
+              >
+                All Games (Global)
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">
+              {{ notesStore.scope === 'global' 
+                ? 'This note will be visible across all games in the series' 
+                : 'This note will only be visible in the current game' }}
+            </p>
+          </div>
+          
+          <textarea
+            ref="textareaRef"
+            v-model="notesStore.currentNote"
+            class="w-full min-h-[150px] px-3 py-2 rounded border border-gray-700 bg-[#1a1a1a] text-white placeholder-gray-400 resize-y focus:outline-none focus:border-amber-500"
+            placeholder="Enter notes here..."
+            @keydown.ctrl.enter="handleSave"
+            @keydown.meta.enter="handleSave"
+          ></textarea>
+          
+          <div class="mt-4 flex justify-end gap-3">
+            <button
+              @click="handleClose"
+              class="modal-button modal-button-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              @click="handleSave"
+              class="modal-button modal-button-confirm"
+            >
+              Save & Close
+            </button>
+          </div>
         </div>
-        <p class="text-xs text-muted-foreground">
-          {{ notesStore.scope === 'global'
-            ? 'This note will be visible across all games in the series'
-            : 'This note will only be visible in the current game' }}
-        </p>
       </div>
-
-      <Textarea
-        ref="textareaRef"
-        v-model="notesStore.currentNote"
-        class="min-h-[150px] resize-y"
-        placeholder="Enter notes here..."
-        @keydown.ctrl.enter="handleSave"
-        @keydown.meta.enter="handleSave"
-      />
-
-      <DialogFooter>
-        <Button @click="handleClose" variant="outline">
-          Cancel
-        </Button>
-        <Button @click="handleSave">
-          Save & Close
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -64,19 +89,10 @@ import { ref, watch, nextTick } from 'vue'
 import { useNotesStore } from '@/stores/notes'
 import { useSeriesStore } from '@/stores/series'
 import { notesService } from '@/services/notes'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 
 const notesStore = useNotesStore()
 const seriesStore = useSeriesStore()
 const textareaRef = ref(null)
-
-const handleOpenChange = (open) => {
-  if (!open) {
-    notesStore.close()
-  }
-}
 
 // Auto-focus textarea when modal opens
 watch(() => notesStore.isOpen, (isOpen) => {
@@ -127,5 +143,13 @@ const handleSave = async () => {
 </script>
 
 <style scoped>
-/* No custom styles needed - using shadcn components */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>

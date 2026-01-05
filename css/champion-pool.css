@@ -460,18 +460,6 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
   transform: scale(1);
 }
 
-/* Search blur effect for champion cards */
-.compact-champion-card.search-blur {
-  opacity: 0.3;
-  filter: blur(0.5px);
-  transform: scale(0.95);
-}
-.compact-champion-card.search-blur:hover {
-  opacity: 0.6; /* Bring it back on hover */
-  filter: blur(0px);
-  transform: scale(1);
-}
-
 /* MODIFIED: champion-grid-container is now just for scrolling */
 .champion-grid-container {
   overflow-y: auto;

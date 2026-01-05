@@ -41,10 +41,6 @@ const props = defineProps({
   role: {
     type: String,
     required: true
-  },
-  searchMatch: {
-    type: Boolean,
-    default: true
   }
 })
 
@@ -65,9 +61,7 @@ const cardClasses = computed(() => ({
     !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
   'manually-marked': draftStore.isHighlighted(props.champion.name, props.role) &&
     !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
-  'editor-mode': adminStore.isEditorModeActive,
-  'search-match': props.searchMatch,
-  'search-blur': !props.searchMatch
+  'editor-mode': adminStore.isEditorModeActive
 }))
 
 const handleClick = () => {
@@ -98,3 +92,5 @@ const handleMiddleClick = () => {
   }
 }
 </script>
+
+

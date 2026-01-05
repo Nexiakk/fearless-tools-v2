@@ -10,7 +10,6 @@
           :key="`${champion.id}-${role}-sticky`"
           :champion="champion"
           :role="role"
-          :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
         />
       </div>
       <div class="scrollable-champions-container">
@@ -19,7 +18,6 @@
           :key="`${champion.id}-${role}-scrollable`"
           :champion="champion"
           :role="role"
-          :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
         />
       </div>
     </div>
@@ -31,7 +29,6 @@
         :key="`${champion.id}-${role}`"
         :champion="champion"
         :role="role"
-        :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
       />
     </div>
   </div>
@@ -41,7 +38,6 @@
 import { computed } from 'vue'
 import { useChampionsStore } from '@/stores/champions'
 import { useSettingsStore } from '@/stores/settings'
-import { useChampionSearchStore } from '@/stores/championSearch'
 import ChampionCard from './ChampionCard.vue'
 
 const props = defineProps({
@@ -57,7 +53,6 @@ const props = defineProps({
 
 const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
-const championSearchStore = useChampionSearchStore()
 
 const roleIconUrl = computed(() => championsStore.getRoleIconUrl(props.role))
 

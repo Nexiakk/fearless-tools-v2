@@ -21,7 +21,6 @@
               :key="`banned-${champion.id}`"
               :champion="champion"
               role=""
-              :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
             />
           </div>
           
