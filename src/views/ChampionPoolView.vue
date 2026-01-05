@@ -106,11 +106,15 @@ const championsByRole = computed(() => {
 // Get all banned champions as a list
 const bannedChampionsList = computed(() => {
   const allBanned = new Set()
-  
+
   // Combine manually banned and LCU banned
-  draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
-  draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
-  
+  if (draftStore.bannedChampions && typeof draftStore.bannedChampions.forEach === 'function') {
+    draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
+  }
+  if (draftStore.lcuBannedChampions && typeof draftStore.lcuBannedChampions.forEach === 'function') {
+    draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
+  }
+
   // Convert to champion objects, sorted alphabetically
   return championsStore.allChampions
     .filter(champ => allBanned.has(champ.name))

@@ -5,13 +5,13 @@
     @click="handleClick"
     @contextmenu.prevent="handleRightClick"
     @mousedown.middle.prevent="handleMiddleClick"
-    :title="champion.name"
+    :title="champion?.name || ''"
   >
     <div class="compact-champion-icon-wrapper">
       <img
         class="compact-champion-icon"
         :src="championIconUrl"
-        :alt="champion.name"
+        :alt="champion?.name || ''"
         draggable="false"
       />
       <div class="champion-icon-corners"></div>
@@ -23,7 +23,7 @@
         </svg>
       </div>
     </div>
-    <span class="compact-champion-name">{{ champion.name }}</span>
+    <span class="compact-champion-name">{{ champion?.name || '' }}</span>
   </div>
 </template>
 
@@ -48,23 +48,31 @@ const championsStore = useChampionsStore()
 const draftStore = useDraftStore()
 const adminStore = useAdminStore()
 
-const championIconUrl = computed(() =>
-  championsStore.getChampionIconUrl(props.champion.name, 'creator-pool')
-)
+const championIconUrl = computed(() => {
+  if (!props.champion || !props.champion.name) return ''
+  return championsStore.getChampionIconUrl(props.champion.name, 'creator-pool')
+})
 
-const isBanned = computed(() => draftStore.isBannedChampion(props.champion.name))
+const isBanned = computed(() => {
+  if (!props.champion || !props.champion.name) return false
+  return draftStore.isBannedChampion(props.champion.name)
+})
 
-const cardClasses = computed(() => ({
-  banned: isBanned.value,
-  unavailable: draftStore.isUnavailable(props.champion.name) && !isBanned.value,
-  'op-tier': championsStore.isOpForRole(props.champion.name, props.role) &&
-    !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
-  'manually-marked': draftStore.isHighlighted(props.champion.name, props.role) &&
-    !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
-  'editor-mode': adminStore.isEditorModeActive
-}))
+const cardClasses = computed(() => {
+  if (!props.champion || !props.champion.name) return { 'editor-mode': adminStore.isEditorModeActive }
+  return {
+    banned: isBanned.value,
+    unavailable: draftStore.isUnavailable(props.champion.name) && !isBanned.value,
+    'op-tier': championsStore.isOpForRole(props.champion.name, props.role) &&
+      !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
+    'manually-marked': draftStore.isHighlighted(props.champion.name, props.role) &&
+      !draftStore.isUnavailable(props.champion.name) && !isBanned.value,
+    'editor-mode': adminStore.isEditorModeActive
+  }
+})
 
 const handleClick = () => {
+  if (!props.champion || !props.champion.name) return
   if (adminStore.isEditorModeActive) {
     // In editor mode, open champion info modal
     adminStore.setSelectedChampionForEditor(props.champion)
@@ -77,6 +85,7 @@ const handleClick = () => {
 }
 
 const handleRightClick = () => {
+  if (!props.champion || !props.champion.name) return
   if (!adminStore.isEditorModeActive) {
     // Right click: toggle ban (but not for LCU banned champions)
     if (!draftStore.isLcuBanned(props.champion.name)) {
@@ -86,11 +95,10 @@ const handleRightClick = () => {
 }
 
 const handleMiddleClick = () => {
+  if (!props.champion || !props.champion.name) return
   if (!adminStore.isEditorModeActive) {
     // Middle click: toggle highlight
     draftStore.toggleHighlight(props.champion.name, props.role)
   }
 }
 </script>
-
-

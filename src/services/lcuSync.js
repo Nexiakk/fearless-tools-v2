@@ -1,0 +1,291 @@
+import { useDraftStore } from '@/stores/draft'
+import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { fetchLcuDraftsFromFirestore, setupLcuDraftsRealtimeSync } from './firebase/firestore'
+
+class LcuSyncService {
+  constructor() {
+    this.unsubscribe = null
+    this.isInitialized = false
+  }
+
+  // Lazy getters for stores to avoid Pinia initialization issues
+  get draftStore() {
+    return useDraftStore()
+  }
+
+  get settingsStore() {
+    return useSettingsStore()
+  }
+
+  get workspaceStore() {
+    return useWorkspaceStore()
+  }
+
+  async initialize() {
+    if (this.isInitialized) return
+
+    // Watch for workspace changes
+    this.workspaceStore.$subscribe(async (mutation, state) => {
+      if (state.hasWorkspace && !state.isLocalWorkspace) {
+        await this.startSync()
+      } else {
+        this.stopSync()
+      }
+    })
+
+    // Watch for mode changes
+    this.settingsStore.$subscribe(async (mutation, state) => {
+      const draftingMode = state.settings?.drafting?.mode
+      if (draftingMode === 'fearless-sync') {
+        await this.startSync()
+      } else {
+        this.stopSync()
+      }
+    })
+
+    this.isInitialized = true
+
+    // Initial sync if conditions are met
+    if (this.workspaceStore.hasWorkspace &&
+        !this.workspaceStore.isLocalWorkspace &&
+        this.settingsStore.settings?.drafting?.mode === 'fearless-sync') {
+      await this.startSync()
+    }
+  }
+
+  async startSync() {
+    if (!this.workspaceStore.hasWorkspace || this.workspaceStore.isLocalWorkspace) return
+    if (this.settingsStore.settings?.drafting?.mode !== 'fearless-sync') return
+
+    try {
+      console.log('[LCU Sync] Starting Fearless Sync mode')
+
+      // Stop existing sync
+      this.stopSync()
+
+      // Load initial LCU drafts and populate slots
+      await this.loadAndPopulateLcuDrafts()
+
+      // Set up real-time sync
+      this.unsubscribe = setupLcuDraftsRealtimeSync(
+        this.workspaceStore.currentWorkspaceId,
+        async (updatedDrafts) => {
+          await this.handleRealtimeUpdate(updatedDrafts)
+        }
+      )
+
+    } catch (error) {
+      console.error('[LCU Sync] Error starting sync:', error)
+    }
+  }
+
+  stopSync() {
+    if (this.unsubscribe) {
+      this.unsubscribe()
+      this.unsubscribe = null
+    }
+    console.log('[LCU Sync] Stopped Fearless Sync mode')
+  }
+
+  async loadAndPopulateLcuDrafts() {
+    try {
+      const lcuDrafts = await fetchLcuDraftsFromFirestore(this.workspaceStore.currentWorkspaceId)
+      await this.populateDraftSlotsFromLcuDrafts(lcuDrafts)
+      this.checkForCompletedDrafts(lcuDrafts)
+    } catch (error) {
+      console.error('[LCU Sync] Error loading LCU drafts:', error)
+    }
+  }
+
+  async populateDraftSlotsFromLcuDrafts(lcuDrafts) {
+    if (!lcuDrafts || lcuDrafts.length === 0) return
+
+    // Find the latest draft by highest sequential number
+    let latestDraft = null
+    let maxNumber = -1
+
+    lcuDrafts.forEach(draft => {
+      if (draft.id) {
+        const parts = draft.id.split('_')
+        if (parts.length >= 2) {
+          const number = parseInt(parts[parts.length - 1], 10)
+          if (!isNaN(number) && number > maxNumber) {
+            maxNumber = number
+            latestDraft = draft
+          }
+        }
+      }
+    })
+
+    if (!latestDraft) return
+
+    console.log(`[LCU Sync] Populating slots from latest draft: ${latestDraft.id}`)
+
+    // Convert LCU champion IDs to names
+    const championsStore = useDraftStore().$pinia._s.get('champions')
+    const championIdToName = (id) => {
+      if (!id || id === '0') return null
+      const idNum = parseInt(id, 10)
+      const champion = championsStore.allChampions.find(c => c.id === idNum)
+      return champion ? champion.name : null
+    }
+
+    // Populate blue side
+    if (latestDraft.blueSide) {
+      // Bans (first 5 positions)
+      if (latestDraft.blueSide.bans) {
+        latestDraft.blueSide.bans.forEach((banId, index) => {
+          if (index < 5) {
+            const championName = championIdToName(banId)
+            if (championName) {
+              this.draftStore.updateCurrentDraftSlot('blue', 'bans', index, championName)
+            }
+          }
+        })
+      }
+
+      // Picks (positions 5-9)
+      if (latestDraft.blueSide.picks) {
+        latestDraft.blueSide.picks.forEach((pickId, index) => {
+          if (index < 5) {
+            const championName = championIdToName(pickId)
+            if (championName) {
+              this.draftStore.updateCurrentDraftSlot('blue', 'picks', index, championName)
+            }
+          }
+        })
+      }
+    }
+
+    // Populate red side
+    if (latestDraft.redSide) {
+      // Bans (first 5 positions)
+      if (latestDraft.redSide.bans) {
+        latestDraft.redSide.bans.forEach((banId, index) => {
+          if (index < 5) {
+            const championName = championIdToName(banId)
+            if (championName) {
+              this.draftStore.updateCurrentDraftSlot('red', 'bans', index, championName)
+            }
+          }
+        })
+      }
+
+      // Picks (positions 5-9, but mapped to 0-4 in our system)
+      if (latestDraft.redSide.picks) {
+        latestDraft.redSide.picks.forEach((pickId, index) => {
+          if (index < 5) {
+            const championName = championIdToName(pickId)
+            if (championName) {
+              this.draftStore.updateCurrentDraftSlot('red', 'picks', index, championName)
+            }
+          }
+        })
+      }
+    }
+  }
+
+  async handleRealtimeUpdate(updatedDrafts) {
+    console.log('[LCU Sync] Real-time update received')
+    await this.populateDraftSlotsFromLcuDrafts(updatedDrafts)
+    this.checkForCompletedDrafts(updatedDrafts)
+  }
+
+  checkForCompletedDrafts(lcuDrafts) {
+    if (!lcuDrafts || lcuDrafts.length === 0) return
+
+    // Find the latest draft
+    let latestDraft = null
+    let maxNumber = -1
+
+    lcuDrafts.forEach(draft => {
+      if (draft.id) {
+        const parts = draft.id.split('_')
+        if (parts.length >= 2) {
+          const number = parseInt(parts[parts.length - 1], 10)
+          if (!isNaN(number) && number > maxNumber) {
+            maxNumber = number
+            latestDraft = draft
+          }
+        }
+      }
+    })
+
+    if (!latestDraft) return
+
+    // Check if draft is complete (10 bans + 10 picks)
+    const blueBans = latestDraft.blueSide?.bans || []
+    const redBans = latestDraft.redSide?.bans || []
+    const bluePicks = latestDraft.blueSide?.picks || []
+    const redPicks = latestDraft.redSide?.picks || []
+
+    const totalBans = blueBans.filter(id => id && id !== '0').length +
+                      redBans.filter(id => id && id !== '0').length
+    const totalPicks = bluePicks.filter(id => id && id !== '0').length +
+                       redPicks.filter(id => id && id !== '0').length
+
+    const isComplete = totalBans >= 10 && totalPicks >= 10
+
+    if (isComplete) {
+      console.log('[LCU Sync] Draft completed! Triggering ban cleanup')
+      this.triggerBanCleanup(latestDraft)
+    }
+  }
+
+  triggerBanCleanup(completedDraft) {
+    // Extract all banned champion IDs from the completed draft
+    const bannedIds = new Set()
+
+    if (completedDraft.blueSide?.bans) {
+      completedDraft.blueSide.bans.forEach(id => {
+        if (id && id !== '0') bannedIds.add(id)
+      })
+    }
+
+    if (completedDraft.redSide?.bans) {
+      completedDraft.redSide.bans.forEach(id => {
+        if (id && id !== '0') bannedIds.add(id)
+      })
+    }
+
+    // Convert IDs to champion names
+    const championsStore = useDraftStore().$pinia._s.get('champions')
+    const bannedChampionNames = Array.from(bannedIds).map(id => {
+      const idNum = parseInt(id, 10)
+      const champion = championsStore.allChampions.find(c => c.id === idNum)
+      return champion ? champion.name : null
+    }).filter(name => name !== null)
+
+    if (bannedChampionNames.length > 0) {
+      console.log('[LCU Sync] Adding banned champions to pool:', bannedChampionNames)
+      // Add to draft store's banned champions (this will hide them from the pool)
+      bannedChampionNames.forEach(name => {
+        if (!this.draftStore.bannedChampions.has(name)) {
+          this.draftStore.bannedChampions.add(name)
+        }
+      })
+
+      // Save the updated banned champions
+      this.draftStore.queueSave()
+    }
+  }
+
+  // Utility method to check if we're in sync mode
+  isInSyncMode() {
+    return this.settingsStore.settings?.drafting?.mode === 'fearless-sync'
+  }
+
+  // Cleanup method
+  destroy() {
+    this.stopSync()
+    this.isInitialized = false
+  }
+}
+
+// Export the class
+export { LcuSyncService }
+export default LcuSyncService
+
+// Note: Singleton instance is created in main.js after Pinia initialization
+// Components should access it via global reference or through a different pattern

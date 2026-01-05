@@ -16,7 +16,8 @@ export const useSettingsStore = defineStore('settings', () => {
       showBannedChampions: false // Show banned champions container, default: hidden
     },
     drafting: {
-      integrateUnavailableChampions: true // default: enabled
+      integrateUnavailableChampions: true, // default: enabled
+      mode: 'sandbox' // 'sandbox' or 'fearless-sync'
     }
   })
   
@@ -84,7 +85,8 @@ export const useSettingsStore = defineStore('settings', () => {
         showBannedChampions: false // Show banned champions container, default: hidden
       },
       drafting: {
-        integrateUnavailableChampions: true // default: enabled
+        integrateUnavailableChampions: true, // default: enabled
+        mode: 'sandbox' // default: sandbox
       }
     }
     // Save the reset settings
@@ -107,5 +109,3 @@ export const useSettingsStore = defineStore('settings', () => {
     resetSettings
   }
 })
-
-

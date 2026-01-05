@@ -522,16 +522,16 @@ export const useDraftStore = defineStore('draft', () => {
       try {
         await deleteAllLcuDrafts(workspaceStore.currentWorkspaceId)
         // Clear LCU unavailable and banned champions after deleting drafts
-        lcuUnavailableChampions.value = []
-        lcuBannedChampions.value = []
+        lcuUnavailableChampions.value = new Set()
+        lcuBannedChampions.value = new Set()
       } catch (error) {
         console.error('Error deleting LCU drafts:', error)
         // Continue with reset even if deletion fails
       }
     } else {
       // For local workspaces, just clear the state
-      lcuUnavailableChampions.value = []
-      lcuBannedChampions.value = []
+      lcuUnavailableChampions.value = new Set()
+      lcuBannedChampions.value = new Set()
     }
     
     queueSave()

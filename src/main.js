@@ -12,6 +12,7 @@ import { useWorkspaceStore } from './stores/workspace'
 import { useChampionsStore } from './stores/champions'
 import { workspaceService } from './services/workspace'
 import { riotApiService } from './services/riotApi'
+import { LcuSyncService } from './services/lcuSync'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -21,6 +22,14 @@ app.use(router)
 
 // Initialize app after stores are set up
 app.mount('#app')
+
+// Create LCU sync service singleton after Pinia is set up
+const lcuSyncService = new LcuSyncService()
+
+// Make it globally accessible for components
+if (typeof window !== 'undefined') {
+  window.lcuSyncService = lcuSyncService
+}
 
 // Set modal to open immediately if no saved workspace (before async initialization)
 // This prevents UI flash before initialization completes
@@ -63,6 +72,9 @@ async function initializeApp() {
   }
   // If no saved workspace, modal is already open from above
   
+  // Initialize LCU sync service
+  await lcuSyncService.initialize()
+
   // Mark initialization as complete
   workspaceStore.setInitializing(false)
   console.log('App initialization complete')
@@ -87,5 +99,3 @@ if (typeof window !== 'undefined') {
   console.log('🔧 Debug helpers available:')
   console.log('   - debugLcuDrafts() or debugLCU() - Print LCU draft champions with names and sides')
 }
-
-

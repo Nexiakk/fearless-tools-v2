@@ -1,10 +1,7 @@
 <template>
   <div class="drafting-view-wrapper">
     <div v-if="workspaceStore.hasWorkspace" class="draft-creator-container">
-      <!-- Drawing Canvas -->
-      <DrawingCanvas />
-      
-      <!-- Series Navigator - Top Bar -->
+      <!-- Series Navigator - Left Sidebar -->
       <SeriesNavigator v-if="workspaceStore.hasWorkspace" />
       
       <!-- Main Drafting Content -->
@@ -165,7 +162,6 @@
                 :key="`blue-pick-${i}`"
                 class="pick-row blue"
               >
-                <span class="pick-label">B{{ i }}</span>
                 <div
                   class="draft-creator-slot pick-slot"
                   :data-pick-order="`B${i}`"
@@ -186,14 +182,19 @@
                     draggable="false"
                     @error="handleImageError"
                   />
-                  <button
-                    class="notes-toggle-button"
-                    @click.stop="handleToggleNotes('blue', 'picks', i-1)"
-                    title="Edit Notes"
-                  >
-                    <svg><use href="#icon-note"></use></svg>
-                  </button>
                 </div>
+                <span class="pick-label">B{{ i }}</span>
+
+                <!-- Sticky Note for all pick slots -->
+                <StickyNote
+                  :side="'blue'"
+                  :type="'picks'"
+                  :index="i-1"
+                  :isGrouped="isSlotGrouped('blue', 'picks', i-1)"
+                  :groupSlots="getSlotGroup('blue', 'picks', i-1)?.slots || []"
+                  @group-toggle="handleGroupToggle"
+                  @ungroup="handleUngroup"
+                />
               </div>
             </div>
           </div>
@@ -281,6 +282,7 @@
                 :key="`red-pick-${i}`"
                 class="pick-row red"
               >
+                <span class="pick-label">R{{ i }}</span>
                 <div
                   class="draft-creator-slot pick-slot"
                   :data-pick-order="`R${i}`"
@@ -301,15 +303,18 @@
                     draggable="false"
                     @error="handleImageError"
                   />
-                  <button
-                    class="notes-toggle-button"
-                    @click.stop="handleToggleNotes('red', 'picks', i-1)"
-                    title="Edit Notes"
-                  >
-                    <svg><use href="#icon-note"></use></svg>
-                  </button>
                 </div>
-                <span class="pick-label">R{{ i }}</span>
+
+                <!-- Sticky Note for all pick slots -->
+                <StickyNote
+                  :side="'red'"
+                  :type="'picks'"
+                  :index="i-1"
+                  :isGrouped="isSlotGrouped('red', 'picks', i-1)"
+                  :groupSlots="getSlotGroup('red', 'picks', i-1)?.slots || []"
+                  @group-toggle="handleGroupToggle"
+                  @ungroup="handleUngroup"
+                />
               </div>
             </div>
           </div>
@@ -317,8 +322,6 @@
       </div>
     </div>
 
-      <!-- Saved Series Sidebar -->
-      <SeriesManager />
     </div>
     </div>
     
@@ -329,7 +332,7 @@
 </template>
 
 <script setup>
-import { onMounted, computed, watch } from 'vue'
+import { onMounted, computed, watch, ref } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDraftingStore } from '@/stores/drafting'
 import { useSeriesStore } from '@/stores/series'
@@ -339,8 +342,7 @@ import { useNotesStore } from '@/stores/notes'
 import { useSettingsStore } from '@/stores/settings'
 import { notesService } from '@/services/notes'
 import SeriesNavigator from '@/components/drafting/SeriesNavigator.vue'
-import SeriesManager from '@/components/drafting/SeriesManager.vue'
-import DrawingCanvas from '@/components/drafting/DrawingCanvas.vue'
+import StickyNote from '@/components/drafting/StickyNote.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftingStore = useDraftingStore()
@@ -350,6 +352,61 @@ const confirmationStore = useConfirmationStore()
 const settingsStore = useSettingsStore()
 
 const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+
+// Drafting mode computed property
+const draftingMode = computed(() => settingsStore.settings.drafting?.mode || 'sandbox')
+const isFearlessSyncMode = computed(() => draftingMode.value === 'fearless-sync')
+
+// Grouped notes state management
+const groupedNotes = ref(new Map()) // Map of groupKey -> group data
+
+// Helper function to get group key
+const getGroupKey = (side, type, index) => `${side}-${type}-${index}`
+
+// Check if a slot is part of a group
+const isSlotGrouped = (side, type, index) => {
+  const groupKey = getGroupKey(side, type, index)
+  return groupedNotes.value.has(groupKey)
+}
+
+// Get group data for a slot
+const getSlotGroup = (side, type, index) => {
+  const groupKey = getGroupKey(side, type, index)
+  return groupedNotes.value.get(groupKey)
+}
+
+// Handle group toggle event
+const handleGroupToggle = (toggleData) => {
+  const { primary, partner } = toggleData
+
+  // Create group key for the primary slot
+  const primaryKey = getGroupKey(primary.side, primary.type, primary.index)
+  const partnerKey = getGroupKey(partner.side, partner.type, partner.index)
+
+  // Check if either slot is already in a group
+  if (groupedNotes.value.has(primaryKey) || groupedNotes.value.has(partnerKey)) {
+    return // Already grouped
+  }
+
+  // Create new group
+  const groupSlots = [primary, partner]
+  const groupData = {
+    slots: groupSlots,
+    key: `${primaryKey}+${partnerKey}`
+  }
+
+  // Add to grouped notes map
+  groupedNotes.value.set(primaryKey, groupData)
+  groupedNotes.value.set(partnerKey, groupData)
+}
+
+// Handle ungroup event
+const handleUngroup = (groupSlots) => {
+  groupSlots.forEach(slot => {
+    const key = getGroupKey(slot.side, slot.type, slot.index)
+    groupedNotes.value.delete(key)
+  })
+}
 
 // Get current draft from series store
 const currentDraft = computed(() => {
@@ -403,13 +460,29 @@ const handleImageError = (e) => {
   e.target.style.opacity = '0.5'
 }
 
+// Check if a slot is occupied by LCU data (cannot be edited in Fearless Sync mode)
+const isSlotOccupiedByLcu = (side, type, index) => {
+  if (!isFearlessSyncMode.value) return false
+
+  // Check if this slot has a champion from LCU data
+  // This would be determined by checking against LCU draft data
+  // For now, we'll use a placeholder - in real implementation,
+  // this would check the LCU drafts collection
+  return false // TODO: Implement actual LCU slot checking
+}
+
 // Slot click handler
 function handleSlotClick(side, type, index) {
   if (!currentDraft.value) return
-  
+
   const slotKey = `${side}${type.charAt(0).toUpperCase() + type.slice(1)}`
   const slot = currentDraft.value[slotKey]?.[index]
-  
+
+  // In Fearless Sync mode, prevent editing of occupied slots
+  if (isFearlessSyncMode.value && isSlotOccupiedByLcu(side, type, index)) {
+    return // Cannot edit LCU-occupied slots
+  }
+
   if (draftingStore.selectedChampionForPlacement) {
     // Place champion
     if (slot && isChampionAvailable(draftingStore.selectedChampionForPlacement)) {
@@ -420,23 +493,32 @@ function handleSlotClick(side, type, index) {
     // Move champion
     const sourceKey = `${draftingStore.selectedChampionSource.side}${draftingStore.selectedChampionSource.type.charAt(0).toUpperCase() + draftingStore.selectedChampionSource.type.slice(1)}`
     const sourceSlot = currentDraft.value[sourceKey]?.[draftingStore.selectedChampionSource.index]
-    
+
+    // Prevent moving from/to LCU-occupied slots in Fearless Sync mode
+    if (isFearlessSyncMode.value) {
+      const sourceOccupied = isSlotOccupiedByLcu(draftingStore.selectedChampionSource.side, draftingStore.selectedChampionSource.type, draftingStore.selectedChampionSource.index)
+      const targetOccupied = isSlotOccupiedByLcu(side, type, index)
+      if (sourceOccupied || targetOccupied) return
+    }
+
     if (slot && sourceSlot) {
       const tempChamp = sourceSlot.champion
       const tempNotes = sourceSlot.notes
-      
+
       sourceSlot.champion = slot.champion
       sourceSlot.notes = slot.notes
-      
+
       slot.champion = tempChamp
       slot.notes = tempNotes
-      
+
       draftingStore.selectedChampionSource = null
       seriesStore.queueSave()
     }
   } else if (slot?.champion) {
-    // Select for move
-    draftingStore.selectedChampionSource = { side, type, index, championName: slot.champion }
+    // Select for move (prevent selecting LCU-occupied slots in Fearless Sync mode)
+    if (!isFearlessSyncMode.value || !isSlotOccupiedByLcu(side, type, index)) {
+      draftingStore.selectedChampionSource = { side, type, index, championName: slot.champion }
+    }
   } else {
     // Select for targeting
     draftingStore.selectedTargetSlot = { side, type, index }
