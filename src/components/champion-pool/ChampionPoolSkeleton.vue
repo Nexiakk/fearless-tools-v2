@@ -1,7 +1,7 @@
 <template>
   <div class="pool-main-area">
-    <div 
-      class="compact-view-container skeleton-container" 
+    <div
+      class="compact-view-container skeleton-container"
       :class="viewClasses"
       :style="cardSizeStyles"
     >
@@ -11,7 +11,7 @@
         class="role-pillar skeleton-pillar"
       >
         <div class="pillar-header-icon skeleton-role-icon"></div>
-        
+
         <div class="pillar-champions-grid skeleton-grid fluid">
           <div
             v-for="i in skeletonCardCount"
@@ -31,40 +31,40 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useSettingsStore } from '@/stores/settings'
+import { computed } from "vue";
+import { useSettingsStore } from "@/stores/settings";
 
-const settingsStore = useSettingsStore()
+const settingsStore = useSettingsStore();
 
-const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+const roles = ["Top", "Jungle", "Mid", "Bot", "Support"];
 
 const viewClasses = computed(() => ({
-  'compact-mode': settingsStore.settings.pool.compactMode,
-  'no-animations': true, // Disable animations for skeleton
-  'center-cards': settingsStore.settings.pool.centerCards
-}))
+  "compact-mode": settingsStore.settings.pool.compactMode,
+  "no-animations": true, // Disable animations for skeleton
+  "center-cards": settingsStore.settings.pool.centerCards,
+}));
 
 const cardSizeStyles = computed(() => {
-  const normalSize = settingsStore.settings.pool.normalCardSize || 100
-  const highlightSize = settingsStore.settings.pool.highlightCardSize || 100
-  const unavailableSize = settingsStore.settings.pool.unavailableCardSize || 83
-  
+  const normalSize = settingsStore.settings.pool.normalCardSize || 100;
+  const highlightSize = settingsStore.settings.pool.highlightCardSize || 100;
+  const unavailableSize = settingsStore.settings.pool.unavailableCardSize || 83;
+
   return {
-    '--normal-card-scale': normalSize / 100,
-    '--highlight-card-scale': highlightSize / 100,
-    '--unavailable-card-scale': unavailableSize / 100,
-    '--normal-font-scale': normalSize / 100,
-    '--highlight-font-scale': highlightSize / 100,
-    '--unavailable-font-scale': unavailableSize / 100
-  }
-})
+    "--normal-card-scale": normalSize / 100,
+    "--highlight-card-scale": highlightSize / 100,
+    "--unavailable-card-scale": unavailableSize / 100,
+    "--normal-font-scale": normalSize / 100,
+    "--highlight-font-scale": highlightSize / 100,
+    "--unavailable-font-scale": unavailableSize / 100,
+  };
+});
 
 // Show a reasonable number of skeleton cards per role to fill containers fully
 const skeletonCardCount = computed(() => {
   // League of Legends has ~170 champions, distributed across 5 roles
   // To fill containers fully, we show more cards (70 per role ensures full height)
-  return 50
-})
+  return 70;
+});
 </script>
 
 <style scoped>
@@ -102,12 +102,7 @@ const skeletonCardCount = computed(() => {
   width: 100%;
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(
-    90deg,
-    #1e1e1e 25%,
-    #2a2a2a 50%,
-    #1e1e1e 75%
-  );
+  background: linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
   border: 1px solid #2a2a2a;
@@ -118,12 +113,7 @@ const skeletonCardCount = computed(() => {
   width: 60px;
   height: 12px;
   border-radius: 4px;
-  background: linear-gradient(
-    90deg,
-    #1e1e1e 25%,
-    #2a2a2a 50%,
-    #1e1e1e 75%
-  );
+  background: linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
   margin: 0 auto;
@@ -143,7 +133,8 @@ const skeletonCardCount = computed(() => {
 }
 
 @keyframes skeleton-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
@@ -154,52 +145,52 @@ const skeletonCardCount = computed(() => {
 }
 
 /* Delay each card's animation slightly for a wave effect */
-.skeleton-card:nth-child(1) { 
-  animation-delay: 0s; 
+.skeleton-card:nth-child(1) {
+  animation-delay: 0s;
 }
-.skeleton-card:nth-child(2) { 
-  animation-delay: 0.1s; 
+.skeleton-card:nth-child(2) {
+  animation-delay: 0.1s;
 }
-.skeleton-card:nth-child(3) { 
-  animation-delay: 0.2s; 
+.skeleton-card:nth-child(3) {
+  animation-delay: 0.2s;
 }
-.skeleton-card:nth-child(4) { 
-  animation-delay: 0.3s; 
+.skeleton-card:nth-child(4) {
+  animation-delay: 0.3s;
 }
-.skeleton-card:nth-child(5) { 
-  animation-delay: 0.4s; 
+.skeleton-card:nth-child(5) {
+  animation-delay: 0.4s;
 }
-.skeleton-card:nth-child(6) { 
-  animation-delay: 0.5s; 
+.skeleton-card:nth-child(6) {
+  animation-delay: 0.5s;
 }
-.skeleton-card:nth-child(7) { 
-  animation-delay: 0.6s; 
+.skeleton-card:nth-child(7) {
+  animation-delay: 0.6s;
 }
-.skeleton-card:nth-child(8) { 
-  animation-delay: 0.7s; 
+.skeleton-card:nth-child(8) {
+  animation-delay: 0.7s;
 }
-.skeleton-card:nth-child(9) { 
-  animation-delay: 0.8s; 
+.skeleton-card:nth-child(9) {
+  animation-delay: 0.8s;
 }
-.skeleton-card:nth-child(10) { 
-  animation-delay: 0.9s; 
+.skeleton-card:nth-child(10) {
+  animation-delay: 0.9s;
 }
-.skeleton-card:nth-child(11) { 
-  animation-delay: 1s; 
+.skeleton-card:nth-child(11) {
+  animation-delay: 1s;
 }
-.skeleton-card:nth-child(12) { 
-  animation-delay: 1.1s; 
+.skeleton-card:nth-child(12) {
+  animation-delay: 1.1s;
 }
-.skeleton-card:nth-child(13) { 
-  animation-delay: 1.2s; 
+.skeleton-card:nth-child(13) {
+  animation-delay: 1.2s;
 }
-.skeleton-card:nth-child(14) { 
-  animation-delay: 1.3s; 
+.skeleton-card:nth-child(14) {
+  animation-delay: 1.3s;
 }
-.skeleton-card:nth-child(15) { 
-  animation-delay: 1.4s; 
+.skeleton-card:nth-child(15) {
+  animation-delay: 1.4s;
 }
-.skeleton-card:nth-child(n+16) { 
-  animation-delay: 1.5s; 
+.skeleton-card:nth-child(n + 16) {
+  animation-delay: 1.5s;
 }
 </style>

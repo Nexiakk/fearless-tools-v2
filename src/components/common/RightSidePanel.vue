@@ -158,16 +158,13 @@ const openMilestoneReview = () => {
   border-top-left-radius: 0; /* Remove radius on left side (connection side) */
   border-bottom-left-radius: 0; /* Remove radius on left side (connection side) */
   border-left: none; /* Remove left border to connect */
-  background-color: #2a2a2a; /* Ensure consistent background */
+  background-color: #3a3a3a; /* Hover background when expanded */
   border-color: #3a3a3a; /* Keep border color consistent */
 }
 .expandable-button-group:not(.single-option) {
   overflow: visible; /* Allow expanded area to be visible */
 }
-.expandable-button-group:not(.single-option) .side-panel-icon-button:hover {
-  background-color: #2a2a2a; /* Override hover background when in expanded group */
-  border-color: #3a3a3a; /* Keep border color consistent */
-}
+
 .side-panel-icon-button.single-option-button {
   position: relative;
 }
@@ -200,7 +197,7 @@ const openMilestoneReview = () => {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-left: none;
-  background-color: #2a2a2a; /* Keep consistent background */
+  background-color: #3a3a3a; /* Hover background when expanded */
   border-color: #3a3a3a; /* Keep consistent border color */
 }
 .expandable-button-group.single-option .side-panel-icon-button:hover {
@@ -208,21 +205,16 @@ const openMilestoneReview = () => {
   border-color: #3a3a3a;
 }
 
-.side-panel-icon-button:hover {
+.side-panel-icon-button:hover,
+.expandable-button-group.single-option:hover .side-panel-icon-button {
   background-color: #3a3a3a;
   border-color: #3a3a3a; /* Keep border color consistent */
 }
 .expandable-button-group:not(.single-option):hover .side-panel-icon-button {
   border-color: #3a3a3a; /* Explicitly set border color when expanded */
 }
-.expandable-button-group:not(.single-option):hover .side-panel-icon-button:hover {
-  background-color: #2a2a2a; /* Keep same background when expanded */
-  border-color: #3a3a3a; /* Keep border color consistent */
-}
-.expandable-button-group:not(.single-option) .side-panel-icon-button:hover {
-  background-color: #2a2a2a; /* Override hover background when in expanded group */
-  border-color: #3a3a3a; /* Keep border color consistent */
-}
+
+
 
 .side-panel-icon-button svg {
   flex-shrink: 0;
@@ -315,4 +307,3 @@ const openMilestoneReview = () => {
   border-color: #b45309;
 }
 </style>
-

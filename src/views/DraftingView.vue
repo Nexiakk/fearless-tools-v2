@@ -1,8 +1,7 @@
 <template>
   <div class="drafting-view-wrapper">
     <div v-if="workspaceStore.hasWorkspace" class="draft-creator-container">
-      <!-- Drawing Canvas -->
-      <DrawingCanvas />
+
       
       <!-- Series Navigator - Top Bar -->
       <SeriesNavigator v-if="workspaceStore.hasWorkspace" />
@@ -340,7 +339,6 @@ import { useSettingsStore } from '@/stores/settings'
 import { notesService } from '@/services/notes'
 import SeriesNavigator from '@/components/drafting/SeriesNavigator.vue'
 import SeriesManager from '@/components/drafting/SeriesManager.vue'
-import DrawingCanvas from '@/components/drafting/DrawingCanvas.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftingStore = useDraftingStore()
