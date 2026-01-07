@@ -21,6 +21,7 @@
               :key="`banned-${champion.id}`"
               :champion="champion"
               role=""
+              :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
             />
           </div>
           
@@ -106,15 +107,11 @@ const championsByRole = computed(() => {
 // Get all banned champions as a list
 const bannedChampionsList = computed(() => {
   const allBanned = new Set()
-
+  
   // Combine manually banned and LCU banned
-  if (draftStore.bannedChampions && typeof draftStore.bannedChampions.forEach === 'function') {
-    draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
-  }
-  if (draftStore.lcuBannedChampions && typeof draftStore.lcuBannedChampions.forEach === 'function') {
-    draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
-  }
-
+  draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
+  draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
+  
   // Convert to champion objects, sorted alphabetically
   return championsStore.allChampions
     .filter(champ => allBanned.has(champ.name))

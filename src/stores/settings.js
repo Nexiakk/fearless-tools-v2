@@ -1,7 +1,7 @@
-import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { defineStore } from "pinia";
+import { ref } from "vue";
 
-export const useSettingsStore = defineStore('settings', () => {
+export const useSettingsStore = defineStore("settings", () => {
   // State
   const settings = ref({
     pool: {
@@ -13,63 +13,74 @@ export const useSettingsStore = defineStore('settings', () => {
       disableAnimations: false,
       centerCards: true,
       enableSearch: true, // Enable search bar feature, default: enabled
-      showBannedChampions: false // Show banned champions container, default: hidden
+      showBannedChampions: false, // Show banned champions container, default: hidden
     },
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
-      mode: 'sandbox' // 'sandbox' or 'fearless-sync'
-    }
-  })
-  
-  const isSettingsOpen = ref(false)
-  const settingsTab = ref('pool')
-  
-  // Watch settings and save to localStorage
-  watch(settings, (newSettings) => {
-    saveSettings()
-  }, { deep: true })
-  
+    },
+  });
+
+  const isSettingsOpen = ref(false);
+  const settingsTab = ref("pool");
+
   // Actions
   function loadSettings() {
-    const saved = localStorage.getItem('fearlessSettings')
+    const saved = localStorage.getItem("fearlessSettings");
     if (saved) {
       try {
-        const parsed = JSON.parse(saved)
+        const parsed = JSON.parse(saved);
         // Deep merge to preserve defaults for missing properties
         if (parsed.pool) {
-          settings.value.pool = { ...settings.value.pool, ...parsed.pool }
-          // Initialize new size properties if they don't exist
-          if (settings.value.pool.normalCardSize === undefined) {
-            settings.value.pool.normalCardSize = parsed.pool.compactMode ? 83 : 100
+          // First, merge saved settings with defaults
+          const mergedPool = { ...settings.value.pool, ...parsed.pool };
+
+          // Then handle backward compatibility for size properties
+          if (parsed.pool.compactMode !== undefined && parsed.pool.normalCardSize === undefined) {
+            mergedPool.normalCardSize = parsed.pool.compactMode ? 83 : 100;
           }
-          if (settings.value.pool.highlightCardSize === undefined) {
-            settings.value.pool.highlightCardSize = 100
+          if (parsed.pool.highlightCardSize === undefined) {
+            mergedPool.highlightCardSize = 100;
           }
-          if (settings.value.pool.unavailableCardSize === undefined) {
-            settings.value.pool.unavailableCardSize = 83
+          if (parsed.pool.unavailableCardSize === undefined) {
+            mergedPool.unavailableCardSize = 83;
           }
+
+          settings.value.pool = mergedPool;
         }
         if (parsed.drafting) {
-          settings.value.drafting = { ...settings.value.drafting, ...parsed.drafting }
+          settings.value.drafting = {
+            ...settings.value.drafting,
+            ...parsed.drafting,
+          };
         }
       } catch (error) {
-        console.error('Error loading settings:', error)
+        console.error("Error loading settings:", error);
       }
     }
   }
-  
+
   function saveSettings() {
-    localStorage.setItem('fearlessSettings', JSON.stringify(settings.value))
+    localStorage.setItem("fearlessSettings", JSON.stringify(settings.value));
   }
-  
+
   function openSettings() {
-    isSettingsOpen.value = true
+    isSettingsOpen.value = true;
   }
-  
+
   function closeSettings() {
-    isSettingsOpen.value = false
+    isSettingsOpen.value = false;
   }
-  
+
+  function updatePoolSetting(key, value) {
+    settings.value.pool[key] = value;
+    saveSettings();
+  }
+
+  function updateDraftingSetting(key, value) {
+    settings.value.drafting[key] = value;
+    saveSettings();
+  }
+
   function resetSettings() {
     // Reset to default values
     settings.value = {
@@ -82,20 +93,21 @@ export const useSettingsStore = defineStore('settings', () => {
         disableAnimations: false,
         centerCards: true,
         enableSearch: true, // Enable search bar feature, default: enabled
-        showBannedChampions: false // Show banned champions container, default: hidden
+        showBannedChampions: false, // Show banned champions container, default: hidden
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled
-        mode: 'sandbox' // default: sandbox
-      }
-    }
+      },
+    };
     // Save the reset settings
-    saveSettings()
+    saveSettings();
   }
-  
+
+  // Settings are now saved through updatePoolSetting() and updateDraftingSetting() methods
+
   // Initialize
-  loadSettings()
-  
+  loadSettings();
+
   return {
     // State
     settings,
@@ -106,6 +118,8 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSettings,
     openSettings,
     closeSettings,
-    resetSettings
-  }
-})
+    updatePoolSetting,
+    updateDraftingSetting,
+    resetSettings,
+  };
+});
