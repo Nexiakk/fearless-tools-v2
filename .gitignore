@@ -34,5 +34,41 @@ netlify/functions/node_modules
 .env.local
 .env.*.local
 
+# Firebase credentials - NEVER commit these!
+firebase-key.json
+*-firebase-adminsdk-*.json
+*firebase*credentials*.json
+*service*account*key*.json
 
-sex
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# AWS Lambda
+lambda-deployment.zip
+aws-scraping/package/
+aws-scraping/*.zip
+
+# Test files and temporary data
+test_results.json
+*.tmp
+temp/
