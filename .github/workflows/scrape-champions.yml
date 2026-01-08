@@ -1,0 +1,53 @@
+name: Champion Data Scraper
+
+on:
+  # Manual trigger - allows you to run whenever you want
+  workflow_dispatch:
+
+  # Scheduled execution every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'  # Runs at minute 0, every 6 hours
+
+  # Optional: Run on push to main branch for testing (remove after setup)
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'aws-scraping/**'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('aws-scraping/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        cd aws-scraping
+        pip install -r requirements.txt
+
+    - name: Run champion scraper
+      env:
+        FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+      run: |
+        cd aws-scraping
+        python lambda_function.py
+
+    - name: Log completion
+      run: |
+        echo "Champion scraping completed successfully at $(date)"
+        echo "Next scheduled run: $(date -d '+6 hours')"
