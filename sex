@@ -1,0 +1,104 @@
+[33mcommit ea13d4d5436e60bff0ece7bdcf618018538df76b[m
+Author: Nexiakk <90979509+Nexiakk@users.noreply.github.com>
+Date:   Mon Jan 5 14:59:28 2026 +0100
+
+    Update + Python Background App
+
+A	components.json
+M	css/champion-pool.css
+M	index.html
+M	package-lock.json
+M	package.json
+A	python-lcu-client - Copy/__pycache__/lcu-client-console.cpython-314.pyc
+A	python-lcu-client - Copy/__pycache__/lcu_client.cpython-314.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/Analysis-00.toc
+A	python-lcu-client - Copy/build/lcu-client-console/EXE-00.toc
+A	python-lcu-client - Copy/build/lcu-client-console/LCU-Client-Console.pkg
+A	python-lcu-client - Copy/build/lcu-client-console/PKG-00.toc
+A	python-lcu-client - Copy/build/lcu-client-console/PYZ-00.pyz
+A	python-lcu-client - Copy/build/lcu-client-console/PYZ-00.toc
+A	python-lcu-client - Copy/build/lcu-client-console/base_library.zip
+A	python-lcu-client - Copy/build/lcu-client-console/localpycs/pyimod01_archive.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/localpycs/pyimod02_importers.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/localpycs/pyimod03_ctypes.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/localpycs/pyimod04_pywin32.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/localpycs/struct.pyc
+A	python-lcu-client - Copy/build/lcu-client-console/warn-lcu-client-console.txt
+A	python-lcu-client - Copy/build/lcu-client-console/xref-lcu-client-console.html
+A	python-lcu-client - Copy/build/lcu-client/Analysis-00.toc
+A	python-lcu-client - Copy/build/lcu-client/EXE-00.toc
+A	python-lcu-client - Copy/build/lcu-client/LCU-Client.pkg
+A	python-lcu-client - Copy/build/lcu-client/PKG-00.toc
+A	python-lcu-client - Copy/build/lcu-client/PYZ-00.pyz
+A	python-lcu-client - Copy/build/lcu-client/PYZ-00.toc
+A	python-lcu-client - Copy/build/lcu-client/base_library.zip
+A	python-lcu-client - Copy/build/lcu-client/localpycs/pyimod01_archive.pyc
+A	python-lcu-client - Copy/build/lcu-client/localpycs/pyimod02_importers.pyc
+A	python-lcu-client - Copy/build/lcu-client/localpycs/pyimod03_ctypes.pyc
+A	python-lcu-client - Copy/build/lcu-client/localpycs/pyimod04_pywin32.pyc
+A	python-lcu-client - Copy/build/lcu-client/localpycs/struct.pyc
+A	python-lcu-client - Copy/build/lcu-client/warn-lcu-client.txt
+A	python-lcu-client - Copy/build/lcu-client/xref-lcu-client.html
+A	python-lcu-client - Copy/create_icon.py
+A	python-lcu-client - Copy/lcu-client-console.py
+A	python-lcu-client - Copy/lcu-client-console.spec
+A	python-lcu-client - Copy/lcu_client.ico
+A	python-lcu-client - Copy/lcu_client.py
+A	python-lcu-client - Copy/workspace_config.json
+M	src/assets/css/main.css
+M	src/components/champion-pool/ChampionCard.vue
+M	src/components/champion-pool/ChampionPoolSkeleton.vue
+M	src/components/champion-pool/RolePillar.vue
+M	src/components/common/AppHeader.vue
+M	src/components/common/AppLayout.vue
+M	src/components/common/AuthModal.vue
+M	src/components/common/ConfirmationModal.vue
+M	src/components/common/NotesModal.vue
+M	src/components/common/RightSidePanel.vue
+M	src/components/common/SettingsModal.vue
+D	src/components/drafting/DrawingCanvas.vue
+A	src/components/ui/button/Button.vue
+A	src/components/ui/button/index.ts
+A	src/components/ui/card/Card.vue
+A	src/components/ui/card/CardContent.vue
+A	src/components/ui/card/CardDescription.vue
+A	src/components/ui/card/CardFooter.vue
+A	src/components/ui/card/CardHeader.vue
+A	src/components/ui/card/CardTitle.vue
+A	src/components/ui/card/index.ts
+A	src/components/ui/dialog/Dialog.vue
+A	src/components/ui/dialog/DialogClose.vue
+A	src/components/ui/dialog/DialogContent.vue
+A	src/components/ui/dialog/DialogDescription.vue
+A	src/components/ui/dialog/DialogFooter.vue
+A	src/components/ui/dialog/DialogHeader.vue
+A	src/components/ui/dialog/DialogScrollContent.vue
+A	src/components/ui/dialog/DialogTitle.vue
+A	src/components/ui/dialog/DialogTrigger.vue
+A	src/components/ui/dialog/index.ts
+A	src/components/ui/input/Input.vue
+A	src/components/ui/input/index.ts
+A	src/components/ui/slider/Slider.vue
+A	src/components/ui/slider/index.ts
+A	src/components/ui/spinner/Spinner.vue
+A	src/components/ui/spinner/index.ts
+A	src/components/ui/switch/Switch.vue
+A	src/components/ui/switch/index.ts
+A	src/components/ui/sync-indicator/SyncIndicator.vue
+A	src/components/ui/sync-indicator/index.ts
+A	src/components/ui/tabs/Tabs.vue
+A	src/components/ui/tabs/TabsContent.vue
+A	src/components/ui/tabs/TabsList.vue
+A	src/components/ui/tabs/TabsTrigger.vue
+A	src/components/ui/tabs/index.ts
+A	src/components/ui/textarea/Textarea.vue
+A	src/components/ui/textarea/index.ts
+A	src/lib/utils.ts
+M	src/services/firebase/firestore.js
+D	src/stores/drawing.js
+M	src/stores/settings.js
+M	src/views/ChampionPoolView.vue
+M	src/views/DraftingView.vue
+M	tailwind.config.js
+A	tsconfig.json
+A	tsconfig.node.json
