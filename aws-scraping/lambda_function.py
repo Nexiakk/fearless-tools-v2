@@ -136,3 +136,14 @@ def get_champion_list():
         return [
             'Ahri', 'Akali', 'Ashe', 'Jinx', 'Lux', 'Miss Fortune', 'Vayne', 'Yuumi'
         ]
+
+# Main execution block for running as standalone script (GitHub Actions)
+if __name__ == "__main__":
+    try:
+        scrape_and_store_data()
+        print("✅ Champion scraping completed successfully!")
+    except Exception as e:
+        print(f"❌ Error during scraping: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
