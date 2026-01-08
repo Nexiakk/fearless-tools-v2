@@ -33,6 +33,10 @@ def scrape_and_store_data():
     """Main function to scrape data and store in Firebase"""
     print("Starting data scraping...")
 
+    # Get current patch for all scraping operations
+    current_patch = get_current_patch()
+    print(f"Using current patch: {current_patch}")
+
     champions = get_champion_list()
 
     # Process each champion
@@ -45,10 +49,10 @@ def scrape_and_store_data():
             abilities_data = scrape_champion_abilities(champion)
             print(f"Found {len(abilities_data)} abilities")
 
-            # Scrape Lolalytics build data
-            print(f"Scraping lolalytics data for {champion}...")
+            # Scrape Lolalytics build data with current patch
+            print(f"Scraping lolalytics data for {champion} (patch {current_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
-            build_data = lolalytics_scraper.scrape_champion_build(champion.lower())
+            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=current_patch)
 
             # Combine the data
             combined_data = {
@@ -505,14 +509,42 @@ def cleanup_old_patch_data():
         import traceback
         traceback.print_exc()
 
+def get_current_patch():
+    """Get the current League of Legends patch version from Riot API"""
+    try:
+        versions_url = "https://ddragon.leagueoflegends.com/api/versions.json"
+        versions_response = requests.get(versions_url, timeout=10)
+        versions_response.raise_for_status()
+        versions = versions_response.json()
+        return versions[0]  # Latest version is first in the list
+    except Exception as e:
+        print(f"Error fetching current patch from Riot API: {e}")
+        return "15.24"  # Fallback to known recent patch
+
 def get_champion_list():
-    """Get list of all champions - expanded for testing"""
-    # For now, return a sample list - in production, get from Riot API or static list
-    return [
-        'Aatrox', 'Ahri', 'Akali', 'Ashe', 'Jinx', 'Lux', 'Miss Fortune', 'Vayne', 'Yuumi',
-        'Yasuo', 'Zed', 'Jinx', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus'
-        # Add more champions as needed for full implementation
-    ]
+    """Get list of all champions from Riot Data Dragon API"""
+    try:
+        # Get latest version
+        current_patch = get_current_patch()
+
+        # Get champion data
+        champions_url = f"https://ddragon.leagueoflegends.com/cdn/{current_patch}/data/en_US/champion.json"
+        champions_response = requests.get(champions_url, timeout=10)
+        champions_response.raise_for_status()
+        champions_data = champions_response.json()
+
+        # Return sorted list of champion names
+        champion_names = list(champions_data['data'].keys())
+        champion_names.sort()
+        return champion_names
+
+    except Exception as e:
+        print(f"Error fetching champion list from Riot API: {e}")
+        # Fallback to a smaller static list for testing
+        return [
+            'Aatrox', 'Ahri', 'Akali', 'Ashe', 'Jinx', 'Lux', 'Miss Fortune', 'Vayne', 'Yuumi',
+            'Yasuo', 'Zed', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus'
+        ]
 
 if __name__ == "__main__":
     # Test the integration first

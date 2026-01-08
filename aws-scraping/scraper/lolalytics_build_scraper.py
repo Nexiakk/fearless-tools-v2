@@ -14,9 +14,12 @@ class LolalyticsBuildScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
 
-    def get_champion_roles(self, champion: str, tier: str = "diamond_plus", patch: str = "15.24") -> List[str]:
+    def get_champion_roles(self, champion: str, tier: str = "diamond_plus", patch: str = None) -> List[str]:
         """Get roles with playrate >= 9% from main champion page"""
-        url = f"{self.base_url}/pl/lol/{champion}/build/?tier={tier}&patch={patch}"
+        if patch:
+            url = f"{self.base_url}/pl/lol/{champion}/build/?tier={tier}&patch={patch}"
+        else:
+            url = f"{self.base_url}/pl/lol/{champion}/build/?tier={tier}"
         print(f"Fetching roles from: {url}")
 
         try:
@@ -60,9 +63,12 @@ class LolalyticsBuildScraper:
             print(f"Error getting roles for {champion}: {e}")
             return []
 
-    def get_role_stats(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = "15.24") -> Dict:
+    def get_role_stats(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
         """Get win rate, pick rate, tier, rank, ban rate, games for a specific role"""
-        url = f"{self.base_url}/pl/lol/{champion}/build/?lane={role}&tier={tier}&patch={patch}"
+        if patch:
+            url = f"{self.base_url}/pl/lol/{champion}/build/?lane={role}&tier={tier}&patch={patch}"
+        else:
+            url = f"{self.base_url}/pl/lol/{champion}/build/?lane={role}&tier={tier}"
         print(f"Fetching stats for {champion} {role}: {url}")
 
         try:
@@ -125,9 +131,12 @@ class LolalyticsBuildScraper:
             print(f"Error getting stats for {champion} {role}: {e}")
             return {}
 
-    def get_counter_matchups(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = "15.24") -> List[Dict]:
+    def get_counter_matchups(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = None) -> List[Dict]:
         """Get counter matchups for a specific role"""
-        url = f"{self.base_url}/pl/lol/{champion}/counters/?lane={role}&tier={tier}&patch={patch}"
+        if patch:
+            url = f"{self.base_url}/pl/lol/{champion}/counters/?lane={role}&tier={tier}&patch={patch}"
+        else:
+            url = f"{self.base_url}/pl/lol/{champion}/counters/?lane={role}&tier={tier}"
         print(f"Fetching counters for {champion} {role}: {url}")
 
         try:
@@ -381,7 +390,7 @@ class LolalyticsBuildScraper:
             print(f"Error getting counters for {champion} {role}: {e}")
             return []
 
-    def scrape_champion_build(self, champion: str, tier: str = "diamond_plus", patch: str = "15.24") -> Dict:
+    def scrape_champion_build(self, champion: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
         """Main method to scrape all champion build data - returns flattened structure"""
         print(f"\n=== Scraping {champion} build data ===")
 
