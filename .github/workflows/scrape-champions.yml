@@ -4,9 +4,9 @@ on:
   # Manual trigger - allows you to run whenever you want
   workflow_dispatch:
 
-  # Scheduled execution every 6 hours
+  # Scheduled execution every 24 hours
   schedule:
-    - cron: '0 */6 * * *'  # Runs at minute 0, every 6 hours
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
 
   # Optional: Run on push to main branch for testing (remove after setup)
   push:
@@ -50,4 +50,4 @@ jobs:
     - name: Log completion
       run: |
         echo "Champion scraping completed successfully at $(date)"
-        echo "Next scheduled run: $(date -d '+6 hours')"
+        echo "Next scheduled run: $(date -d '+24 hours')"
