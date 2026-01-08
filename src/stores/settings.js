@@ -17,6 +17,7 @@ export const useSettingsStore = defineStore("settings", () => {
     },
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
+      disableDraftDeletionWarning: false, // default: show warning
     },
   });
 
@@ -97,6 +98,7 @@ export const useSettingsStore = defineStore("settings", () => {
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled
+        disableDraftDeletionWarning: false, // default: show warning
       },
     };
     // Save the reset settings

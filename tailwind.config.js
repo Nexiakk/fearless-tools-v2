@@ -1,9 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ["class"],
-    content: [
+  content: [
     "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}",
+    "./src/**/*.{vue,js,ts,jsx,tsx,css}",
   ],
   theme: {
   	extend: {
@@ -70,5 +70,4 @@ export default {
   },
   plugins: [require("tailwindcss-animate")],
 }
-
 

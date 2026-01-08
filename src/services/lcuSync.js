@@ -3,6 +3,8 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { fetchLcuDraftsFromFirestore, setupLcuDraftsRealtimeSync } from './firebase/firestore'
 
+let seriesStore = null
+
 class LcuSyncService {
   constructor() {
     this.unsubscribe = null
@@ -186,8 +188,76 @@ class LcuSyncService {
     }
   }
 
+  async checkForGameSwitch(lcuDrafts) {
+    if (!lcuDrafts || lcuDrafts.length === 0) return false
+
+    // Find the latest draft
+    let latestDraft = null
+    let maxNumber = -1
+
+    lcuDrafts.forEach(draft => {
+      if (draft.id) {
+        const parts = draft.id.split('_')
+        if (parts.length >= 2) {
+          const number = parseInt(parts[parts.length - 1], 10)
+          if (!isNaN(number) && number > maxNumber) {
+            maxNumber = number
+            latestDraft = draft
+          }
+        }
+      }
+    })
+
+    if (!latestDraft) return false
+
+    // Check if latest draft has any bans or picks (indicating active game data)
+    const blueBans = latestDraft.blueSide?.bans || []
+    const redBans = latestDraft.redSide?.bans || []
+    const bluePicks = latestDraft.blueSide?.picks || []
+    const redPicks = latestDraft.redSide?.picks || []
+
+    const hasBans = blueBans.some(id => id && id !== '0') || redBans.some(id => id && id !== '0')
+    const hasPicks = bluePicks.some(id => id && id !== '0') || redPicks.some(id => id && id !== '0')
+
+    if (!hasBans && !hasPicks) return false // No active game data
+
+    // Check if current game has completed drafts
+    const seriesStore = useDraftStore().$pinia._s.get('series')
+    const currentGame = seriesStore.currentGame
+
+    if (!currentGame || !currentGame.drafts) return false
+
+    // Check if any draft in current game is complete (10 bans + 10 picks)
+    const hasCompletedDraft = currentGame.drafts.some(draft => {
+      const draftBlueBans = draft.blueBans || []
+      const draftRedBans = draft.redBans || []
+      const draftBluePicks = draft.bluePicks || []
+      const draftRedPicks = draft.redPicks || []
+
+      const draftTotalBans = draftBlueBans.filter(slot => slot?.champion).length +
+                             draftRedBans.filter(slot => slot?.champion).length
+      const draftTotalPicks = draftBluePicks.filter(slot => slot?.champion).length +
+                              draftRedPicks.filter(slot => slot?.champion).length
+
+      return draftTotalBans >= 10 && draftTotalPicks >= 10
+    })
+
+    if (!hasCompletedDraft) return false // Current game not complete yet
+
+    // Current game is complete and we have new game data - switch to next game
+    const nextGameNumber = currentGame.gameNumber + 1
+    if (nextGameNumber <= 5) {
+      console.log(`[LCU Sync] Switching to Game ${nextGameNumber} - current game completed and new data detected`)
+      seriesStore.setCurrentGame(nextGameNumber)
+      return true
+    }
+
+    return false
+  }
+
   async handleRealtimeUpdate(updatedDrafts) {
     console.log('[LCU Sync] Real-time update received')
+    await this.checkForGameSwitch(updatedDrafts)
     await this.populateDraftSlotsFromLcuDrafts(updatedDrafts)
     this.checkForCompletedDrafts(updatedDrafts)
   }

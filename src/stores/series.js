@@ -18,10 +18,17 @@ export const useSeriesStore = defineStore('series', () => {
   const isSaving = ref(false)
   let saveTimeout = null
   let unsubscribeRealtimeSync = null
+  const originalSeriesState = ref(null) // Store original state for change detection
 
   // Getters
   const hasSeries = computed(() => !!currentSeries.value)
   
+  const currentGameNumber = computed(() => {
+    if (!currentSeries.value) return null
+    const gameIndex = currentSeries.value.currentGameIndex ?? 0
+    return currentSeries.value.games?.[gameIndex]?.gameNumber || null
+  })
+
   const currentGame = computed(() => {
     if (!currentSeries.value) return null
     const gameIndex = currentSeries.value.currentGameIndex ?? 0
@@ -132,7 +139,7 @@ export const useSeriesStore = defineStore('series', () => {
   }
 
   // Load series
-  async function loadSeries(seriesId) {
+  async function loadSeries(seriesId, gameNumber = null) {
     const workspaceStore = useWorkspaceStore()
     if (!workspaceStore.currentWorkspaceId || workspaceStore.isLocalWorkspace) {
       console.warn('Cannot load series in local workspace')
@@ -151,7 +158,18 @@ export const useSeriesStore = defineStore('series', () => {
           }
           series.games = existingGames
         }
-        
+
+        // Set current game index before storing original state
+        if (gameNumber !== null) {
+          const gameIndex = series.games?.findIndex(g => g.gameNumber === gameNumber)
+          if (gameIndex !== -1) {
+            series.currentGameIndex = gameIndex
+          }
+        }
+
+        // Store the original state for change detection
+        originalSeriesState.value = JSON.parse(JSON.stringify(series))
+
         currentSeries.value = series
         setupRealtimeSync()
       }
@@ -171,11 +189,14 @@ export const useSeriesStore = defineStore('series', () => {
       return
     }
 
+    isLoadingSeries.value = true
     try {
       const series = await getAllSeriesForWorkspace(workspaceStore.currentWorkspaceId)
       savedSeries.value = series
     } catch (error) {
       console.error('Error refreshing saved series:', error)
+    } finally {
+      isLoadingSeries.value = false
     }
   }
 
@@ -367,13 +388,9 @@ export const useSeriesStore = defineStore('series', () => {
   // Check if game has changes
   function gameHasChanges(game) {
     if (!game) return false
-    
-    if (game.hasChanges) return true
-    
-    // Check if any draft has changes
+
+    // Check if any draft has changes (defined as having at least one champion in slots)
     for (const draft of game.drafts || []) {
-      if (draft.hasChanges) return true
-      
       // Check if any slot has a champion
       const allSlots = [
         ...(draft.bluePicks || []),
@@ -381,30 +398,48 @@ export const useSeriesStore = defineStore('series', () => {
         ...(draft.redPicks || []),
         ...(draft.redBans || [])
       ]
-      
+
       if (allSlots.some(slot => slot?.champion)) return true
-      if (draft.generalNotes) return true
     }
-    
+
     return false
   }
 
   // Get games with changes
   function getGamesWithChanges() {
     if (!currentSeries.value) return []
-    
+
     return (currentSeries.value.games || []).filter(game => gameHasChanges(game))
   }
 
-  // Queue save (debounced)
+  // Check if current series has unsaved changes
+  // A draft has changes if it has any champions in its slots
+  function hasUnsavedChanges() {
+    if (!currentSeries.value) return false
+
+    // Check if any game has drafts with actual content (champions in slots)
+    const gamesWithContent = (currentSeries.value.games || []).filter(game => {
+      // Skip games that didn't exist before (are newly created defaults)
+      if (!originalSeriesState.value) return true
+
+      const originalGame = originalSeriesState.value.games?.find(
+        g => g.gameNumber === game.gameNumber
+      )
+
+      // If this game didn't exist in original state, it's a new game, not an unsaved change
+      if (!originalGame) return false
+
+      // Check if this game has any draft with champions
+      return gameHasChanges(game)
+    })
+
+    return gamesWithContent.length > 0
+  }
+
+  // Queue save (debounced) - DISABLED: Manual save only
   function queueSave() {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout)
-    }
-    
-    saveTimeout = setTimeout(async () => {
-      await saveSeries()
-    }, 3000)
+    // Auto-save disabled - users must manually click Save button
+    return
   }
 
   // Save series
@@ -451,7 +486,10 @@ export const useSeriesStore = defineStore('series', () => {
         currentSeries.value.updatedAt = new Date()
         setupRealtimeSync()
       }
-      
+
+      // Update original state after successful save
+      originalSeriesState.value = JSON.parse(JSON.stringify(currentSeries.value))
+
       await refreshSavedSeries()
     } catch (error) {
       console.error('Error saving series:', error)
@@ -475,6 +513,9 @@ export const useSeriesStore = defineStore('series', () => {
       currentSeries.value.id,
       (series) => {
         if (series) {
+          // Preserve currentGameIndex if already set (user selected a game)
+          const savedGameIndex = currentSeries.value?.currentGameIndex ?? 0
+
           // Ensure series has 5 games
           if (!series.games || series.games.length < 5) {
             const existingGames = series.games || []
@@ -483,6 +524,10 @@ export const useSeriesStore = defineStore('series', () => {
             }
             series.games = existingGames
           }
+
+          // Restore the current game index to preserve user's selection
+          series.currentGameIndex = savedGameIndex
+
           currentSeries.value = series
         }
       }
@@ -513,6 +558,7 @@ export const useSeriesStore = defineStore('series', () => {
     isSaving,
     // Getters
     hasSeries,
+    currentGameNumber,
     currentGame,
     currentDraft,
     canAddGame,
@@ -537,10 +583,10 @@ export const useSeriesStore = defineStore('series', () => {
     getUnavailableChampionsForGame,
     gameHasChanges,
     getGamesWithChanges,
+    hasUnsavedChanges,
     queueSave,
     saveSeries,
     setupRealtimeSync,
     cleanupRealtimeSync
   }
-})
-
+ })

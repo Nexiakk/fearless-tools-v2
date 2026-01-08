@@ -1,57 +1,77 @@
 <template>
   <div class="series-manager">
-    <div class="series-manager-header">
-      <h3 class="series-manager-title">Saved Series ({{ seriesStore.savedSeries.length }})</h3>
-      <button
-        v-if="seriesStore.hasSeries"
-        @click="handleSaveCurrentSeries"
-        class="save-series-button"
-        :disabled="seriesStore.isSaving"
-        title="Save Current Series"
-      >
-        <svg><use href="#icon-save"></use></svg>
-        {{ seriesStore.isSaving ? 'Saving...' : 'Save Series' }}
-      </button>
-    </div>
-
     <div class="series-manager-content">
-      <p v-if="seriesStore.isLoadingSeries" class="loading-text">
-        Loading saved series...
-      </p>
-      <p v-else-if="seriesStore.savedSeries.length === 0" class="empty-text">
-        No series saved yet.
-        <br />
-        <span class="empty-hint">Create a series to get started.</span>
+      <!-- Skeleton Loading -->
+      <div v-if="seriesStore.isLoadingSeries" class="skeleton-loading">
+        <div v-for="i in 3" :key="i" class="skeleton-item">
+          <div class="skeleton-item-content">
+            <div class="skeleton-header">
+              <div class="skeleton-title"></div>
+              <div class="skeleton-date"></div>
+            </div>
+            <div class="skeleton-preview">
+              <div class="skeleton-game" v-for="j in 3" :key="j"></div>
+            </div>
+          </div>
+          <div class="skeleton-item-actions">
+            <div class="skeleton-action-button"></div>
+          </div>
+        </div>
+      </div>
+      <p
+        v-else-if="
+          !seriesStore.isLoadingSeries && seriesStore.savedSeries.length === 0
+        "
+        class="empty-text"
+      >
+        No drafts saved.
       </p>
       <div v-else class="series-list">
         <div
           v-for="series in seriesStore.savedSeries"
           :key="series.id"
           class="series-item"
-          :class="{ 'active-series': seriesStore.currentSeries?.id === series.id }"
+          :class="{
+            'active-series': seriesStore.currentSeries?.id === series.id,
+          }"
+          @click="handleLoadSeries(series.id)"
         >
-          <div class="series-item-content" @click="handleLoadSeries(series.id)">
+          <div class="series-item-content">
             <div class="series-item-header">
-              <span class="series-item-name">{{ series.name || 'Unnamed Series' }}</span>
-              <span v-if="seriesStore.currentSeries?.id === series.id" class="active-badge">Active</span>
-            </div>
-            <div class="series-item-info">
-              <span class="series-item-games">
-                {{ series.games?.length || 0 }} {{ series.games?.length === 1 ? 'Game' : 'Games' }}
-              </span>
+              <span class="series-item-name">{{
+                series.name || "Unnamed Series"
+              }}</span>
               <span v-if="series.updatedAt" class="series-item-date">
-                Updated: {{ formatDate(series.updatedAt) }}
+                {{ formatDate(series.updatedAt) }}
               </span>
             </div>
+            <div
+              v-if="
+                seriesStore.currentSeries?.id === series.id &&
+                seriesStore.hasUnsavedChanges()
+              "
+              class="unsaved-badge"
+            ></div>
             <!-- Series Preview -->
-            <div v-if="series.games && series.games.length > 0" class="series-preview">
+            <div
+              v-if="series.games && series.games.length > 0"
+              class="series-preview"
+            >
               <div
                 v-for="(game, idx) in series.games.slice(0, 3)"
                 :key="game.id"
                 class="preview-game"
+                :class="{
+                  'active-game':
+                    seriesStore.currentSeries?.id === series.id &&
+                    seriesStore.currentGameNumber === game.gameNumber,
+                }"
+                @click.stop="handleLoadGame(series.id, game.gameNumber)"
               >
                 <span class="preview-game-number">G{{ game.gameNumber }}</span>
-                <span class="preview-draft-count">{{ game.drafts?.length || 0 }} drafts</span>
+                <button class="preview-draft-button">
+                  {{ game.drafts?.length || 0 }}
+                </button>
               </div>
               <span v-if="series.games.length > 3" class="preview-more">
                 +{{ series.games.length - 3 }} more
@@ -59,13 +79,6 @@
             </div>
           </div>
           <div class="series-item-actions">
-            <button
-              @click.stop="handleLoadSeries(series.id)"
-              class="action-button load-button"
-              title="Load Series"
-            >
-              <svg><use href="#icon-load"></use></svg>
-            </button>
             <button
               @click.stop="handleDeleteSeries(series.id, series.name)"
               class="action-button delete-button"
@@ -81,293 +94,190 @@
 </template>
 
 <script setup>
-import { useSeriesStore } from '@/stores/series'
-import { useConfirmationStore } from '@/stores/confirmation'
+import { useSeriesStore } from "@/stores/series";
+import { useConfirmationStore } from "@/stores/confirmation";
 
-const seriesStore = useSeriesStore()
-const confirmationStore = useConfirmationStore()
+const seriesStore = useSeriesStore();
+const confirmationStore = useConfirmationStore();
 
 function formatDate(date) {
-  if (!date) return 'Unknown'
-  
-  const d = date instanceof Date ? date : (date.toDate ? date.toDate() : new Date(date))
-  const now = new Date()
-  const diffMs = now - d
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
+  if (!date) return "Unknown";
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  
-  return d.toLocaleDateString('en-US')
-}
+  const d =
+    date instanceof Date ? date : date.toDate ? date.toDate() : new Date(date);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-async function handleSaveCurrentSeries() {
-  if (!seriesStore.hasSeries) return
-  
-  try {
-    seriesStore.queueSave()
-    // Show success feedback (the store handles the actual save)
-    // You could add a toast notification here
-  } catch (error) {
-    console.error('Error saving series:', error)
-    alert('Failed to save series. See console for details.')
-  }
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return d.toLocaleDateString("en-US");
 }
 
 async function handleLoadSeries(seriesId) {
   try {
-    await seriesStore.loadSeries(seriesId)
+    // If series is already loaded, just ensure we're on the first available game
+    if (seriesStore.currentSeries?.id === seriesId) {
+      const firstGameNumber =
+        seriesStore.currentSeries.games?.[0]?.gameNumber || 1;
+      if (seriesStore.currentGame?.gameNumber !== firstGameNumber) {
+        seriesStore.setCurrentGame(firstGameNumber);
+      }
+      return;
+    }
+
+    // Check for unsaved changes before loading a different series
+    if (seriesStore.hasUnsavedChanges()) {
+      const confirmed = await new Promise((resolve) => {
+        confirmationStore.open({
+          message:
+            "You have unsaved changes in the current draft. Loading a different series will discard these changes. Continue?",
+          confirmAction: () => resolve(true),
+          cancelAction: () => resolve(false),
+          isDanger: true,
+        });
+      });
+
+      if (!confirmed) return;
+    }
+
+    // Load the series and default to the first available game
+    await seriesStore.loadSeries(seriesId);
+    const firstGameNumber =
+      seriesStore.currentSeries?.games?.[0]?.gameNumber || 1;
+    if (seriesStore.currentGame?.gameNumber !== firstGameNumber) {
+      seriesStore.setCurrentGame(firstGameNumber);
+    }
   } catch (error) {
-    console.error('Error loading series:', error)
-    alert('Failed to load series. See console for details.')
+    console.error("Error loading series:", error);
+    alert("Failed to load series. See console for details.");
+  }
+}
+
+async function handleLoadGame(seriesId, gameNumber) {
+  try {
+    // If series is not loaded, load it with the specific game number
+    if (seriesStore.currentSeries?.id !== seriesId) {
+      await seriesStore.loadSeries(seriesId, gameNumber);
+    } else {
+      // Series already loaded, just switch game
+      seriesStore.setCurrentGame(gameNumber);
+    }
+  } catch (error) {
+    console.error("Error loading game:", error);
+    alert("Failed to load game. See console for details.");
   }
 }
 
 function handleDeleteSeries(seriesId, seriesName) {
   confirmationStore.open({
-    message: `Are you sure you want to permanently delete '${seriesName || 'this series'}'? This will delete all games, drafts, and notes associated with it. This cannot be undone.`,
+    message: `Are you sure you want to permanently delete '${seriesName || "this series"}'? This will delete all games, drafts, and notes associated with it. This cannot be undone.`,
     confirmAction: async () => {
       try {
-        await seriesStore.deleteSeries(seriesId)
+        await seriesStore.deleteSeries(seriesId);
       } catch (error) {
-        console.error('Error deleting series:', error)
-        alert('Failed to delete series. See console for details.')
+        console.error("Error deleting series:", error);
+        alert("Failed to delete series. See console for details.");
       }
     },
-    isDanger: true
-  })
+    isDanger: true,
+  });
 }
 </script>
 
 <style scoped>
 .series-manager {
-  background: #1f2937;
-  border-left: 1px solid #374151;
-  width: 300px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.series-manager-header {
-  padding: 1rem;
-  border-bottom: 1px solid #374151;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.series-manager-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f9fafb;
-}
-
-.save-series-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-  white-space: nowrap;
-}
-
-.save-series-button:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.save-series-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.save-series-button svg {
-  width: 16px;
-  height: 16px;
+  @apply bg-card border-l border-border w-[200px] min-w-[200px] flex flex-col h-full;
 }
 
 .series-manager-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem;
+  @apply flex-1 overflow-y-auto p-2;
 }
 
 .loading-text,
 .empty-text {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: #9ca3af;
-  font-size: 0.875rem;
+  @apply text-center py-12 px-4 text-muted-foreground text-sm flex items-center justify-center h-full;
 }
 
 .empty-hint {
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-  display: block;
+  @apply text-xs text-muted-foreground mt-2 block;
 }
 
 .series-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  @apply flex flex-col gap-2;
 }
 
 .series-item {
-  background: #374151;
-  border: 1px solid #4b5563;
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.series-item:hover {
-  border-color: #60a5fa;
-  background: #3a3f4a;
+  @apply bg-secondary border border-border rounded-md p-3 flex justify-between items-start gap-3 transition-colors cursor-pointer hover:bg-secondary/80 relative;
 }
 
 .series-item.active-series {
-  border-color: #3b82f6;
-  background: #1e3a5f;
+  @apply border-primary bg-primary/5;
 }
 
 .series-item-content {
-  flex: 1;
-  cursor: pointer;
-  min-width: 0;
+  @apply flex-1 min-w-0;
 }
 
 .series-item-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  @apply flex flex-col gap-0.5 mb-2;
 }
 
 .series-item-name {
-  font-weight: 600;
-  color: #f9fafb;
-  font-size: 0.875rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.active-badge {
-  font-size: 0.75rem;
-  padding: 0.125rem 0.5rem;
-  background: #3b82f6;
-  color: white;
-  border-radius: 0.25rem;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.series-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.series-item-games {
-  font-size: 0.75rem;
-  color: #d1d5db;
+  @apply font-semibold text-foreground text-sm overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
 .series-item-date {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  @apply text-[11px] text-muted-foreground font-mono;
+}
+
+.unsaved-badge {
+  @apply absolute -top-2.5 -right-2.5 w-4 h-4 bg-amber-500 rounded-full border-2 border-card;
 }
 
 .series-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid #4b5563;
+  @apply flex flex-wrap gap-2 mt-2 pt-2 border-t border-border;
 }
 
 .preview-game {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #9ca3af;
-  background: #1f2937;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  @apply flex items-center gap-1 text-xs text-muted-foreground bg-card px-2 py-1 rounded cursor-pointer hover:bg-accent transition-colors;
+}
+
+.preview-game.active-game {
+  @apply border border-primary text-foreground;
 }
 
 .preview-game-number {
-  font-weight: 600;
-  color: #d1d5db;
+  @apply font-semibold text-foreground;
 }
 
-.preview-draft-count {
-  color: #6b7280;
+.preview-draft-button {
+  @apply w-4 h-4 p-0 font-medium bg-secondary text-foreground border border-border rounded-full text-xs flex items-center justify-center hover:bg-secondary/80 transition-colors;
 }
 
 .preview-more {
-  font-size: 0.75rem;
-  color: #6b7280;
-  align-self: center;
+  @apply text-xs text-muted-foreground self-center;
 }
 
 .series-item-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex-shrink: 0;
+  @apply flex flex-col gap-1 flex-shrink-0;
 }
 
 .action-button {
-  background: transparent;
-  border: 1px solid #4b5563;
-  color: #9ca3af;
-  padding: 0.375rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  width: 28px;
-  height: 28px;
+  @apply bg-transparent border border-border text-muted-foreground p-1.5 rounded cursor-pointer flex items-center justify-center transition-all w-7 h-7 hover:border-accent hover:text-foreground hover:bg-accent;
 }
 
-.action-button:hover {
-  border-color: #60a5fa;
-  color: #f9fafb;
-  background: #374151;
+.delete-button {
+  @apply text-white hover:border-destructive hover:bg-destructive;
 }
 
-.load-button:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
-}
-
-.delete-button:hover {
-  border-color: #ef4444;
-  color: #ef4444;
+.delete-button svg {
+  @apply text-white;
 }
 
 .action-button svg {
@@ -376,21 +286,59 @@ function handleDeleteSeries(seriesId, seriesName) {
 }
 
 .series-manager-content::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .series-manager-content::-webkit-scrollbar-track {
-  background: #1f2937;
+  @apply bg-card;
 }
 
 .series-manager-content::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 3px;
+  @apply bg-border rounded;
 }
 
 .series-manager-content::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  @apply bg-muted-foreground;
+}
+
+/* Skeleton Loading */
+.skeleton-loading {
+  @apply flex flex-col gap-2;
+}
+
+.skeleton-item {
+  @apply bg-secondary border border-border rounded-md p-3 flex justify-between items-start gap-3 animate-pulse relative;
+}
+
+.skeleton-item-content {
+  @apply flex-1 min-w-0;
+}
+
+.skeleton-header {
+  @apply flex flex-col gap-0.5 mb-2;
+}
+
+.skeleton-title {
+  @apply bg-muted-foreground/20 h-4 rounded w-3/4;
+}
+
+.skeleton-date {
+  @apply bg-muted-foreground/20 h-3 rounded w-1/2;
+}
+
+.skeleton-preview {
+  @apply flex flex-wrap gap-2 mt-2 pt-2 border-t border-border;
+}
+
+.skeleton-game {
+  @apply bg-muted-foreground/20 h-6 w-12 rounded;
+}
+
+.skeleton-item-actions {
+  @apply flex flex-col gap-1 flex-shrink-0;
+}
+
+.skeleton-action-button {
+  @apply bg-muted-foreground/20 w-7 h-7 rounded animate-pulse;
 }
 </style>
-
-

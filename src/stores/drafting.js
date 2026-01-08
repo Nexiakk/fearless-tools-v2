@@ -290,7 +290,11 @@ export const useDraftingStore = defineStore('drafting', () => {
   }
   
   function setDraftCreatorRoleFilter(role) {
-    draftCreatorRoleFilter.value = role
+    if (draftCreatorRoleFilter.value === role) {
+      draftCreatorRoleFilter.value = 'all'
+    } else {
+      draftCreatorRoleFilter.value = role
+    }
   }
   
   function toggleNotesVisibility(side, type, index) {

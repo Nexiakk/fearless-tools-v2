@@ -260,6 +260,15 @@ onMounted(() => {
   if (route.name === 'pool' && settingsStore.settings.pool.enableSearch) {
     setupAutoFocus()
   }
+
+  // Set navbar height as CSS custom property for proper positioning
+  nextTick(() => {
+    const navbar = document.querySelector('.top-navbar')
+    if (navbar) {
+      const height = navbar.offsetHeight
+      document.documentElement.style.setProperty('--navbar-height', `${height}px`)
+    }
+  })
 })
 
 onUnmounted(() => {
