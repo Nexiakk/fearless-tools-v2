@@ -302,7 +302,7 @@ def update_role_containers():
 
     try:
         # Get all champions
-        champions_ref = db.collection('champions').document('all').collection('all')
+        champions_ref = db.collection('champions')
         champions = champions_ref.stream()
 
         role_champions = {
