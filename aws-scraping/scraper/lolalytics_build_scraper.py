@@ -53,8 +53,8 @@ class LolalyticsBuildScraper:
                             if role_match:
                                 role = role_match.group(1)
                             else:
-                                # No lane parameter = main role, use "bottom" (ADC lane)
-                                role = "bottom"
+                                # No lane parameter = main role, determine what role it actually is
+                                role = self.determine_main_role_from_url(champion, href, tier, patch)
                             valid_roles.append((role, href))  # Store both role and URL
                     except ValueError:
                         continue
@@ -205,6 +205,67 @@ class LolalyticsBuildScraper:
         except Exception as e:
             print(f"Error getting stats from URL {role_url}: {e}")
             return {}
+
+    def determine_main_role_from_url(self, champion: str, role_url: str, tier: str = "diamond_plus", patch: str = None) -> str:
+        """Determine what role the main URL actually represents"""
+        # Ensure we have a full URL
+        if role_url.startswith('/'):
+            full_url = self.base_url + role_url
+        else:
+            full_url = role_url
+
+        try:
+            response = self.session.get(full_url, timeout=15)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Look for the active/selected role indicator
+            # Try to find the currently active role tab or button
+            active_role_elements = soup.find_all(['a', 'button', 'div'], class_=re.compile(r'active|selected|current'))
+
+            for element in active_role_elements:
+                # Check if this element contains role information
+                text = element.get_text().strip().lower()
+                if any(role in text for role in ['top', 'jungle', 'mid', 'middle', 'adc', 'bottom', 'support']):
+                    if 'top' in text:
+                        return 'top'
+                    elif 'jungle' in text:
+                        return 'jungle'
+                    elif 'mid' in text or 'middle' in text:
+                        return 'middle'
+                    elif 'adc' in text or 'bottom' in text:
+                        return 'bottom'
+                    elif 'support' in text:
+                        return 'support'
+
+            # Fallback: Check the page title for role information
+            title = soup.title.get_text() if soup.title else ""
+            title_lower = title.lower()
+
+            if 'top' in title_lower:
+                return 'top'
+            elif 'jungle' in title_lower:
+                return 'jungle'
+            elif 'mid' in title_lower or 'middle' in title_lower:
+                return 'middle'
+            elif 'adc' in title_lower or 'bottom' in title_lower:
+                return 'bottom'
+            elif 'support' in title_lower:
+                return 'support'
+
+            # Last resort: check URL parameters that might indicate the role
+            if 'lane=' in full_url:
+                lane_match = re.search(r'lane=([^&]+)', full_url)
+                if lane_match:
+                    return lane_match.group(1)
+
+            # If all else fails, assume top (most common default)
+            print(f"Could not determine main role for {champion}, defaulting to 'top'")
+            return 'top'
+
+        except Exception as e:
+            print(f"Error determining main role from URL {full_url}: {e}")
+            return 'top'  # Safe default
 
     def get_counter_matchups(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = None) -> List[Dict]:
         """Get counter matchups for a specific role - optimized HTML parsing only"""

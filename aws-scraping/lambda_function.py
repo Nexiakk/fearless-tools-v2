@@ -235,7 +235,7 @@ class SmartUpdateEngine:
 def get_current_champion_data(champion_key):
     """Get current champion data from Firebase"""
     try:
-        doc_ref = db.collection('champions').document(champion_key)
+        doc_ref = db.collection('champions').document(f'all/{champion_key}')
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
@@ -248,7 +248,7 @@ def get_current_champion_data(champion_key):
 def store_combined_champion_data_smart(champion_key, current_data, new_data, update_decision):
     """Store combined champion data using smart update decisions"""
     try:
-        doc_ref = db.collection('champions').document(champion_key)
+        doc_ref = db.collection('champions').document(f'all/{champion_key}')
 
         # Start with current data or empty dict
         final_data = current_data.copy() if current_data else {}
@@ -293,7 +293,7 @@ def archive_champion_data(champion_key, data):
     try:
         patch = data.get('patch')
         if patch:
-            doc_ref = db.collection('champions').document(champion_key).collection('patch_history').document(patch)
+            doc_ref = db.collection('champions').document(f'all/{champion_key}').collection('patch_history').document(patch)
             doc_ref.set(data)
             print(f"📦 Archived {champion_key} data for patch {patch}")
     except Exception as e:
@@ -343,7 +343,7 @@ def update_role_containers():
 
             # Get current patch from first champion if available
             if not current_patch and champions_list:
-                first_champ_data = db.collection('champions').document(champions_list[0]['id']).get()
+                first_champ_data = db.collection('champions').document(f'all/{champions_list[0]["id"]}').get()
                 if first_champ_data.exists:
                     current_patch = first_champ_data.to_dict().get('patch')
 

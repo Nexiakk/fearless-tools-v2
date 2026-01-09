@@ -289,7 +289,7 @@ def store_combined_champion_data(champion_key: str, data: dict):
     """Store combined champion data in Firebase"""
     if not init_firebase():
         raise Exception("Firebase not available")
-    doc_ref = db.collection('champions').document(champion_key)
+    doc_ref = db.collection('champions').document(f'all/{champion_key}')
     doc_ref.set(data)
 
 def update_role_containers():
@@ -302,7 +302,7 @@ def update_role_containers():
 
     try:
         # Get all champions
-        champions_ref = db.collection('champions')
+        champions_ref = db.collection('champions').document('all').collection('all')
         champions = champions_ref.stream()
 
         role_champions = {
@@ -342,7 +342,7 @@ def update_role_containers():
 
             # Get current patch from first champion if available
             if not current_patch and champions_list:
-                first_champ_data = db.collection('champions').document(champions_list[0]['id']).get()
+                first_champ_data = db.collection('champions').document(f'all/{champions_list[0]["id"]}').get()
                 if first_champ_data.exists:
                     current_patch = first_champ_data.to_dict().get('patch')
 
@@ -422,7 +422,7 @@ def get_champion_fallback_data(champion_id, current_patch):
     try:
         # Look for archived data from previous patch
         fallback_doc = db.collection('champions') \
-                        .document(champion_id) \
+                        .document(f'all/{champion_id}') \
                         .collection('patch_history') \
                         .document(previous_patch) \
                         .get()
