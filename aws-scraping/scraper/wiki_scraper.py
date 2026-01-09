@@ -3,11 +3,26 @@ from bs4 import BeautifulSoup
 import re
 import time
 import random
+from urllib.parse import quote
+
+def encode_champion_name_for_wiki(champion_name):
+    """Encode champion name for League Wiki URL format"""
+    # First replace spaces with underscores
+    encoded = champion_name.replace(' ', '_')
+
+    # Then URL encode any remaining special characters (like apostrophes)
+    # Use quote() but allow underscores to remain
+    encoded = quote(encoded, safe='_')
+
+    return encoded
 
 def scrape_champion_abilities(champion_name):
     """Scrape ability cooldowns for a champion from League Wiki"""
+    # Encode champion name for wiki URL format
+    encoded_name = encode_champion_name_for_wiki(champion_name)
+
     # Use the correct URL format: https://wiki.leagueoflegends.com/en-us/{Champion}
-    url = f"https://wiki.leagueoflegends.com/en-us/{champion_name}"
+    url = f"https://wiki.leagueoflegends.com/en-us/{encoded_name}"
     print(f"Scraping {url}")
 
     try:
