@@ -5,7 +5,7 @@ import random
 import requests
 from scraper.lolalytics_build_scraper import LolalyticsBuildScraper
 from scraper.wiki_scraper import scrape_champion_abilities
-from scraper.main import check_patch_viability, normalize_patch_for_lolalytics
+from scraper.main import check_patch_viability, normalize_patch_for_lolalytics, get_display_name, get_simplified_key
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
@@ -87,9 +87,16 @@ def scrape_and_store_data():
             normalized_patch = normalize_patch_for_lolalytics(target_patch)
             build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=normalized_patch)
 
-            # Combine the data
+            # Get champion metadata
+            champion_id = get_champion_id(champion)
+            champion_display = get_display_name(champion)
+            champion_image_name = get_champion_image_name(champion)
+
+            # Combine the data with new structure
             new_data = {
-                'name': champion,
+                'id': champion_id,              # Numeric champion ID
+                'imageName': champion_image_name, # Internal key for images
+                'name': champion_display,       # Display name
                 'abilities': abilities_data,
                 'lastUpdated': datetime.utcnow()
             }
@@ -257,9 +264,9 @@ class SmartUpdateEngine:
         return list(viable_roles)
 
 def get_current_champion_data(champion_key):
-    """Get current champion data from Firebase"""
+    """Get current champion data from Firebase (direct document, no /data subdocument)"""
     try:
-        doc_ref = db.collection('champions').document('all').collection(champion_key).document('data')
+        doc_ref = db.collection('champions').document(f'all/{champion_key}')
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
@@ -270,9 +277,9 @@ def get_current_champion_data(champion_key):
         return {}
 
 def store_combined_champion_data_smart(champion_key, current_data, new_data, update_decision):
-    """Store combined champion data using smart update decisions"""
+    """Store combined champion data using smart update decisions (direct document, no tier field)"""
     try:
-        doc_ref = db.collection('champions').document('all').collection(champion_key).document('data')
+        doc_ref = db.collection('champions').document(f'all/{champion_key}')
 
         # Start with current data or empty dict
         final_data = current_data.copy() if current_data else {}
@@ -285,8 +292,8 @@ def store_combined_champion_data_smart(champion_key, current_data, new_data, upd
             final_data['abilities'] = new_data.get('abilities', [])
 
         if update_decision['lolalytics']:
-            # Update with new build data
-            lolalytics_fields = ['patch', 'tier', 'roles']
+            # Update with new build data (exclude tier field)
+            lolalytics_fields = ['patch', 'roles']
             for field in lolalytics_fields:
                 if field in new_data:
                     final_data[field] = new_data[field]
@@ -332,12 +339,12 @@ def update_role_containers():
         champions_ref = db.collection('champions').document('all')
         champions = []  # list of (champion_key, champ_data)
 
-        for collection_ref in champions_ref.collections():
-            champion_key = collection_ref.id
-            doc = collection_ref.document('data').get()
-            if doc.exists:
-                champ_data = doc.to_dict()
-                champions.append((champion_key, champ_data))
+        # Get all champions directly from the all document
+        champions_docs = champions_ref.stream()
+        for doc in champions_docs:
+            champion_key = doc.id
+            champ_data = doc.to_dict()
+            champions.append((champion_key, champ_data))
 
         role_champions = {
             'top': [],
@@ -372,7 +379,7 @@ def update_role_containers():
 
             # Get current patch from first champion if available
             if not current_patch and champions_list:
-                first_champ_data = db.collection('champions').document('all').collection(champions_list[0]["id"]).document('data').get()
+                first_champ_data = db.collection('champions').document(f'all/{champions_list[0]["id"]}').get()
                 if first_champ_data.exists:
                     current_patch = first_champ_data.to_dict().get('patch')
 
@@ -448,13 +455,7 @@ def cleanup_old_patch_data():
         # Get current patch from a sample champion
         current_patch = None
         champions_ref = db.collection('champions').document('all')
-        sample_champions = []
-
-        for collection_ref in champions_ref.collections():
-            doc = collection_ref.document('data').get()
-            if doc.exists:
-                sample_champions.append(doc)
-                break
+        sample_champions = champions_ref.stream()
 
         for doc in sample_champions:
             current_patch = doc.to_dict().get('patch')
@@ -469,9 +470,12 @@ def cleanup_old_patch_data():
         # Collect all patch history data
         old_patches = []
 
-        for collection_ref in champions_ref.collections():
-            champion_key = collection_ref.id
-            patch_history_ref = collection_ref.collection('patch_history')
+        # Get all champions directly
+        champions_docs = champions_ref.stream()
+        for doc in champions_docs:
+            champion_key = doc.id
+            # Check if this champion has patch history subcollection
+            patch_history_ref = champions_ref.collection(champion_key).collection('patch_history')
             patches = patch_history_ref.list_documents()
 
             for patch_doc in patches:

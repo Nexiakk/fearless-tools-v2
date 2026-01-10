@@ -13,22 +13,108 @@ db = None
 # Simple in-memory cache for Riot API data
 riot_cache = {}
 
-def init_firebase():
-    """Initialize Firebase if not already done"""
-    global firebase_initialized, db
-    if not firebase_initialized:
-        try:
-            import firebase_admin
-            from firebase_admin import credentials, firestore
-            cred_path = os.environ.get('FIREBASE_CREDENTIALS_PATH', 'firebase-key.json')
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-            db = firestore.client()
-            firebase_initialized = True
-        except Exception as e:
-            print(f"Firebase initialization failed: {e}")
-            return False
-    return firebase_initialized
+# Champion name mapping cache
+champion_name_cache = {}
+champion_data_cache = {}
+
+def get_champion_data_mapping():
+    """Get comprehensive champion data mapping from Riot API"""
+    global champion_data_cache
+
+    # Return cached mapping if available
+    if champion_data_cache:
+        return champion_data_cache
+
+    try:
+        # Get latest patch version
+        current_patch = get_current_patch()
+
+        # Fetch champion data from Riot API
+        champions_url = f"https://ddragon.leagueoflegends.com/cdn/{current_patch}/data/en_US/champion.json"
+        response = requests.get(champions_url, timeout=10)
+        response.raise_for_status()
+        champions_data = response.json()
+
+        # Build comprehensive mapping: internal_key -> full data
+        mapping = {}
+        for key, champ_data in champions_data['data'].items():
+            mapping[key] = {
+                'id': int(champ_data['key']),  # Numeric champion ID
+                'imageName': key,              # Internal string key for images
+                'name': champ_data['name'],    # Display name
+                'internalKey': key             # Internal key for reference
+            }
+
+        # Cache the mapping
+        champion_data_cache.update(mapping)
+        return mapping
+
+    except Exception as e:
+        print(f"Error fetching champion data mapping: {e}")
+        return {}
+
+def get_display_name(internal_key):
+    """Convert Riot internal champion key to display name"""
+    mapping = get_champion_data_mapping()
+    return mapping.get(internal_key, {}).get('name', internal_key)
+
+def get_champion_id(internal_key):
+    """Get numeric champion ID from internal key"""
+    mapping = get_champion_data_mapping()
+    return mapping.get(internal_key, {}).get('id')
+
+def get_champion_image_name(internal_key):
+    """Get image name (internal key) for a champion"""
+    mapping = get_champion_data_mapping()
+    return mapping.get(internal_key, {}).get('imageName', internal_key)
+
+def get_simplified_key(internal_key):
+    """Generate simplified database key from internal key"""
+    display_name = get_display_name(internal_key)
+    return encode_champion_name_for_lolalytics(display_name)
+
+def encode_champion_name_for_lolalytics(display_name):
+    """Encode champion name for Lolalytics URL format (simplified, no special chars/spaces)"""
+    import re
+
+    # Convert to lowercase
+    encoded = display_name.lower()
+
+    # Remove apostrophes, quotes, and other special characters
+    encoded = re.sub(r"['\"]", '', encoded)
+
+    # Replace spaces with nothing (remove spaces)
+    encoded = encoded.replace(' ', '')
+
+    # Handle roman numerals (IV -> iv, etc.)
+    # But keep them as is since they're already lowercase
+
+    return encoded
+
+def get_champion_list():
+    """Get list of all champions from Riot Data Dragon API"""
+    try:
+        # Get latest version
+        current_patch = get_current_patch()
+
+        # Get champion data
+        champions_url = f"https://ddragon.leagueoflegends.com/cdn/{current_patch}/data/en_US/champion.json"
+        champions_response = requests.get(champions_url, timeout=10)
+        champions_response.raise_for_status()
+        champions_data = champions_response.json()
+
+        # Return sorted list of champion names
+        champion_names = list(champions_data['data'].keys())
+        champion_names.sort()
+        return champion_names
+
+    except Exception as e:
+        print(f"Error fetching champion list from Riot API: {e}")
+        # Fallback to a smaller static list for testing
+        return [
+            'Aatrox', 'Ahri', 'Akali', 'Ashe', 'Jinx', 'Lux', 'Miss Fortune', 'Vayne', 'Yuumi',
+            'Yasuo', 'Zed', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus'
+        ]
 
 def normalize_patch_for_lolalytics(patch_version):
     """Convert Riot API patch format (x.y.z) to Lolalytics format (x.y)"""
@@ -168,40 +254,52 @@ def scrape_and_store_data():
     champions = get_champion_list()
 
     # Process each champion
-    for champion in champions:
+    for champion_internal in champions:
         try:
-            print(f"\n=== Processing {champion} ===")
+            # Get all champion data
+            champion_id = get_champion_id(champion_internal)
+            champion_display = get_display_name(champion_internal)
+            champion_image_name = get_champion_image_name(champion_internal)
+            simplified_key = get_simplified_key(champion_internal)
+
+            print(f"\n=== Processing {champion_internal} (display: {champion_display}, key: {simplified_key}) ===")
 
             # Scrape League Wiki abilities data
-            print(f"Scraping wiki abilities for {champion}...")
-            abilities_data = scrape_champion_abilities(champion)
+            print(f"Scraping wiki abilities for {champion_display}...")
+            abilities_data = scrape_champion_abilities(champion_display)
             print(f"Found {len(abilities_data)} abilities")
 
             # Scrape Lolalytics build data with target patch
-            print(f"Scraping lolalytics data for {champion} (patch {target_patch})...")
+            print(f"Scraping lolalytics data for {champion_display} (patch {target_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
-            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=target_patch)
+            normalized_patch = normalize_patch_for_lolalytics(target_patch)
+            build_data = lolalytics_scraper.scrape_champion_build(champion_display, patch=normalized_patch)
 
-            # Combine the data
+            # Combine the data with new structure
             combined_data = {
-                'name': champion,
+                'id': champion_id,              # Numeric champion ID (136 for Aurelion Sol)
+                'imageName': champion_image_name, # Internal key for images (AurelionSol)
+                'name': champion_display,       # Display name (Aurelion Sol)
                 'abilities': abilities_data,
                 'lastUpdated': datetime.utcnow()
             }
 
-            # Add lolalytics data if available (flattened structure)
+            # Add lolalytics data if available (flattened structure, remove tier field)
             if build_data:
-                combined_data.update(build_data)
+                # Copy build data but exclude the 'tier' field since it's always diamond_plus
+                for key, value in build_data.items():
+                    if key != 'tier':  # Skip the tier field
+                        combined_data[key] = value
                 print(f"Combined data: {len(build_data.get('roles', {}))} roles")
             else:
                 print("No build data available")
 
-            # Store combined data
-            store_combined_champion_data(champion.lower(), combined_data)
-            print(f"✅ Successfully stored data for {champion}")
+            # Store combined data using internal key (remove /data subdocument)
+            store_combined_champion_data(champion_internal, combined_data)
+            print(f"✅ Successfully stored data for {champion_display} (key: {champion_internal})")
 
         except Exception as e:
-            print(f"❌ Error processing {champion}: {e}")
+            print(f"❌ Error processing {champion_internal}: {e}")
             import traceback
             traceback.print_exc()
 
@@ -414,7 +512,7 @@ def test_data_integration():
         return None, None
 
 def store_combined_champion_data(champion_key: str, data: dict):
-    """Store combined champion data in Firebase"""
+    """Store combined champion data in Firebase (direct document, no /data subdocument)"""
     if not init_firebase():
         raise Exception("Firebase not available")
     doc_ref = db.collection('champions').document(f'all/{champion_key}')

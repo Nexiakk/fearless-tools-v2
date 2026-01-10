@@ -5,6 +5,22 @@ import re
 import time
 from typing import Dict, List, Optional
 
+def encode_champion_name_for_lolalytics(display_name):
+    """Encode champion name for Lolalytics URL format (simplified, no special chars/spaces)"""
+    # Convert to lowercase
+    encoded = display_name.lower()
+
+    # Remove apostrophes, quotes, and other special characters
+    encoded = re.sub(r"['\"]", '', encoded)
+
+    # Replace spaces with nothing (remove spaces)
+    encoded = encoded.replace(' ', '')
+
+    # Handle roman numerals (IV -> iv, etc.)
+    # But keep them as is since they're already lowercase
+
+    return encoded
+
 class LolalyticsBuildScraper:
     def __init__(self):
         self.base_url = "https://lolalytics.com"
@@ -329,14 +345,17 @@ class LolalyticsBuildScraper:
             print(f"Error getting counters for {champion} {role}: {e}")
             return []
 
-    def scrape_champion_build(self, champion: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
+    def scrape_champion_build(self, champion_display_name: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
         """Main method to scrape all champion build data - returns flattened structure"""
-        print(f"\n=== Scraping {champion} build data ===")
+        print(f"\n=== Scraping {champion_display_name} build data ===")
+
+        # Encode champion name for Lolalytics URL
+        encoded_champion = encode_champion_name_for_lolalytics(champion_display_name)
 
         # Get valid roles
-        roles = self.get_champion_roles(champion, tier, patch)
+        roles = self.get_champion_roles(encoded_champion, tier, patch)
         if not roles:
-            print(f"No valid roles found for {champion}")
+            print(f"No valid roles found for {champion_display_name}")
             return {}
 
         result = {
@@ -358,16 +377,16 @@ class LolalyticsBuildScraper:
             # Get stats for this role
             if role_url and 'lane=' not in role_url:
                 # Main role without lane parameter - use the URL directly
-                stats = self.get_role_stats_from_url(champion, role_url, tier, patch)
+                stats = self.get_role_stats_from_url(encoded_champion, role_url, tier, patch)
             else:
                 # Normal role with lane parameter
-                stats = self.get_role_stats(champion, role_name, tier, patch)
+                stats = self.get_role_stats(encoded_champion, role_name, tier, patch)
 
             # Note: Individual role filtering happens at the patch level in the update engine
             # We collect all roles with ≥9% pickrate here, regardless of individual game counts
 
             # Get counters only for valid roles
-            counters = self.get_counter_matchups(champion, role_name, tier, patch)
+            counters = self.get_counter_matchups(encoded_champion, role_name, tier, patch)
 
             result['roles'][role_name] = {
                 'stats': stats,
@@ -391,6 +410,3 @@ def test_aatrox():
 
 if __name__ == "__main__":
     test_aatrox()
-
-
-

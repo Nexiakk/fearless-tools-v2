@@ -16,10 +16,10 @@ def encode_champion_name_for_wiki(champion_name):
 
     return encoded
 
-def scrape_champion_abilities(champion_name):
+def scrape_champion_abilities(champion_display_name):
     """Scrape ability cooldowns for a champion from League Wiki"""
-    # Encode champion name for wiki URL format
-    encoded_name = encode_champion_name_for_wiki(champion_name)
+    # Encode champion display name for wiki URL format
+    encoded_name = encode_champion_name_for_wiki(champion_display_name)
 
     # Use the correct URL format: https://wiki.leagueoflegends.com/en-us/{Champion}
     url = f"https://wiki.leagueoflegends.com/en-us/{encoded_name}"
@@ -47,7 +47,7 @@ def scrape_champion_abilities(champion_name):
                 continue
 
             # Skip generic entries
-            if ability_name in ['Active:', 'Passive:', 'Innate:'] or ability_name == champion_name:
+            if ability_name in ['Active:', 'Passive:', 'Innate:'] or ability_name == champion_display_name:
                 continue
 
             # Extract cooldown
@@ -78,7 +78,7 @@ def scrape_champion_abilities(champion_name):
         return abilities
 
     except Exception as e:
-        print(f"Error scraping {champion_name}: {e}")
+        print(f"Error scraping {champion_display_name}: {e}")
         return []
 
 def extract_ability_name(container):
