@@ -84,7 +84,8 @@ def scrape_and_store_data():
             # Scrape Lolalytics build data with target patch
             print(f"Scraping lolalytics data for {champion} (patch {target_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
-            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=target_patch)
+            normalized_patch = normalize_patch_for_lolalytics(target_patch)
+            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=normalized_patch)
 
             # Combine the data
             new_data = {
