@@ -5,7 +5,7 @@ import random
 import requests
 from scraper.lolalytics_build_scraper import LolalyticsBuildScraper
 from scraper.wiki_scraper import scrape_champion_abilities
-from scraper.main import check_patch_viability, normalize_patch_for_lolalytics, get_display_name, get_simplified_key
+from scraper.main import check_patch_viability, normalize_patch_for_lolalytics, get_display_name, get_simplified_key, get_champion_id, get_champion_image_name
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
