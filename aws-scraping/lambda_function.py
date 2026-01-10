@@ -349,8 +349,8 @@ def update_role_containers():
         role_champions = {
             'top': [],
             'jungle': [],
-            'mid': [],
-            'adc': [],
+            'middle': [],  # Scraper uses 'middle', not 'mid'
+            'bottom': [],  # Scraper uses 'bottom', not 'adc'
             'support': []
         }
 
@@ -475,7 +475,7 @@ def cleanup_old_patch_data():
         for doc in champions_docs:
             champion_key = doc.id
             # Check if this champion has patch history subcollection
-            patch_history_ref = champions_ref.collection(champion_key).collection('patch_history')
+            patch_history_ref = doc.reference.collection('patch_history')
             patches = patch_history_ref.list_documents()
 
             for patch_doc in patches:

@@ -113,8 +113,8 @@ class LolalyticsBuildScraper:
                     if win_rate_text:
                         stats['win_rate'] = float(win_rate_text.get_text().strip().rstrip('%'))
 
-                    # Pick Rate (third div)
-                    pick_rate_div = stat_divs[2]
+                    # Pick Rate (fourth div, index 3)
+                    pick_rate_div = stat_divs[3]
                     pick_rate_text = pick_rate_div.find('div', class_='mb-1 font-bold')
                     if pick_rate_text:
                         stats['pick_rate'] = float(pick_rate_text.get_text().strip().rstrip('%'))
@@ -180,8 +180,8 @@ class LolalyticsBuildScraper:
                     if win_rate_text:
                         stats['win_rate'] = float(win_rate_text.get_text().strip().rstrip('%'))
 
-                    # Pick Rate (third div)
-                    pick_rate_div = stat_divs[2]
+                    # Pick Rate (fourth div, index 3)
+                    pick_rate_div = stat_divs[3]
                     pick_rate_text = pick_rate_div.find('div', class_='mb-1 font-bold')
                     if pick_rate_text:
                         stats['pick_rate'] = float(pick_rate_text.get_text().strip().rstrip('%'))
@@ -305,7 +305,7 @@ class LolalyticsBuildScraper:
             matchup_links = soup.find_all('a', href=lambda x: x and '/lol/' in x and '/vs/' in x)
 
             if matchup_links:
-                for link in matchup_links[:15]:  # Limit to top counters
+                for link in matchup_links:  # Process all available counters
                     try:
                         counter_data = {}
 
