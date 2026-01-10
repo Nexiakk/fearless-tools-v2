@@ -2,8 +2,8 @@ import os
 import json
 import time
 import requests
-from lolalytics_build_scraper import LolalyticsBuildScraper
-from wiki_scraper import scrape_champion_abilities
+from .lolalytics_build_scraper import LolalyticsBuildScraper
+from .wiki_scraper import scrape_champion_abilities
 from datetime import datetime
 
 # Firebase will be initialized only when needed
