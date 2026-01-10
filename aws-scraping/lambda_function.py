@@ -264,9 +264,9 @@ class SmartUpdateEngine:
         return list(viable_roles)
 
 def get_current_champion_data(champion_key):
-    """Get current champion data from Firebase (direct document, no /data subdocument)"""
+    """Get current champion data from Firebase (optimized hierarchical structure)"""
     try:
-        doc_ref = db.collection('champions').document(f'all/{champion_key}')
+        doc_ref = db.collection('champions').document('all').collection('champions').document(champion_key)
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
@@ -277,9 +277,9 @@ def get_current_champion_data(champion_key):
         return {}
 
 def store_combined_champion_data_smart(champion_key, current_data, new_data, update_decision):
-    """Store combined champion data using smart update decisions (direct document, no tier field)"""
+    """Store combined champion data using smart update decisions (optimized hierarchical structure)"""
     try:
-        doc_ref = db.collection('champions').document(f'all/{champion_key}')
+        doc_ref = db.collection('champions').document('all').collection('champions').document(champion_key)
 
         # Start with current data or empty dict
         final_data = current_data.copy() if current_data else {}
@@ -320,11 +320,11 @@ def store_combined_champion_data_smart(champion_key, current_data, new_data, upd
         raise
 
 def archive_champion_data(champion_key, data):
-    """Archive champion data for fallback system"""
+    """Archive champion data for fallback system (optimized hierarchical structure)"""
     try:
         patch = data.get('patch')
         if patch:
-            doc_ref = db.collection('champions').document('all').collection(champion_key).collection('patch_history').document(patch)
+            doc_ref = db.collection('champions').document('all').collection('champions').document(champion_key).collection('patch_history').document(patch)
             doc_ref.set(data)
             print(f"📦 Archived {champion_key} data for patch {patch}")
     except Exception as e:
@@ -339,8 +339,8 @@ def update_role_containers():
         champions_ref = db.collection('champions').document('all')
         champions = []  # list of (champion_key, champ_data)
 
-        # Get all champions directly from the all document
-        champions_docs = champions_ref.stream()
+        # Get all champions from the champions subcollection
+        champions_docs = champions_ref.collection('champions').stream()
         for doc in champions_docs:
             champion_key = doc.id
             champ_data = doc.to_dict()
@@ -379,7 +379,7 @@ def update_role_containers():
 
             # Get current patch from first champion if available
             if not current_patch and champions_list:
-                first_champ_data = db.collection('champions').document(f'all/{champions_list[0]["id"]}').get()
+                first_champ_data = db.collection('champions').document('all').collection('champions').document(champions_list[0]["id"]).get()
                 if first_champ_data.exists:
                     current_patch = first_champ_data.to_dict().get('patch')
 
@@ -454,7 +454,7 @@ def cleanup_old_patch_data():
     try:
         # Get current patch from a sample champion
         current_patch = None
-        champions_ref = db.collection('champions').document('all')
+        champions_ref = db.collection('champions').document('all').collection('champions')
         sample_champions = champions_ref.stream()
 
         for doc in sample_champions:
