@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import requests
 from lolalytics_build_scraper import LolalyticsBuildScraper
 from wiki_scraper import scrape_champion_abilities
 from datetime import datetime
@@ -29,13 +30,140 @@ def init_firebase():
             return False
     return firebase_initialized
 
+def normalize_patch_for_lolalytics(patch_version):
+    """Convert Riot API patch format (x.y.z) to Lolalytics format (x.y)"""
+    # Split by dots and take only first two components
+    parts = patch_version.split('.')
+    if len(parts) >= 2:
+        return f"{parts[0]}.{parts[1]}"
+    return patch_version
+
+def check_patch_viability(patch_version):
+    """
+    Check if current patch has sufficient sample size by scraping Lolalytics tierlist.
+    Returns tuple: (use_current_patch, target_patch, metrics)
+    """
+    try:
+        print(f"🔍 Checking patch {patch_version} viability...")
+
+        # Convert patch format for Lolalytics (remove .1 suffix)
+        lolalytics_patch = normalize_patch_for_lolalytics(patch_version)
+        print(f"  - Using Lolalytics patch format: {patch_version} → {lolalytics_patch}")
+
+        # Scrape Lolalytics tierlist for this patch
+        url = f"https://lolalytics.com/pl/lol/tierlist/?patch={lolalytics_patch}&tier=diamond_plus"
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+
+        # Parse HTML to extract champion data
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        champions_data = []
+
+        # Find champion rows in the tierlist table
+        champion_rows = soup.find_all('tr', class_='ChampionRow')
+
+        for row in champion_rows:
+            try:
+                # Extract champion name
+                name_elem = row.find('a', class_='ChampionName')
+                if not name_elem:
+                    continue
+                champion_name = name_elem.get_text().strip()
+
+                # Extract games count (usually in a span with specific class)
+                games_elem = row.find('span', string=lambda text: text and 'games' in text.lower())
+                if games_elem:
+                    games_text = games_elem.get_text().strip()
+                    # Parse number (e.g., "16,947 games" -> 16947)
+                    games_count = int(games_text.replace(',', '').replace(' games', ''))
+                else:
+                    # Try alternative selectors for games count
+                    stats_div = row.find('div', class_='ChampionStats')
+                    if stats_div:
+                        games_text = stats_div.get_text()
+                        # Look for number pattern
+                        import re
+                        match = re.search(r'(\d{1,3}(?:,\d{3})*)', games_text)
+                        if match:
+                            games_count = int(match.group(1).replace(',', ''))
+                        else:
+                            continue
+                    else:
+                        continue
+
+                champions_data.append({
+                    'name': champion_name,
+                    'games': games_count
+                })
+
+            except Exception as e:
+                print(f"⚠️ Error parsing champion row: {e}")
+                continue
+
+        if not champions_data:
+            print("⚠️ No champion data found in tierlist")
+            return False, get_previous_patch(patch_version), {}
+
+        # Sort by games descending and calculate metrics
+        champions_data.sort(key=lambda x: x['games'], reverse=True)
+
+        # Calculate top 10 total games
+        top_10_total = sum(champ['games'] for champ in champions_data[:10])
+
+        # Calculate average games per champion
+        avg_games = sum(champ['games'] for champ in champions_data) / len(champions_data)
+
+        metrics = {
+            'champion_count': len(champions_data),
+            'top_10_total_games': top_10_total,
+            'avg_games_per_champion': avg_games,
+            'top_10_champions': champions_data[:10]
+        }
+
+        # Check thresholds
+        top_10_threshold = 200000  # 200k
+        avg_threshold = 5000       # 5k
+
+        viable = (top_10_total >= top_10_threshold and avg_games >= avg_threshold)
+
+        target_patch = patch_version if viable else get_previous_patch(patch_version)
+
+        print("📊 Patch viability metrics:")
+        print(f"  - Champions analyzed: {len(champions_data)}")
+        print(f"  - Top 10 total games: {top_10_total:,} (threshold: {top_10_threshold:,})")
+        print(f"  - Average games/champion: {avg_games:.0f} (threshold: {avg_threshold})")
+        print(f"  - Result: {'✅ VIABLE' if viable else '❌ FALLBACK'}")
+
+        if not viable:
+            print(f"  - Fallback to patch: {target_patch}")
+
+        return viable, target_patch, metrics
+
+    except Exception as e:
+        print(f"❌ Error checking patch viability: {e}")
+        import traceback
+        traceback.print_exc()
+        # On error, fall back to previous patch
+        return False, get_previous_patch(patch_version), {}
+
 def scrape_and_store_data():
     """Main function to scrape data and store in Firebase"""
     print("Starting data scraping...")
 
-    # Get current patch for all scraping operations
+    # Get current patch and check viability
     current_patch = get_current_patch()
-    print(f"Using current patch: {current_patch}")
+    print(f"Current patch: {current_patch}")
+
+    # Check if current patch has sufficient sample size
+    use_current, target_patch, viability_metrics = check_patch_viability(current_patch)
+
+    if use_current:
+        print(f"✅ Using current patch {current_patch} for scraping")
+    else:
+        print(f"⚠️ Current patch {current_patch} has insufficient data")
+        print(f"🔄 Falling back to patch {target_patch}")
 
     champions = get_champion_list()
 
@@ -49,10 +177,10 @@ def scrape_and_store_data():
             abilities_data = scrape_champion_abilities(champion)
             print(f"Found {len(abilities_data)} abilities")
 
-            # Scrape Lolalytics build data with current patch
-            print(f"Scraping lolalytics data for {champion} (patch {current_patch})...")
+            # Scrape Lolalytics build data with target patch
+            print(f"Scraping lolalytics data for {champion} (patch {target_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
-            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=current_patch)
+            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=target_patch)
 
             # Combine the data
             combined_data = {
