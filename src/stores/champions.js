@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchChampionDataFromFirestore } from '@/services/firebase/championData'
+import { fetchChampionsFromIndividualDocs, fetchChampionDataFromFirestore } from '@/services/firebase/championData'
 import { riotApiService } from '@/services/riotApi'
 
 export const useChampionsStore = defineStore('champions', () => {
@@ -13,13 +13,13 @@ export const useChampionsStore = defineStore('champions', () => {
   // Getters
   const championsByRole = computed(() => {
     const grouped = {
-      Top: [],
-      Jungle: [],
-      Mid: [],
-      Bot: [],
-      Support: []
+      top: [],
+      jungle: [],
+      middle: [],
+      bottom: [],
+      support: []
     }
-    
+
     allChampions.value.forEach(champ => {
       if (Array.isArray(champ.roles)) {
         champ.roles.forEach(role => {
@@ -29,7 +29,7 @@ export const useChampionsStore = defineStore('champions', () => {
         })
       }
     })
-    
+
     return grouped
   })
   
@@ -37,11 +37,17 @@ export const useChampionsStore = defineStore('champions', () => {
   async function loadChampions() {
     isLoading.value = true
     try {
-      console.log('=== LOADING GLOBAL CHAMPION DATA ===')
-      
-      // Fetch directly from Firestore (bypassing cache for now)
-      const firestoreData = await fetchChampionDataFromFirestore('global')
-      
+      console.log('=== LOADING CHAMPION DATA ===')
+
+      // Try new individual documents system first
+      let firestoreData = await fetchChampionsFromIndividualDocs()
+
+      // If new system fails or returns no data, fall back to global document
+      if (!firestoreData || !firestoreData.allChampions || !Array.isArray(firestoreData.allChampions) || firestoreData.allChampions.length === 0) {
+        console.log('🔄 New system failed or returned no data, falling back to global document...')
+        firestoreData = await fetchChampionDataFromFirestore('global')
+      }
+
       if (firestoreData && firestoreData.allChampions && Array.isArray(firestoreData.allChampions) && firestoreData.allChampions.length > 0) {
         // Create a deep copy to avoid reference issues
         allChampions.value = firestoreData.allChampions.map(champ => {
@@ -56,15 +62,15 @@ export const useChampionsStore = defineStore('champions', () => {
           }
         })
         opTierChampions.value = { ...(firestoreData.opTierChampions || {}) }
-        
-        console.log(`✓ Champion data loaded from Firestore: ${firestoreData.allChampions.length} champions`)
+
+        console.log(`✓ Champion data loaded: ${firestoreData.allChampions.length} champions`)
       } else {
         console.warn('⚠️ No champion data in database. Please import data using Admin Panel > Migration tab.')
         allChampions.value = []
         opTierChampions.value = {}
       }
     } catch (error) {
-      console.error('=== ERROR loading champion data from Firestore ===', error)
+      console.error('=== ERROR loading champion data ===', error)
       allChampions.value = []
       opTierChampions.value = {}
     } finally {
@@ -113,8 +119,8 @@ export const useChampionsStore = defineStore('champions', () => {
     const urls = {
       top: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-top-blue-hover.png',
       jungle: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-jungle-blue-hover.png',
-      mid: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-middle-blue-hover.png',
-      bot: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-bottom-blue-hover.png',
+      middle: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-middle-blue-hover.png',
+      bottom: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-bottom-blue-hover.png',
       support: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-utility-blue-hover.png',
       unknown: 'https://placehold.co/16x16/cccccc/777777?text=?'
     }

@@ -11,11 +11,11 @@ export const useDraftStore = defineStore('draft', () => {
   const draftSeries = ref([])
   const highlightedChampions = ref({})
   const unavailablePanelState = ref({
-    Top: Array(10).fill(null),
-    Jungle: Array(10).fill(null),
-    Mid: Array(10).fill(null),
-    Bot: Array(10).fill(null),
-    Support: Array(10).fill(null)
+    top: Array(10).fill(null),
+    jungle: Array(10).fill(null),
+    middle: Array(10).fill(null),
+    bottom: Array(10).fill(null),
+    support: Array(10).fill(null)
   })
   const pickContext = ref([])
   const bannedChampions = ref(new Set()) // Manually banned champions
@@ -41,11 +41,11 @@ export const useDraftStore = defineStore('draft', () => {
     
     if (frozenChampions) {
       const grouped = {
-        Top: { sticky: [], scrollable: [] },
-        Jungle: { sticky: [], scrollable: [] },
-        Mid: { sticky: [], scrollable: [] },
-        Bot: { sticky: [], scrollable: [] },
-        Support: { sticky: [], scrollable: [] }
+        top: { sticky: [], scrollable: [] },
+        jungle: { sticky: [], scrollable: [] },
+        middle: { sticky: [], scrollable: [] },
+        bottom: { sticky: [], scrollable: [] },
+        support: { sticky: [], scrollable: [] }
       }
       
       championsStore.allChampions.forEach(champ => {
@@ -88,8 +88,8 @@ export const useDraftStore = defineStore('draft', () => {
       
       return grouped
     } else {
-      const grouped = { Top: [], Jungle: [], Mid: [], Bot: [], Support: [] }
-      
+      const grouped = { top: [], jungle: [], middle: [], bottom: [], support: [] }
+
       championsStore.allChampions.forEach(champ => {
         if (Array.isArray(champ.roles)) {
           champ.roles.forEach(role => {
@@ -99,7 +99,7 @@ export const useDraftStore = defineStore('draft', () => {
           })
         }
       })
-      
+
       // Sort by priority
       Object.keys(grouped).forEach(role => {
         grouped[role].sort((a, b) => {
@@ -116,7 +116,7 @@ export const useDraftStore = defineStore('draft', () => {
           return a.name.localeCompare(b.name)
         })
       })
-      
+
       return grouped
     }
   })
@@ -429,7 +429,7 @@ export const useDraftStore = defineStore('draft', () => {
   
   function placeChampionInPanel(champion, preferredRole = null) {
     const placementOrder = [0, 5, 1, 6, 2, 7, 3, 8, 4, 9]
-    const validRoles = new Set(['Top', 'Jungle', 'Mid', 'Bot', 'Support'])
+    const validRoles = new Set(['top', 'jungle', 'middle', 'bottom', 'support'])
     
     // Try preferred role first
     if (preferredRole && validRoles.has(preferredRole) && unavailablePanelState.value[preferredRole]) {
@@ -509,11 +509,11 @@ export const useDraftStore = defineStore('draft', () => {
     draftSeries.value = []
     pickContext.value = []
     unavailablePanelState.value = {
-      Top: Array(10).fill(null),
-      Jungle: Array(10).fill(null),
-      Mid: Array(10).fill(null),
-      Bot: Array(10).fill(null),
-      Support: Array(10).fill(null)
+      top: Array(10).fill(null),
+      jungle: Array(10).fill(null),
+      middle: Array(10).fill(null),
+      bottom: Array(10).fill(null),
+      support: Array(10).fill(null)
     }
     
     // Also delete all lcuDrafts from Firestore
@@ -593,11 +593,11 @@ export const useDraftStore = defineStore('draft', () => {
         draftSeries.value = data.draftSeries || []
         highlightedChampions.value = data.highlightedChampions || {}
         unavailablePanelState.value = data.unavailablePanelState || {
-          Top: Array(10).fill(null),
-          Jungle: Array(10).fill(null),
-          Mid: Array(10).fill(null),
-          Bot: Array(10).fill(null),
-          Support: Array(10).fill(null)
+          top: Array(10).fill(null),
+          jungle: Array(10).fill(null),
+          middle: Array(10).fill(null),
+          bottom: Array(10).fill(null),
+          support: Array(10).fill(null)
         }
         pickContext.value = data.pickContext || []
         bannedChampions.value = new Set(data.bannedChampions || [])
@@ -644,15 +644,15 @@ export const useDraftStore = defineStore('draft', () => {
       draftSeries.value = data.draftSeries || []
       highlightedChampions.value = data.highlightedChampions || {}
       unavailablePanelState.value = data.unavailablePanelState || {
-        Top: Array(10).fill(null),
-        Jungle: Array(10).fill(null),
-        Mid: Array(10).fill(null),
-        Bot: Array(10).fill(null),
-        Support: Array(10).fill(null)
+        top: Array(10).fill(null),
+        jungle: Array(10).fill(null),
+        middle: Array(10).fill(null),
+        bottom: Array(10).fill(null),
+        support: Array(10).fill(null)
       }
       pickContext.value = data.pickContext || []
       bannedChampions.value = new Set(data.bannedChampions || [])
-      
+
       // Reconstruct pickContext if missing
       if (pickContext.value.length === 0 && draftSeries.value.length > 0) {
         reconstructPickContext()
@@ -672,18 +672,18 @@ export const useDraftStore = defineStore('draft', () => {
       
       // Try to find which role the champion is currently placed in
       let foundRole = null
-      for (const role of ['Top', 'Jungle', 'Mid', 'Bot', 'Support']) {
+      for (const role of ['top', 'jungle', 'middle', 'bottom', 'support']) {
         if (unavailablePanelState.value[role] && unavailablePanelState.value[role].includes(championName)) {
           foundRole = role
           break
         }
       }
-      
+
       // If not found in panel, use mainRole or first role
       if (!foundRole) {
-        foundRole = champion.mainRole && ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].includes(champion.mainRole)
+        foundRole = champion.mainRole && ['top', 'jungle', 'middle', 'bottom', 'support'].includes(champion.mainRole)
           ? champion.mainRole
-          : (champion.roles && champion.roles.length > 0 && ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].includes(champion.roles[0])
+          : (champion.roles && champion.roles.length > 0 && ['top', 'jungle', 'middle', 'bottom', 'support'].includes(champion.roles[0])
             ? champion.roles[0]
             : null)
       }
@@ -698,7 +698,7 @@ export const useDraftStore = defineStore('draft', () => {
   
   function balanceChampionsAcrossRoles() {
     const championsStore = useChampionsStore()
-    const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+    const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
     
     // Clear all current placements
     roles.forEach(role => {

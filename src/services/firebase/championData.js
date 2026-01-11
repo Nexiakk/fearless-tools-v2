@@ -3,6 +3,8 @@ import {
   doc,
   getDoc,
   setDoc,
+  collection,
+  getDocs,
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from './config'
@@ -176,3 +178,187 @@ export async function migrateChampionDataToFirestore(workspaceId, allChampions, 
   }
 }
 
+/**
+ * NEW SYSTEM: Fetch champions from individual documents using role containers
+ */
+export async function fetchChampionsFromIndividualDocs() {
+  try {
+    console.log('🔄 Fetching champions from individual documents...')
+
+    // First, get role containers to know which champions exist
+    const roleData = await fetchChampionRolesFromContainers()
+
+    // Flatten all champion IDs
+    const allChampionIds = new Set()
+    Object.values(roleData).forEach(ids => {
+      ids.forEach(id => allChampionIds.add(id))
+    })
+
+    console.log(`📋 Found ${allChampionIds.size} champions across all roles`)
+
+    if (allChampionIds.size === 0) {
+      console.warn('⚠️ No champions found in role containers, falling back to global data')
+      return await fetchChampionDataFromFirestore('global')
+    }
+
+    // Fetch all champion documents in batches to avoid overwhelming Firestore
+    const champions = await fetchChampionsInBatches(Array.from(allChampionIds))
+
+    // Normalize champions for frontend compatibility
+    const normalizedChampions = champions.map(champion => {
+      const normalized = { ...champion }
+
+      // Extract roles from the roles object and convert to array
+      if (normalized.roles && typeof normalized.roles === 'object') {
+        normalized.roles = Object.keys(normalized.roles)
+      } else if (!Array.isArray(normalized.roles)) {
+        normalized.roles = []
+      }
+
+      // Set mainRole to first role if not set
+      if (!normalized.mainRole && normalized.roles.length > 0) {
+        normalized.mainRole = normalized.roles[0]
+      }
+
+      return normalized
+    })
+
+    console.log(`✅ Successfully fetched ${normalizedChampions.length} champions from individual documents`)
+
+    return {
+      allChampions: normalizedChampions,
+      opTierChampions: {}, // TODO: Implement OP tier detection from new data
+      version: Date.now(), // Use current timestamp as version
+      lastUpdated: new Date()
+    }
+
+  } catch (error) {
+    console.error('❌ Error fetching champions from individual docs:', error)
+    // Fallback to old system
+    console.log('🔄 Falling back to global champion data...')
+    return await fetchChampionDataFromFirestore('global')
+  }
+}
+
+/**
+ * Fetch role containers to get champion IDs per role
+ */
+export async function fetchChampionRolesFromContainers() {
+  const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
+  const roleData = {}
+
+  // Fetch all role containers in parallel
+  const rolePromises = roles.map(async (role) => {
+    try {
+      const roleRef = doc(db, 'champions', 'roles', role)
+      const roleSnap = await getDoc(roleRef)
+
+      if (roleSnap.exists()) {
+        const data = roleSnap.data()
+        return { role, champions: data.champions || [] }
+      }
+      return { role, champions: [] }
+    } catch (error) {
+      console.warn(`⚠️ Error fetching role container ${role}:`, error)
+      return { role, champions: [] }
+    }
+  })
+
+  const results = await Promise.all(rolePromises)
+
+  // Build role -> champion IDs mapping and normalize role names
+  results.forEach(({ role, champions }) => {
+    let displayRole = role
+
+    // Normalize role names for frontend (already standardized)
+    const roleMapping = {
+      'top': 'top',
+      'jungle': 'jungle',
+      'middle': 'middle',
+      'bottom': 'bottom',
+      'support': 'support'
+    }
+
+    displayRole = roleMapping[role] || role
+    roleData[displayRole] = champions
+  })
+
+  console.log('📊 Role containers fetched:', Object.keys(roleData).map(role =>
+    `${role}: ${roleData[role].length} champions`
+  ).join(', '))
+
+  return roleData
+}
+
+/**
+ * Fetch champion documents in batches to avoid overwhelming Firestore
+ */
+async function fetchChampionsInBatches(championIds, batchSize = 10) {
+  const batches = []
+  for (let i = 0; i < championIds.length; i += batchSize) {
+    batches.push(championIds.slice(i, i + batchSize))
+  }
+
+  const results = []
+  for (const batch of batches) {
+    const batchPromises = batch.map(async (championId) => {
+      try {
+        const docRef = doc(db, 'champions', `all/${championId}`)
+        const docSnap = await getDoc(docRef)
+
+        if (docSnap.exists()) {
+          return docSnap.data()
+        } else {
+          console.warn(`⚠️ Champion document ${championId} not found`)
+          return null
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error fetching champion ${championId}:`, error)
+        return null
+      }
+    })
+
+    const batchResults = await Promise.all(batchPromises)
+    results.push(...batchResults.filter(Boolean))
+  }
+
+  return results
+}
+
+/**
+ * Check for data updates by monitoring role containers
+ */
+export async function checkForDataUpdates() {
+  try {
+    // Check if any role container has been updated recently
+    const roleData = await fetchChampionRolesFromContainers()
+
+    // Get the latest update timestamp from role containers
+    let latestUpdate = 0
+    for (const role of ['top', 'jungle', 'middle', 'bottom', 'support']) {
+      try {
+        const roleRef = doc(db, 'champions', 'roles', role)
+        const roleSnap = await getDoc(roleRef)
+
+        if (roleSnap.exists()) {
+          const data = roleSnap.data()
+          if (data.lastUpdated) {
+            const timestamp = data.lastUpdated.toMillis ? data.lastUpdated.toMillis() : data.lastUpdated
+            latestUpdate = Math.max(latestUpdate, timestamp)
+          }
+        }
+      } catch (error) {
+        console.warn(`Error checking role ${role} update time:`, error)
+      }
+    }
+
+    return {
+      hasNewData: latestUpdate > 0,
+      lastUpdated: latestUpdate,
+      roleData
+    }
+  } catch (error) {
+    console.error('Error checking for data updates:', error)
+    return { hasNewData: false, lastUpdated: 0, roleData: {} }
+  }
+}

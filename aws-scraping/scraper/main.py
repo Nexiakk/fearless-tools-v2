@@ -10,6 +10,46 @@ from datetime import datetime
 firebase_initialized = False
 db = None
 
+def init_firebase():
+    """Initialize Firebase if not already done"""
+    global firebase_initialized, db
+
+    if firebase_initialized and db:
+        return True
+
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+
+        if not firebase_admin._apps:
+            # For GitHub Actions / serverless environments, credentials from environment variable
+            cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_KEY')
+            if cred_json:
+                cred = credentials.Certificate(json.loads(cred_json))
+            else:
+                # Fallback for local testing - use firebase-key.json in current directory
+                cred_path = 'firebase-key.json'
+                if os.path.exists(cred_path):
+                    cred = credentials.Certificate(cred_path)
+                else:
+                    # Try parent directory
+                    cred_path = os.path.join(os.path.dirname(__file__), '..', '..', 'firebase-key.json')
+                    if os.path.exists(cred_path):
+                        cred = credentials.Certificate(cred_path)
+                    else:
+                        print("❌ No Firebase credentials found")
+                        return False
+
+            firebase_admin.initialize_app(cred)
+
+        db = firestore.client()
+        firebase_initialized = True
+        return True
+
+    except Exception as e:
+        print(f"❌ Firebase initialization failed: {e}")
+        return False
+
 # Simple in-memory cache for Riot API data
 riot_cache = {}
 
@@ -523,11 +563,70 @@ def test_data_integration():
         return None, None
 
 def store_combined_champion_data(champion_key: str, data: dict):
-    """Store combined champion data in Firebase (direct document, no /data subdocument)"""
+    """Store combined champion data and update role containers incrementally"""
     if not init_firebase():
         raise Exception("Firebase not available")
+
+    # Store champion data
     doc_ref = db.collection('champions').document(f'all/{champion_key}')
     doc_ref.set(data)
+
+    # Update role containers for this champion
+    update_role_containers_for_champion(champion_key, data)
+
+def update_role_containers_for_champion(champion_key: str, champion_data: dict):
+    """Update role containers for a single champion"""
+    roles = champion_data.get('roles', {})
+
+    for role_name, role_stats in roles.items():
+        if role_name and role_stats.get('stats', {}).get('games', 0) > 0:
+            # Normalize role name for storage
+            normalized_role = normalize_role_name(role_name)
+            role_ref = get_role_container_ref(normalized_role)
+
+            # Update role container atomically
+            update_role_container_incremental(role_ref, champion_key, role_stats)
+
+def update_role_container_incremental(role_ref, champion_key: str, role_stats: dict):
+    """Atomically update a single role container"""
+    @firestore.transactional
+    def update_in_transaction(transaction):
+        role_doc = role_ref.get(transaction=transaction)
+
+        if role_doc.exists:
+            current_data = role_doc.to_dict()
+            champions_list = current_data.get('champions', [])
+        else:
+            champions_list = []
+
+        # Add champion if not already present
+        if champion_key not in champions_list:
+            champions_list.append(champion_key)
+
+        # Update role document
+        transaction.set(role_ref, {
+            'champions': champions_list,
+            'count': len(champions_list),
+            'lastUpdated': datetime.utcnow()
+        }, merge=True)
+
+    update_in_transaction(db)
+
+def get_role_container_ref(role_name: str):
+    """Get reference to role container document at champions/roles/{roleName}"""
+    return db.collection('champions').document(f'roles/{role_name}')
+
+def normalize_role_name(role_name: str) -> str:
+    """Normalize role names for storage"""
+    mapping = {
+        'top': 'top',
+        'jungle': 'jungle',
+        'mid': 'middle',
+        'bot': 'bottom',
+        'adc': 'bottom',
+        'support': 'support'
+    }
+    return mapping.get(role_name.lower(), role_name.lower())
 
 def update_role_containers():
     """Create optimized role container indexes for Firebase free tier"""
@@ -545,8 +644,8 @@ def update_role_containers():
         role_champions = {
             'top': [],
             'jungle': [],
-            'mid': [],
-            'adc': [],
+            'middle': [],
+            'bottom': [],
             'support': []
         }
 

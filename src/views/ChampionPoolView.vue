@@ -91,7 +91,7 @@ const setPillarRef = (el, role) => {
   }
 }
 
-const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
 
 // Check if there's a saved workspace synchronously (to avoid flash of "join workspace" message)
 let initialSavedWorkspace = false
