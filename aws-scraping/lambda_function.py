@@ -250,13 +250,13 @@ class SmartUpdateEngine:
         """Get all roles that should be stored (current + historical + emerging)"""
         viable_roles = set()
 
-        # Add current viable roles (≥9% playrate)
+        # Add current viable roles (any playrate > 0%)
         for role_name, role_data in scraped_data.get('roles', {}).items():
             pick_rate = role_data.get('stats', {}).get('pick_rate', 0)
             games = role_data.get('stats', {}).get('games', 0)
 
-            # Include if: ≥9% OR (≥3% + ≥2000 games) for emerging roles
-            if pick_rate >= 9.0 or (pick_rate >= 3.0 and games >= 2000):
+            # Include if: >0% pickrate OR any games played (catches edge cases)
+            if pick_rate > 0.0 or games > 0:
                 viable_roles.add(role_name)
 
         # Add historically viable roles
@@ -300,15 +300,8 @@ def store_combined_champion_data_smart(champion_key, current_data, new_data, upd
                 if field in new_data:
                     final_data[field] = new_data[field]
 
-            # Filter to viable roles only
-            if 'roles' in final_data:
-                update_engine = SmartUpdateEngine()
-                viable_roles = update_engine.get_viable_roles(new_data)
-                final_data['roles'] = {
-                    role: final_data['roles'][role]
-                    for role in viable_roles
-                    if role in final_data['roles']
-                }
+            # Store ALL scraped roles - filtering happens at the application level
+            # This ensures champions appear in all roles they can play, even with low stats
 
         # Archive old data before updating (for fallback system)
         if current_data and current_data.get('patch') != new_data.get('patch'):

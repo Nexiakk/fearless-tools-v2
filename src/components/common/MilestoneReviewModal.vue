@@ -35,7 +35,7 @@
               >
                 <!-- Role Header -->
                 <div class="p-3 border-b border-gray-700 flex items-center gap-2">
-                  <img :src="championsStore.getRoleIconUrl(role)" :alt="role" class="h-6 w-6" />
+                  <div v-html="championsStore.getRoleIconSvg(role)" class="h-6 w-6" />
                   <h4 class="font-semibold text-white">{{ role }}</h4>
                 </div>
                 
@@ -108,7 +108,7 @@ const milestoneStore = useMilestoneStore()
 const draftStore = useDraftStore()
 const championsStore = useChampionsStore()
 
-const roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
 
 // Auto-balance when modal opens if there are champions but no assignments
 watch(() => milestoneStore.isOpen, (isOpen) => {

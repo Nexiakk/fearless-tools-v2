@@ -1,6 +1,6 @@
 <template>
   <div class="role-pillar">
-    <img :src="roleIconUrl" :alt="role" class="pillar-header-icon" />
+    <div v-html="roleIconSvg" class="pillar-header-icon" />
     
     <!-- Frozen Champions View (sticky + scrollable) -->
     <div v-if="isFrozenView" class="pillar-champions-grid">
@@ -59,7 +59,7 @@ const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
 const championSearchStore = useChampionSearchStore()
 
-const roleIconUrl = computed(() => championsStore.getRoleIconUrl(props.role))
+const roleIconSvg = computed(() => championsStore.getRoleIconSvg(props.role))
 
 const isFrozenView = computed(() => {
   // Check if champions object has sticky/scrollable structure
