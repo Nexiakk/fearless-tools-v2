@@ -73,6 +73,18 @@ def get_simplified_key(internal_key):
     display_name = get_display_name(internal_key)
     return encode_champion_name_for_lolalytics(display_name)
 
+def encode_champion_name_for_wiki(display_name):
+    """Encode champion name for League Wiki URL format"""
+    # First replace spaces with underscores
+    encoded = display_name.replace(' ', '_')
+
+    # Then URL encode any remaining special characters (like apostrophes)
+    # Use quote() but allow underscores to remain
+    from urllib.parse import quote
+    encoded = quote(encoded, safe='_')
+
+    return encoded
+
 def encode_champion_name_for_lolalytics(display_name):
     """Encode champion name for Lolalytics URL format (simplified, no special chars/spaces)"""
     import re
@@ -134,7 +146,6 @@ def check_patch_viability(patch_version):
 
         # Convert patch format for Lolalytics (remove .1 suffix)
         lolalytics_patch = normalize_patch_for_lolalytics(patch_version)
-        print(f"  - Using Lolalytics patch format: {patch_version} → {lolalytics_patch}")
 
         # Scrape Lolalytics tierlist for this patch
         url = f"https://lolalytics.com/pl/lol/tierlist/?patch={lolalytics_patch}&tier=diamond_plus"
@@ -772,8 +783,51 @@ def get_champion_list():
             'Yasuo', 'Zed', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus'
         ]
 
+def test_name_mapping():
+    """Test the champion name mapping and encoding functions"""
+    print("🧪 Testing champion name mapping and encoding...")
+
+    test_cases = [
+        ('MonkeyKing', 'Wukong'),
+        ('KSante', "K'Sante"),
+        ('JarvanIV', 'Jarvan IV'),
+        ('Aatrox', 'Aatrox'),
+        ('MissFortune', 'Miss Fortune')
+    ]
+
+    print("\n📋 Testing name mapping:")
+    for internal, expected_display in test_cases:
+        actual_display = get_display_name(internal)
+        status = "✅" if actual_display == expected_display else "❌"
+        print(f"  {status} {internal} → {actual_display} (expected: {expected_display})")
+
+    print("\n🔗 Testing URL encoding:")
+
+    encoding_tests = [
+        ("K'Sante", "K%27Sante", "ksante"),
+        ("Jarvan IV", "Jarvan_IV", "jarvaniv"),
+        ("Wukong", "Wukong", "wukong"),
+        ("Miss Fortune", "Miss_Fortune", "missfortune")
+    ]
+
+    for display_name, expected_wiki, expected_lolalytics in encoding_tests:
+        actual_wiki = encode_champion_name_for_wiki(display_name)
+        actual_lolalytics = encode_champion_name_for_lolalytics(display_name)
+
+        wiki_status = "✅" if actual_wiki == expected_wiki else "❌"
+        lolalytics_status = "✅" if actual_lolalytics == expected_lolalytics else "❌"
+
+        print(f"  {display_name}:")
+        print(f"    Wiki: {wiki_status} {actual_wiki} (expected: {expected_wiki})")
+        print(f"    Lolalytics: {lolalytics_status} {actual_lolalytics} (expected: {expected_lolalytics})")
+
+    print("\n✅ Name mapping tests completed!")
+
 if __name__ == "__main__":
-    # Test the integration first
+    # Test the name mapping first
+    test_name_mapping()
+
+    # Test the integration
     test_result = test_data_integration()
 
     # Uncomment to run full scraping with Firebase

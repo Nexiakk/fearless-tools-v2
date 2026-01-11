@@ -5,7 +5,7 @@ import random
 import requests
 from scraper.lolalytics_build_scraper import LolalyticsBuildScraper
 from scraper.wiki_scraper import scrape_champion_abilities
-from scraper.main import check_patch_viability, normalize_patch_for_lolalytics, get_display_name, get_simplified_key, get_champion_id, get_champion_image_name
+from scraper.main import check_patch_viability, normalize_patch_for_lolalytics, get_display_name, get_simplified_key, get_champion_id, get_champion_image_name, encode_champion_name_for_wiki, encode_champion_name_for_lolalytics
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
@@ -74,22 +74,24 @@ def scrape_and_store_data():
     # Process each champion
     for i, champion in enumerate(champions):
         try:
-            print(f"\n=== Processing {champion} ({i+1}/{len(champions)}) ===")
+            # Get champion display name using unified name mapping
+            champion_display = get_display_name(champion)
 
-            # Scrape League Wiki abilities data
-            print(f"Scraping wiki abilities for {champion}...")
-            abilities_data = scrape_champion_abilities(champion)
+            print(f"\n=== Processing {champion} (display: {champion_display}) ({i+1}/{len(champions)}) ===")
+
+            # Scrape League Wiki abilities data using display name
+            print(f"Scraping wiki abilities for {champion_display}...")
+            abilities_data = scrape_champion_abilities(champion_display)
             print(f"Found {len(abilities_data)} abilities")
 
-            # Scrape Lolalytics build data with target patch
-            print(f"Scraping lolalytics data for {champion} (patch {target_patch})...")
+            # Scrape Lolalytics build data using display name
+            print(f"Scraping lolalytics data for {champion_display} (patch {target_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
             normalized_patch = normalize_patch_for_lolalytics(target_patch)
-            build_data = lolalytics_scraper.scrape_champion_build(champion.lower(), patch=normalized_patch)
+            build_data = lolalytics_scraper.scrape_champion_build(champion_display, patch=normalized_patch)
 
             # Get champion metadata
             champion_id = get_champion_id(champion)
-            champion_display = get_display_name(champion)
             champion_image_name = get_champion_image_name(champion)
 
             # Combine the data with new structure
