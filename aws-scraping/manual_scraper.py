@@ -125,72 +125,6 @@ class ManualScraper:
             print(f"❌ Error checking missing champions: {e}")
             return []
 
-    def get_champions_missing_roles(self, role=None):
-        """Get champions that exist but are missing from role containers"""
-        if not self.db:
-            print("❌ Cannot check missing roles without Firebase")
-            return []
-
-        try:
-            roles_to_check = ['top', 'jungle', 'middle', 'bottom', 'support'] if role is None else [role]
-
-            missing_by_role = {}
-
-            for check_role in roles_to_check:
-                # Get champions in this role container
-                role_ref = self.db.collection('roles').document(check_role)
-                role_doc = role_ref.get()
-
-                role_champions = set()
-                if role_doc.exists:
-                    data = role_doc.to_dict()
-                    role_champions = set(data.get('champions', []))
-
-                # Get all champions that have this role in their data
-                champions_ref = self.db.collection('champions').document('all').collection('champions')
-                champions_with_role = []
-
-                for doc in champions_ref.stream():
-                    champ_data = doc.to_dict()
-                    champ_roles = champ_data.get('roles', {})
-
-                    # Check if champion has this role with meaningful presence
-                    if check_role in champ_roles:
-                        role_stats = champ_roles[check_role].get('stats', {})
-                        pick_rate = role_stats.get('pick_rate', 0)
-                        games = role_stats.get('games', 0)
-
-                        # Include if they have any presence in this role
-                        if pick_rate > 0 or games > 0:
-                            champ_key = doc.id
-                            if champ_key not in role_champions:
-                                champions_with_role.append({
-                                    'key': champ_key,
-                                    'name': champ_data.get('name', champ_key),
-                                    'pick_rate': pick_rate,
-                                    'games': games
-                                })
-
-                if champions_with_role:
-                    missing_by_role[check_role] = champions_with_role
-
-            # Print summary
-            total_missing = sum(len(champs) for champs in missing_by_role.values())
-            if total_missing > 0:
-                print(f"Found {total_missing} champions missing from role containers:")
-                for role_name, champions in missing_by_role.items():
-                    print(f"  {role_name}: {len(champions)} champions ({', '.join([c['name'] for c in champions[:3]])}...)")
-            else:
-                print("✅ All champions are properly assigned to their role containers")
-
-            return missing_by_role
-
-        except Exception as e:
-            print(f"❌ Error checking missing roles: {e}")
-            import traceback
-            traceback.print_exc()
-            return {}
-
     def scrape_champion(self, champion_internal, target_patch=None, dry_run=False):
         """Scrape data for a single champion"""
         try:
@@ -280,7 +214,6 @@ def main():
     parser.add_argument('champions', nargs='*', help='Champion names to scrape')
     parser.add_argument('--all', action='store_true', help='Scrape all champions')
     parser.add_argument('--missing', action='store_true', help='Scrape only missing champions')
-    parser.add_argument('--missing-roles', nargs='?', const='all', help='Show champions missing from role containers (optionally specify role: top, jungle, middle, bottom, support)')
     parser.add_argument('--patch', help='Override patch version')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be scraped without doing it')
     parser.add_argument('--update-roles', action='store_true', help='Update role containers after scraping')
@@ -288,26 +221,10 @@ def main():
     args = parser.parse_args()
 
     # Validate arguments
-    if not args.champions and not args.all and not args.missing and not args.missing_roles:
-        print("❌ Error: Must specify champions, --all, --missing, or --missing-roles")
+    if not args.champions and not args.all and not args.missing:
+        print("❌ Error: Must specify champions, --all, or --missing")
         parser.print_help()
         sys.exit(1)
-
-    # Initialize scraper (needed for all operations)
-    scraper = ManualScraper()
-
-    # Handle --missing-roles option (doesn't scrape, just reports)
-    if args.missing_roles:
-        if args.missing_roles == 'all':
-            scraper.get_champions_missing_roles()
-        else:
-            # Validate role name
-            valid_roles = ['top', 'jungle', 'middle', 'bottom', 'support']
-            if args.missing_roles not in valid_roles:
-                print(f"❌ Invalid role '{args.missing_roles}'. Valid roles: {', '.join(valid_roles)}")
-                sys.exit(1)
-            scraper.get_champions_missing_roles(args.missing_roles)
-        return  # Exit after showing missing roles
 
     if args.all and args.missing:
         print("❌ Error: Cannot use --all and --missing together")
@@ -316,6 +233,9 @@ def main():
     if args.champions and (args.all or args.missing):
         print("❌ Error: Cannot specify champions with --all or --missing")
         sys.exit(1)
+
+    # Initialize scraper
+    scraper = ManualScraper()
 
     # Determine which champions to scrape
     if args.all:

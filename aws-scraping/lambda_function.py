@@ -139,98 +139,42 @@ def scrape_and_store_data():
     print("\n🔄 Updating role containers...")
     update_role_containers()
 
-    # Clean up old patch data to save space
-    print("\n🧹 Cleaning up old patch data...")
-    cleanup_old_patch_data()
+    # Clean up old patch data only if we switched patches
+    if target_patch != current_patch:
+        print("\n🧹 Patch changed - cleaning up old patch data...")
+        cleanup_old_patch_data()
+    else:
+        print("\n⏭️ Same patch - skipping cleanup")
 
     print("\n🎉 Data scraping, optimization, and cleanup completed!")
 
 class SmartUpdateEngine:
-    """Intelligent update system for champion data"""
-
-    def __init__(self):
-        self.tier_thresholds = {
-            'S': {'min_percent': 0.4, 'min_absolute': 15000},  # 40% of old or 15K
-            'A': {'min_percent': 0.5, 'min_absolute': 10000},  # 50% of old or 10K
-            'B': {'min_percent': 0.6, 'min_absolute': 7500},   # 60% of old or 7.5K
-            'C': {'min_percent': 0.7, 'min_absolute': 5000},   # 70% of old or 5K
-        }
-
-    def calculate_champion_tier(self, total_games):
-        """Categorize champion by historical play rate"""
-        if total_games >= 150000:
-            return 'S'
-        elif total_games >= 75000:
-            return 'A'
-        elif total_games >= 25000:
-            return 'B'
-        else:
-            return 'C'
-
-    def calculate_adaptive_threshold(self, old_total_games):
-        """Calculate switching threshold based on champion's tier"""
-        tier = self.calculate_champion_tier(old_total_games)
-        config = self.tier_thresholds[tier]
-
-        return max(
-            old_total_games * config['min_percent'],
-            config['min_absolute']
-        )
+    """Simplified update system - patch viability already checked globally"""
 
     def should_update_champion(self, current_data, new_data):
-        """Master decision engine for champion updates"""
+        """Simplified: Patch viability already checked globally"""
 
-        # Handle patch changes vs same patch differently
+        # Always update on patch changes (patch already validated globally as ready)
         if new_data.get('patch') != current_data.get('patch'):
-            return self._handle_patch_change(current_data, new_data)
-        else:
-            return self._handle_same_patch(current_data, new_data)
-
-    def _handle_patch_change(self, current, new):
-        """New patch: check if new data meets adaptive threshold"""
-        old_games = self._calculate_total_games(current)
-        new_games = self._calculate_total_games(new)
-
-        if old_games == 0:  # No historical data
-            threshold = self.tier_thresholds['C']['min_absolute']  # 5K minimum
-        else:
-            threshold = self.calculate_adaptive_threshold(old_games)
-
-        tier = self.calculate_champion_tier(old_games)
-
-        if new_games >= threshold:
             return {
                 'update': True,
-                'abilities': True,  # Always update abilities on patch change
+                'abilities': True,
                 'lolalytics': True,
-                'reason': f"New patch {new['patch']} ready: {new_games} ≥ {threshold} (tier {tier})"
+                'reason': f"Patch changed to {new_data['patch']} (validated globally)"
             }
+
+        # Same patch: Only update if abilities changed
         else:
+            abilities_changed = self._abilities_changed(
+                current_data.get('abilities', []),
+                new_data.get('abilities', [])
+            )
             return {
-                'update': False,
-                'reason': f"New patch {new['patch']} not ready: {new_games} < {threshold} (tier {tier})"
+                'update': abilities_changed,  # Only if abilities changed
+                'abilities': abilities_changed,
+                'lolalytics': True,  # Always update (growing sample)
+                'reason': f"Same patch: abilities={abilities_changed}, lolalytics=True"
             }
-
-    def _handle_same_patch(self, current, new):
-        """Same patch: always update lolalytics (growing sample), check abilities"""
-        abilities_changed = self._abilities_changed(
-            current.get('abilities', []),
-            new.get('abilities', [])
-        )
-
-        return {
-            'update': True,  # Always update in same patch (lolalytics sample grows)
-            'abilities': abilities_changed,
-            'lolalytics': True,
-            'reason': f"Same patch {current.get('patch')}: abilities={abilities_changed}, lolalytics=True"
-        }
-
-    def _calculate_total_games(self, data):
-        """Sum games across all roles"""
-        return sum(
-            role_data.get('stats', {}).get('games', 0)
-            for role_data in data.get('roles', {}).values()
-        )
 
     def _abilities_changed(self, old_abilities, new_abilities):
         """Check if abilities actually changed"""
@@ -247,19 +191,13 @@ class SmartUpdateEngine:
         return False
 
     def get_viable_roles(self, scraped_data, historical_roles=None):
-        """Get all roles that should be stored (current + historical + emerging)"""
+        """Get all roles that should be stored - simplified since we only scrape ≥9% roles"""
         viable_roles = set()
 
-        # Add current viable roles (any playrate > 0%)
-        for role_name, role_data in scraped_data.get('roles', {}).items():
-            pick_rate = role_data.get('stats', {}).get('pick_rate', 0)
-            games = role_data.get('stats', {}).get('games', 0)
+        # All scraped roles are already ≥9% pickrate, so just return them
+        viable_roles.update(scraped_data.get('roles', {}).keys())
 
-            # Include if: >0% pickrate OR any games played (catches edge cases)
-            if pick_rate > 0.0 or games > 0:
-                viable_roles.add(role_name)
-
-        # Add historically viable roles
+        # Add historically viable roles (if any exist from before the optimization)
         if historical_roles:
             viable_roles.update(historical_roles)
 
@@ -300,12 +238,17 @@ def store_combined_champion_data_smart(champion_key, current_data, new_data, upd
                 if field in new_data:
                     final_data[field] = new_data[field]
 
-            # Store ALL scraped roles - filtering happens at the application level
-            # This ensures champions appear in all roles they can play, even with low stats
+            # Filter to viable roles only
+            if 'roles' in final_data:
+                update_engine = SmartUpdateEngine()
+                viable_roles = update_engine.get_viable_roles(new_data)
+                final_data['roles'] = {
+                    role: final_data['roles'][role]
+                    for role in viable_roles
+                    if role in final_data['roles']
+                }
 
-        # Archive old data before updating (for fallback system)
-        if current_data and current_data.get('patch') != new_data.get('patch'):
-            archive_champion_data(champion_key, current_data)
+        # No archival - single dataset storage
 
         # Store the updated data
         doc_ref.set(final_data)

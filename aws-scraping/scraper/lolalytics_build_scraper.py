@@ -62,7 +62,7 @@ class LolalyticsBuildScraper:
                     # Remove % and convert to float
                     try:
                         percentage = float(percentage_text.rstrip('%'))
-                        if percentage > 0.0:  # Collect all roles with any pickrate
+                        if percentage >= 9.0:  # Only collect roles with ≥9% pickrate
                             # Extract role from href
                             href = link['href']
                             role_match = re.search(r'/build/\?lane=([^&]+)', href)
