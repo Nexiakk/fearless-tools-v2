@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchChampionsFromIndividualDocs, fetchChampionDataFromFirestore } from '@/services/firebase/championData'
+import { fetchChampionsFromIndividualDocs, fetchChampionDataFromFirestore, fetchChampionRolesFromContainers } from '@/services/firebase/championData'
 import { riotApiService } from '@/services/riotApi'
 
 export const useChampionsStore = defineStore('champions', () => {
@@ -39,36 +39,82 @@ export const useChampionsStore = defineStore('champions', () => {
     try {
       console.log('=== LOADING CHAMPION DATA ===')
 
-      // Try new individual documents system first
-      let firestoreData = await fetchChampionsFromIndividualDocs()
+      // Step 1: Load role containers to get champion IDs
+      console.log('📋 Loading role containers...')
+      const roleData = await fetchChampionRolesFromContainers()
 
-      // If new system fails or returns no data, fall back to global document
-      if (!firestoreData || !firestoreData.allChampions || !Array.isArray(firestoreData.allChampions) || firestoreData.allChampions.length === 0) {
-        console.log('🔄 New system failed or returned no data, falling back to global document...')
-        firestoreData = await fetchChampionDataFromFirestore('global')
-      }
+      // Flatten all unique champion IDs
+      const championIds = new Set()
+      Object.values(roleData).forEach(ids => {
+        ids.forEach(id => championIds.add(id))
+      })
 
-      if (firestoreData && firestoreData.allChampions && Array.isArray(firestoreData.allChampions) && firestoreData.allChampions.length > 0) {
-        // Create a deep copy to avoid reference issues
-        allChampions.value = firestoreData.allChampions.map(champ => {
-          // Convert roles to a real array (not Proxy)
-          let rolesArray = []
-          if (Array.isArray(champ.roles)) {
-            rolesArray = Array.from(champ.roles)
-          }
-          return {
-            ...champ,
-            roles: rolesArray
-          }
-        })
-        opTierChampions.value = { ...(firestoreData.opTierChampions || {}) }
+      const uniqueChampionIds = Array.from(championIds)
+      console.log(`📊 Found ${uniqueChampionIds.length} unique champions across all roles`)
 
-        console.log(`✓ Champion data loaded: ${firestoreData.allChampions.length} champions`)
-      } else {
-        console.warn('⚠️ No champion data in database. Please import data using Admin Panel > Migration tab.')
+      if (uniqueChampionIds.length === 0) {
+        console.warn('⚠️ No champions found in role containers')
         allChampions.value = []
         opTierChampions.value = {}
+        return
       }
+
+      // Step 2: Fetch champion details from Riot API
+      console.log('🌐 Fetching champion details from Riot API...')
+      const riotChampions = await riotApiService.getChampionsByIds(uniqueChampionIds, patchVersion.value)
+
+      // Step 3: Fetch champion stats from Firestore (optional - for future use)
+      console.log('🔥 Fetching champion stats from Firestore...')
+      let firestoreChampions = []
+      try {
+        const firestoreData = await fetchChampionsInBatches(uniqueChampionIds)
+        firestoreChampions = firestoreData.filter(Boolean) // Remove null entries
+        console.log(`📈 Loaded ${firestoreChampions.length} champion stats from Firestore`)
+      } catch (error) {
+        console.warn('⚠️ Could not load champion stats from Firestore:', error.message)
+      }
+
+      // Step 4: Merge Riot API data with Firestore data and role information
+      console.log('🔄 Merging champion data...')
+      const mergedChampions = []
+
+      uniqueChampionIds.forEach(championId => {
+        const riotData = riotChampions[championId]
+        const firestoreData = firestoreChampions.find(c => c.id === championId) || {}
+
+        if (!riotData) {
+          console.warn(`⚠️ No Riot API data found for champion ID ${championId}`)
+          return
+        }
+
+        // Determine roles for this champion
+        const roles = []
+        Object.entries(roleData).forEach(([role, ids]) => {
+          if (ids.includes(championId)) {
+            roles.push(role)
+          }
+        })
+
+        // Create merged champion object
+        const champion = {
+          id: championId,
+          name: riotData.name,
+          imageName: riotData.imageName,
+          roles: roles,
+          mainRole: roles.length > 0 ? roles[0] : null,
+          // Include any additional data from Firestore
+          ...firestoreData
+        }
+
+        mergedChampions.push(champion)
+      })
+
+      // Set the champions data
+      allChampions.value = mergedChampions
+      opTierChampions.value = {} // TODO: Implement OP tier detection
+
+      console.log(`✅ Successfully loaded ${mergedChampions.length} champions`)
+
     } catch (error) {
       console.error('=== ERROR loading champion data ===', error)
       allChampions.value = []

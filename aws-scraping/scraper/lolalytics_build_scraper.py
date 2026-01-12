@@ -30,7 +30,7 @@ class LolalyticsBuildScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
 
-    def get_champion_roles(self, champion: str, tier: str = "diamond_plus", patch: str = None) -> List[str]:
+    def get_champion_roles(self, champion: str, tier: str = "d2_plus", patch: str = None) -> List[str]:
         """Get roles with playrate >= 9% from main champion page"""
         base_url = f"{self.base_url}/pl/lol/{champion}/build/"
         params = []
@@ -81,7 +81,7 @@ class LolalyticsBuildScraper:
             print(f"Error getting roles for {champion}: {e}")
             return []
 
-    def get_role_stats(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
+    def get_role_stats(self, champion: str, role: str, tier: str = "d2_plus", patch: str = None) -> Dict:
         """Get win rate, pick rate, tier, rank, ban rate, games for a specific role"""
         base_url = f"{self.base_url}/pl/lol/{champion}/build/"
         params = []
@@ -155,7 +155,7 @@ class LolalyticsBuildScraper:
             print(f"Error getting stats for {champion} {role}: {e}")
             return {}
 
-    def get_role_stats_from_url(self, champion: str, role_url: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
+    def get_role_stats_from_url(self, champion: str, role_url: str, tier: str = "d2_plus", patch: str = None) -> Dict:
         """Get stats from a specific URL (for main role detection)"""
         # Ensure we have a full URL
         if role_url.startswith('/'):
@@ -222,7 +222,7 @@ class LolalyticsBuildScraper:
             print(f"Error getting stats from URL {role_url}: {e}")
             return {}
 
-    def determine_main_role_from_url(self, champion: str, role_url: str, tier: str = "diamond_plus", patch: str = None) -> str:
+    def determine_main_role_from_url(self, champion: str, role_url: str, tier: str = "d2_plus", patch: str = None) -> str:
         """Determine what role the main URL actually represents"""
         # Ensure we have a full URL
         if role_url.startswith('/'):
@@ -283,7 +283,7 @@ class LolalyticsBuildScraper:
             print(f"Error determining main role from URL {full_url}: {e}")
             return 'top'  # Safe default
 
-    def get_counter_matchups(self, champion: str, role: str, tier: str = "diamond_plus", patch: str = None) -> List[Dict]:
+    def get_counter_matchups(self, champion: str, role: str, tier: str = "d2_plus", patch: str = None) -> List[Dict]:
         """Get counter matchups for a specific role - optimized HTML parsing only"""
         base_url = f"{self.base_url}/pl/lol/{champion}/counters/"
         params = []
@@ -345,7 +345,7 @@ class LolalyticsBuildScraper:
             print(f"Error getting counters for {champion} {role}: {e}")
             return []
 
-    def scrape_champion_build(self, champion_display_name: str, tier: str = "diamond_plus", patch: str = None) -> Dict:
+    def scrape_champion_build(self, champion_display_name: str, tier: str = "d2_plus", patch: str = None) -> Dict:
         """Main method to scrape all champion build data - returns flattened structure"""
         print(f"\n=== Scraping {champion_display_name} build data ===")
 

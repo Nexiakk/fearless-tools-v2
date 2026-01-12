@@ -241,53 +241,51 @@ export async function fetchChampionsFromIndividualDocs() {
 }
 
 /**
- * Fetch role containers to get champion IDs per role
+ * Fetch role data from single document containing all role arrays
  */
 export async function fetchChampionRolesFromContainers() {
-  const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
-  const roleData = {}
+  try {
+    const dataRef = doc(db, 'champions', 'data')
+    const dataSnap = await getDoc(dataRef)
 
-  // Fetch all role containers in parallel
-  const rolePromises = roles.map(async (role) => {
-    try {
-      const roleRef = doc(db, 'champions', 'roles', role)
-      const roleSnap = await getDoc(roleRef)
+    if (dataSnap.exists()) {
+      const data = dataSnap.data()
+      const rolesData = data.roles || {}
 
-      if (roleSnap.exists()) {
-        const data = roleSnap.data()
-        return { role, champions: data.champions || [] }
+      // Extract role data and normalize role names
+      const roleData = {
+        top: rolesData.top || [],
+        jungle: rolesData.jungle || [],
+        middle: rolesData.middle || [],
+        bottom: rolesData.bottom || [],
+        support: rolesData.support || []
       }
-      return { role, champions: [] }
-    } catch (error) {
-      console.warn(`⚠️ Error fetching role container ${role}:`, error)
-      return { role, champions: [] }
+
+      console.log('📊 Role containers fetched:', Object.keys(roleData).map(role =>
+        `${role}: ${roleData[role].length} champions`
+      ).join(', '))
+
+      return roleData
+    } else {
+      console.warn('⚠️ No data found at champions/data')
+      return {
+        top: [],
+        jungle: [],
+        middle: [],
+        bottom: [],
+        support: []
+      }
     }
-  })
-
-  const results = await Promise.all(rolePromises)
-
-  // Build role -> champion IDs mapping and normalize role names
-  results.forEach(({ role, champions }) => {
-    let displayRole = role
-
-    // Normalize role names for frontend (already standardized)
-    const roleMapping = {
-      'top': 'top',
-      'jungle': 'jungle',
-      'middle': 'middle',
-      'bottom': 'bottom',
-      'support': 'support'
+  } catch (error) {
+    console.warn('⚠️ Error fetching role containers:', error)
+    return {
+      top: [],
+      jungle: [],
+      middle: [],
+      bottom: [],
+      support: []
     }
-
-    displayRole = roleMapping[role] || role
-    roleData[displayRole] = champions
-  })
-
-  console.log('📊 Role containers fetched:', Object.keys(roleData).map(role =>
-    `${role}: ${roleData[role].length} champions`
-  ).join(', '))
-
-  return roleData
+  }
 }
 
 /**
@@ -303,7 +301,7 @@ async function fetchChampionsInBatches(championIds, batchSize = 10) {
   for (const batch of batches) {
     const batchPromises = batch.map(async (championId) => {
       try {
-        const docRef = doc(db, 'champions', `all/${championId}`)
+        const docRef = doc(db, 'champions', 'data', 'champions', championId)
         const docSnap = await getDoc(docRef)
 
         if (docSnap.exists()) {
@@ -333,23 +331,21 @@ export async function checkForDataUpdates() {
     // Check if any role container has been updated recently
     const roleData = await fetchChampionRolesFromContainers()
 
-    // Get the latest update timestamp from role containers
+    // Get the latest update timestamp from the single data document
     let latestUpdate = 0
-    for (const role of ['top', 'jungle', 'middle', 'bottom', 'support']) {
-      try {
-        const roleRef = doc(db, 'champions', 'roles', role)
-        const roleSnap = await getDoc(roleRef)
+    try {
+      const dataRef = doc(db, 'champions', 'data')
+      const dataSnap = await getDoc(dataRef)
 
-        if (roleSnap.exists()) {
-          const data = roleSnap.data()
-          if (data.lastUpdated) {
-            const timestamp = data.lastUpdated.toMillis ? data.lastUpdated.toMillis() : data.lastUpdated
-            latestUpdate = Math.max(latestUpdate, timestamp)
-          }
+      if (dataSnap.exists()) {
+        const data = dataSnap.data()
+        if (data.lastUpdated) {
+          const timestamp = data.lastUpdated.toMillis ? data.lastUpdated.toMillis() : data.lastUpdated
+          latestUpdate = timestamp
         }
-      } catch (error) {
-        console.warn(`Error checking role ${role} update time:`, error)
       }
+    } catch (error) {
+      console.warn('Error checking data update time:', error)
     }
 
     return {

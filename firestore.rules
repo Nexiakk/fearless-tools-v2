@@ -22,11 +22,20 @@ service cloud.firestore {
 
     }
 
-    
 
-    // GLOBAL CHAMPION DATA
+    // INDIVIDUAL CHAMPION DOCUMENTS
 
-    match /champions/global {
+    match /champions/data/champions/{championId} {
+
+      allow read: if isAuthenticated();
+
+      allow write: if isAdmin();
+
+    }
+
+    // CHAMPION DATA DOCUMENT
+
+    match /champions/data {
 
       allow read: if isAuthenticated();
 
@@ -137,21 +146,7 @@ service cloud.firestore {
         }
       }
       
-      // DRAWING COLLECTION
-      match /drawing/{view} {
-        // Workspace members can read drawings
-        allow read: if isAuthenticated();
-        
-        // STROKES subcollection under drawing
-        match /strokes/{strokeId} {
-          // Workspace members can read strokes
-          allow read: if isAuthenticated();
-          // Workspace members can create/update strokes
-          allow create, update: if isAuthenticated();
-          // Only admins can delete strokes (for clear canvas)
-          allow delete: if isAdmin();
-        }
-      }
+      
     }
   }
 }

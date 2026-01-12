@@ -96,7 +96,7 @@ def scrape_and_store_data():
 
             # Combine the data with new structure
             new_data = {
-                'id': champion_id,              # Numeric champion ID
+                'id': champion,                 # Internal champion name (like "KSante")
                 'imageName': champion_image_name, # Internal key for images
                 'name': champion_display,       # Display name
                 'abilities': abilities_data,
@@ -120,7 +120,7 @@ def scrape_and_store_data():
 
             # Apply selective updates
             if update_decision['update']:
-                store_combined_champion_data_smart(champion.lower(), current_data, new_data, update_decision)
+                store_combined_champion_data_smart(champion, current_data, new_data, update_decision)
                 print(f"✅ Successfully updated data for {champion}")
             else:
                 print(f"⏭️ Skipping update for {champion}")
@@ -204,9 +204,9 @@ class SmartUpdateEngine:
         return list(viable_roles)
 
 def get_current_champion_data(champion_key):
-    """Get current champion data from Firebase (optimized hierarchical structure)"""
+    """Get current champion data from Firebase (new structure: champions/data/champions/{championId})"""
     try:
-        doc_ref = db.collection('champions').document('all').collection('champions').document(champion_key)
+        doc_ref = db.collection('champions').document('data').collection('champions').document(champion_key)
         doc = doc_ref.get()
         if doc.exists:
             return doc.to_dict()
@@ -216,10 +216,10 @@ def get_current_champion_data(champion_key):
         print(f"Error getting current data for {champion_key}: {e}")
         return {}
 
-def store_combined_champion_data_smart(champion_key, current_data, new_data, update_decision):
-    """Store combined champion data using smart update decisions (optimized hierarchical structure)"""
+def store_combined_champion_data_smart(champion, current_data, new_data, update_decision):
+    """Store combined champion data using smart update decisions (new structure: champions/data/champions/{championId})"""
     try:
-        doc_ref = db.collection('champions').document('all').collection('champions').document(champion_key)
+        doc_ref = db.collection('champions').document('data').collection('champions').document(champion)
 
         # Start with current data or empty dict
         final_data = current_data.copy() if current_data else {}
@@ -254,7 +254,7 @@ def store_combined_champion_data_smart(champion_key, current_data, new_data, upd
         doc_ref.set(final_data)
 
     except Exception as e:
-        print(f"Error storing smart update data for {champion_key}: {e}")
+        print(f"Error storing smart update data for {champion}: {e}")
         raise
 
 def archive_champion_data(champion_key, data):
@@ -269,16 +269,16 @@ def archive_champion_data(champion_key, data):
         print(f"Error archiving data for {champion_key}: {e}")
 
 def update_role_containers():
-    """Create optimized role container indexes for Firebase free tier"""
-    print("Updating role containers for optimized Firebase queries...")
+    """Store role data in single document at champions/data (new structure)"""
+    print("Updating role containers for new structure...")
 
     try:
-        # Get all champions from subcollections
-        champions_ref = db.collection('champions').document('all')
+        # Get all champions from new structure
+        champions_ref = db.collection('champions').document('data').collection('champions')
         champions = []  # list of (champion_key, champ_data)
 
         # Get all champions from the champions subcollection
-        champions_docs = champions_ref.collection('champions').stream()
+        champions_docs = champions_ref.stream()
         for doc in champions_docs:
             champion_key = doc.id
             champ_data = doc.to_dict()
@@ -297,41 +297,31 @@ def update_role_containers():
             roles = champ_data.get('roles', {})
             for role in roles:
                 if role in role_champions:
-                    role_champions[role].append({
-                        'id': champion_key,
-                        'name': champ_data.get('name', ''),
-                        'pickRate': roles[role].get('stats', {}).get('pick_rate', 0)
-                    })
+                    role_champions[role].append(champion_key)  # Just store champion IDs
 
-        # Sort champions by pick rate (highest first)
+        # Sort champions by pick rate (highest first) within each role
         for role in role_champions:
-            role_champions[role].sort(key=lambda x: x['pickRate'], reverse=True)
+            role_champions[role].sort(key=lambda champ_id: next(
+                (champ_data for key, champ_data in champions if key == champ_id), {}
+            ).get('roles', {}).get(role, {}).get('stats', {}).get('pick_rate', 0), reverse=True)
 
-        # Store role containers
-        roles_ref = db.collection('roles')
-        current_patch = None
+        # Store role data in single document
+        data_ref = db.collection('champions').document('data')
 
-        for role, champions_list in role_champions.items():
-            # Extract just champion IDs for lightweight queries
-            champion_ids = [champ['id'] for champ in champions_list]
+        role_data = {
+            'roles': role_champions,
+            'lastUpdated': datetime.utcnow()
+        }
 
-            # Get current patch from first champion if available
-            if not current_patch and champions_list:
-                first_champ_data = db.collection('champions').document('all').collection('champions').document(champions_list[0]["id"]).get()
-                if first_champ_data.exists:
-                    current_patch = first_champ_data.to_dict().get('patch')
-
-            role_doc = {
-                'champions': champion_ids,  # Lightweight: just IDs
-                'count': len(champion_ids),
-                'lastUpdated': datetime.utcnow()
-            }
-
+        # Get current patch from first champion if available
+        if champions:
+            first_champion_data = champions[0][1]  # (champion_key, champ_data)
+            current_patch = first_champion_data.get('patch')
             if current_patch:
-                role_doc['patch'] = current_patch
+                role_data['patch'] = current_patch
 
-            roles_ref.document(role).set(role_doc)
-            print(f"✅ Updated {role}: {len(champion_ids)} champions")
+        data_ref.set(role_data, merge=True)  # Merge to preserve other data in the document
+        print(f"✅ Updated role data: {sum(len(champs) for champs in role_champions.values())} total champions")
 
         print(f"🎉 Role containers updated successfully!")
 

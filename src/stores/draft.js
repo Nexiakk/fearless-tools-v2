@@ -81,9 +81,9 @@ export const useDraftStore = defineStore('draft', () => {
           const priorityA = getPriority(a)
           const priorityB = getPriority(b)
           if (priorityA !== priorityB) return priorityB - priorityA
-          return a.name.localeCompare(b.name)
+          return (a.name || '').localeCompare(b.name || '')
         })
-        grouped[role].scrollable.sort((a, b) => a.name.localeCompare(b.name))
+        grouped[role].scrollable.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
       })
       
       return grouped
@@ -113,7 +113,7 @@ export const useDraftStore = defineStore('draft', () => {
           const priorityA = getPriority(a)
           const priorityB = getPriority(b)
           if (priorityA !== priorityB) return priorityB - priorityA
-          return a.name.localeCompare(b.name)
+          return (a.name || '').localeCompare(b.name || '')
         })
       })
 

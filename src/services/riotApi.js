@@ -4,6 +4,14 @@ const CHAMPION_DATA_BASE_URL = 'https://ddragon.leagueoflegends.com/cdn'
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000 // 1 second base delay
 
+// Global cache for Riot API data
+const riotDataCache = {
+  patchVersion: null,
+  championData: null,
+  lastFetched: null,
+  isLoading: false
+}
+
 export const riotApiService = {
   /**
    * Fetch latest patch version from Riot API
@@ -152,6 +160,47 @@ export const riotApiService = {
   },
 
   /**
+   * Fetch specific champions by their IDs
+   */
+  async getChampionsByIds(championIds, patchVersion) {
+    if (!Array.isArray(championIds) || championIds.length === 0) {
+      return {}
+    }
+
+    if (!patchVersion) {
+      throw new Error('Patch version is required')
+    }
+
+    try {
+      // Fetch all champion data (this is cached, so it's efficient)
+      const allChampions = await this.getChampionData(patchVersion)
+
+      // Filter to only the requested champion IDs
+      const championMap = {}
+      allChampions.forEach(champion => {
+        if (championIds.includes(champion.id)) {
+          championMap[champion.id] = champion
+        }
+      })
+
+      return championMap
+    } catch (error) {
+      console.error('Error fetching champions by IDs:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get champion icon URL with fallback
+   */
+  getChampionIconUrl(imageName, patchVersion) {
+    if (!imageName || !patchVersion) {
+      return '/assets/icons/no_champion.png' // Fallback to local placeholder
+    }
+    return `${CHAMPION_DATA_BASE_URL}/${patchVersion}/img/champion/${imageName}.png`
+  },
+
+  /**
    * Compare two patch versions
    */
   compareVersions(version1, version2) {
@@ -173,4 +222,3 @@ export const riotApiService = {
     return 0 // Versions are equal
   }
 }
-

@@ -111,12 +111,12 @@ class ManualScraper:
             # Get champions already in database
             existing_champions = set()
             if self.db:
-                champions_ref = self.db.collection('champions').document('all').collection('champions')
+                champions_ref = self.db.collection('champions').document('data').collection('champions')
                 existing_docs = champions_ref.stream()
                 existing_champions = {doc.id for doc in existing_docs}
 
             # Find missing champions
-            missing = [champ for champ in all_champions if champ.lower() not in existing_champions]
+            missing = [champ for champ in all_champions if champ not in existing_champions]
 
             print(f"Found {len(missing)} missing champions out of {len(all_champions)} total")
             return missing
@@ -153,7 +153,7 @@ class ManualScraper:
 
             # Combine the data
             combined_data = {
-                'id': champion_id,
+                'id': champion_internal,        # Internal champion name (like "KSante")
                 'imageName': champion_image_name,
                 'name': champion_display,
                 'abilities': abilities_data,
@@ -182,7 +182,7 @@ class ManualScraper:
     def _store_champion_data(self, champion_key, data):
         """Store champion data in Firebase"""
         try:
-            doc_ref = self.db.collection('champions').document('all').collection('champions').document(champion_key.lower())
+            doc_ref = self.db.collection('champions').document('data').collection('champions').document(champion_key)
             doc_ref.set(data)
             print(f"💾 Stored data for {champion_key}")
         except Exception as e:
