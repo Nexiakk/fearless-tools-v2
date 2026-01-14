@@ -7,8 +7,7 @@ export { useAuthStore } from './auth'
 export { useSettingsStore } from './settings'
 export { useConfirmationStore } from './confirmation'
 export { useNotesStore } from './notes'
-export { useMilestoneStore } from './milestone'
+
 export { useAdminStore } from './admin'
 export { useScoutingStore } from './scouting'
-
-
+export { useWorkspaceTiersStore } from './workspaceTiers'

@@ -137,9 +137,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (JSON.stringify(draftStore.draftSeries) !== JSON.stringify(data.draftSeries)) {
         draftStore.draftSeries = data.draftSeries
       }
-      if (JSON.stringify(draftStore.highlightedChampions) !== JSON.stringify(data.highlightedChampions)) {
-        draftStore.highlightedChampions = data.highlightedChampions
-      }
+
       if (JSON.stringify(draftStore.unavailablePanelState) !== JSON.stringify(data.unavailablePanelState)) {
         draftStore.unavailablePanelState = data.unavailablePanelState
       }

@@ -36,7 +36,6 @@ function getWorkspacePath(workspaceId, ...path) {
 export async function fetchDraftDataFromFirestore(workspaceId) {
   const defaultData = {
     draftSeries: [],
-    highlightedChampions: {},
     unavailablePanelState: {
       Top: Array(10).fill(null),
       Jungle: Array(10).fill(null),
@@ -44,7 +43,8 @@ export async function fetchDraftDataFromFirestore(workspaceId) {
       Bot: Array(10).fill(null),
       Support: Array(10).fill(null)
     },
-    pickContext: []
+    pickContext: [],
+    bannedChampions: []
   }
 
   if (!workspaceId) {
@@ -61,13 +61,9 @@ export async function fetchDraftDataFromFirestore(workspaceId) {
       const data = docSnap.data()
       return {
         draftSeries: Array.isArray(data.draftSeries) ? data.draftSeries : defaultData.draftSeries,
-        highlightedChampions: typeof data.highlightedChampions === 'object' && 
-          data.highlightedChampions !== null && 
-          !Array.isArray(data.highlightedChampions) 
-          ? data.highlightedChampions 
-          : defaultData.highlightedChampions,
         unavailablePanelState: data.unavailablePanelState || defaultData.unavailablePanelState,
-        pickContext: Array.isArray(data.pickContext) ? data.pickContext : defaultData.pickContext
+        pickContext: Array.isArray(data.pickContext) ? data.pickContext : defaultData.pickContext,
+        bannedChampions: Array.isArray(data.bannedChampions) ? data.bannedChampions : defaultData.bannedChampions
       }
     } else {
       console.log('No draft data found in Firestore, using defaults.')
@@ -92,14 +88,10 @@ export async function saveDraftDataToFirestore(workspaceId, draftData) {
     const draftRef = doc(workspaceRef, 'drafts', DRAFT_TRACKER_DOC_ID)
     
     const dataToSave = {
-      highlightedChampions: typeof draftData.highlightedChampions === 'object' && 
-        draftData.highlightedChampions !== null && 
-        !Array.isArray(draftData.highlightedChampions) 
-        ? draftData.highlightedChampions 
-        : {},
       draftSeries: Array.isArray(draftData.draftSeries) ? draftData.draftSeries : [],
       unavailablePanelState: draftData.unavailablePanelState || {},
-      pickContext: Array.isArray(draftData.pickContext) ? draftData.pickContext : []
+      pickContext: Array.isArray(draftData.pickContext) ? draftData.pickContext : [],
+      bannedChampions: Array.isArray(draftData.bannedChampions) ? draftData.bannedChampions : []
     }
 
     await setDoc(draftRef, dataToSave)
@@ -130,7 +122,6 @@ export function setupDraftRealtimeSync(workspaceId, callback) {
           const data = docSnap.data()
           callback({
             draftSeries: data.draftSeries || [],
-            highlightedChampions: data.highlightedChampions || {},
             unavailablePanelState: data.unavailablePanelState || {
               Top: Array(10).fill(null),
               Jungle: Array(10).fill(null),
@@ -138,12 +129,12 @@ export function setupDraftRealtimeSync(workspaceId, callback) {
               Bot: Array(10).fill(null),
               Support: Array(10).fill(null)
             },
-            pickContext: data.pickContext || []
+            pickContext: data.pickContext || [],
+            bannedChampions: data.bannedChampions || []
           })
         } else {
           callback({
             draftSeries: [],
-            highlightedChampions: {},
             unavailablePanelState: {
               Top: Array(10).fill(null),
               Jungle: Array(10).fill(null),
@@ -151,7 +142,8 @@ export function setupDraftRealtimeSync(workspaceId, callback) {
               Bot: Array(10).fill(null),
               Support: Array(10).fill(null)
             },
-            pickContext: []
+            pickContext: [],
+            bannedChampions: []
           })
         }
       },

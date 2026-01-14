@@ -34,14 +34,24 @@ if (!savedWorkspaceId) {
 // Initialize app state
 async function initializeApp() {
   console.log('Initializing Vue app...')
-  
+
   // Initialize auth store (will set up listener automatically)
   const authStore = useAuthStore()
-  
+
   // Initialize patch version
   const championsStore = useChampionsStore()
   await championsStore.initializePatchVersion()
-  
+
+  // Pre-load Riot API champion data (global cache)
+  try {
+    console.log('Pre-loading Riot API champion data...')
+    await riotApiService.preloadChampionData(championsStore.patchVersion)
+    console.log('✅ Riot API data pre-loaded successfully')
+  } catch (error) {
+    console.warn('⚠️ Failed to pre-load Riot API data:', error.message)
+    // Continue with app initialization - data will be fetched when needed
+  }
+
   // Try to auto-join workspace
   if (savedWorkspaceId) {
     try {
@@ -62,7 +72,7 @@ async function initializeApp() {
     }
   }
   // If no saved workspace, modal is already open from above
-  
+
   // Mark initialization as complete
   workspaceStore.setInitializing(false)
   console.log('App initialization complete')
@@ -87,5 +97,3 @@ if (typeof window !== 'undefined') {
   console.log('🔧 Debug helpers available:')
   console.log('   - debugLcuDrafts() or debugLCU() - Print LCU draft champions with names and sides')
 }
-
-

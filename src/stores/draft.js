@@ -2,14 +2,15 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { fetchDraftDataFromFirestore, saveDraftDataToFirestore, fetchLcuDraftsFromFirestore, setupLcuDraftsRealtimeSync, deleteAllLcuDrafts } from '@/services/firebase/firestore'
 import { workspaceService } from '@/services/workspace'
+import { ChampionBalancer } from '@/services/championBalancer'
 import { useWorkspaceStore } from './workspace'
 import { useChampionsStore } from './champions'
 import { useSettingsStore } from './settings'
+import { useWorkspaceTiersStore } from './workspaceTiers'
 
 export const useDraftStore = defineStore('draft', () => {
   // State
   const draftSeries = ref([])
-  const highlightedChampions = ref({})
   const unavailablePanelState = ref({
     top: Array(10).fill(null),
     jungle: Array(10).fill(null),
@@ -57,8 +58,12 @@ export const useDraftStore = defineStore('draft', () => {
               const isOp = championsStore.isOpForRole(champ.name, role)
               // Don't count highlight if champion is banned or unavailable (they're in same section)
               const isHighlighted = !isBanned && !isUnavailable && isHighlightedForRole(champ.name, role)
-              
-              if (isBanned || isUnavailable || isOp || isHighlighted) {
+
+              // Check if champion has a tier assigned for this role
+              const workspaceTiersStore = useWorkspaceTiersStore()
+              const hasTier = workspaceTiersStore.getTierForChampion(champ.name, role) !== null
+
+              if (isBanned || isUnavailable || isOp || isHighlighted || hasTier) {
                 grouped[role].sticky.push(champ)
               } else {
                 grouped[role].scrollable.push(champ)
@@ -71,15 +76,8 @@ export const useDraftStore = defineStore('draft', () => {
       // Sort sticky champions by priority
       Object.keys(grouped).forEach(role => {
         grouped[role].sticky.sort((a, b) => {
-          const getPriority = (champ) => {
-            // Banned and unavailable have same priority (3)
-            if (isBannedChampion(champ.name) || unavailableChampions.value.has(champ.name)) return 3
-            if (championsStore.isOpForRole(champ.name, role)) return 2
-            if (isHighlightedForRole(champ.name, role)) return 1
-            return 0
-          }
-          const priorityA = getPriority(a)
-          const priorityB = getPriority(b)
+          const priorityA = getChampionPriority(a, role, championsStore)
+          const priorityB = getChampionPriority(b, role, championsStore)
           if (priorityA !== priorityB) return priorityB - priorityA
           return (a.name || '').localeCompare(b.name || '')
         })
@@ -103,15 +101,8 @@ export const useDraftStore = defineStore('draft', () => {
       // Sort by priority
       Object.keys(grouped).forEach(role => {
         grouped[role].sort((a, b) => {
-          const getPriority = (champ) => {
-            // Banned and unavailable have same priority (3)
-            if (isBannedChampion(champ.name) || unavailableChampions.value.has(champ.name)) return 3
-            if (championsStore.isOpForRole(champ.name, role)) return 2
-            if (isHighlightedForRole(champ.name, role)) return 1
-            return 0
-          }
-          const priorityA = getPriority(a)
-          const priorityB = getPriority(b)
+          const priorityA = getChampionPriority(a, role, championsStore)
+          const priorityB = getChampionPriority(b, role, championsStore)
           if (priorityA !== priorityB) return priorityB - priorityA
           return (a.name || '').localeCompare(b.name || '')
         })
@@ -123,7 +114,21 @@ export const useDraftStore = defineStore('draft', () => {
   
   // Helper function
   function isHighlightedForRole(championName, role) {
-    return isHighlighted(championName, role)
+    // Highlighting functionality removed - always return false
+    return false
+  }
+
+  // Helper function to get champion priority for sorting
+  function getChampionPriority(champion, role, championsStore) {
+    // Banned and unavailable have same priority (4)
+    if (isBannedChampion(champion.name) || unavailableChampions.value.has(champion.name)) return 4
+    // Check for tier assignment (3)
+    const workspaceTiersStore = useWorkspaceTiersStore()
+    const tier = workspaceTiersStore.getTierForChampion(champion.name, role)
+    if (tier) return 3 - (tier.order * 0.1) // Higher tiers get higher priority
+    if (championsStore.isOpForRole(champion.name, role)) return 2
+    if (isHighlightedForRole(champion.name, role)) return 1
+    return 0
   }
   
   // Helper function to convert champion IDs to names
@@ -378,11 +383,7 @@ export const useDraftStore = defineStore('draft', () => {
     queueSave()
   }
   
-  function isHighlighted(championName, role = null) {
-    if (!championName || !highlightedChampions.value[championName]) return false
-    const roles = highlightedChampions.value[championName]
-    return role ? roles.includes(role) : true
-  }
+
   
   function togglePick(championName, pickedFromRole = null) {
     // Prevent toggling LCU unavailable champions or banned champions (they can't be reversed)
@@ -466,48 +467,12 @@ export const useDraftStore = defineStore('draft', () => {
       }
     }
   }
-  
-  function toggleHighlight(championName, role = null) {
-    // Don't allow highlighting banned or unavailable champions (they're in same section)
-    if (!championName || isUnavailable(championName) || isBannedChampion(championName)) return
-    
-    if (role) {
-      const currentHighlights = highlightedChampions.value[championName] || []
-      const roleIndex = currentHighlights.indexOf(role)
-      
-      if (roleIndex === -1) {
-        highlightedChampions.value[championName] = [...currentHighlights, role]
-      } else {
-        const updated = [...currentHighlights]
-        updated.splice(roleIndex, 1)
-        if (updated.length > 0) {
-          highlightedChampions.value[championName] = updated
-        } else {
-          delete highlightedChampions.value[championName]
-        }
-      }
-    } else {
-      // Toggle all roles
-      if (highlightedChampions.value[championName]) {
-        delete highlightedChampions.value[championName]
-      } else {
-        const championsStore = useChampionsStore()
-        const champ = championsStore.allChampions.find(c => c.name === championName)
-        highlightedChampions.value[championName] = champ?.mainRole ? [champ.mainRole] : []
-      }
-    }
-    
-    queueSave()
-  }
-  
-  function resetHighlighted() {
-    highlightedChampions.value = {}
-    queueSave()
-  }
+
   
   async function resetUnavailable() {
     draftSeries.value = []
     pickContext.value = []
+    bannedChampions.value = new Set() // Reset manually banned champions
     unavailablePanelState.value = {
       top: Array(10).fill(null),
       jungle: Array(10).fill(null),
@@ -515,7 +480,7 @@ export const useDraftStore = defineStore('draft', () => {
       bottom: Array(10).fill(null),
       support: Array(10).fill(null)
     }
-    
+
     // Also delete all lcuDrafts from Firestore
     const workspaceStore = useWorkspaceStore()
     if (workspaceStore.currentWorkspaceId && !workspaceStore.isLocalWorkspace) {
@@ -533,7 +498,7 @@ export const useDraftStore = defineStore('draft', () => {
       lcuUnavailableChampions.value = new Set()
       lcuBannedChampions.value = new Set()
     }
-    
+
     queueSave()
   }
   
@@ -554,7 +519,6 @@ export const useDraftStore = defineStore('draft', () => {
           // Save to localStorage
           workspaceService.saveLocalWorkspaceData(workspaceStore.currentWorkspaceId, {
             draftSeries: draftSeries.value,
-            highlightedChampions: highlightedChampions.value,
             unavailablePanelState: unavailablePanelState.value,
             pickContext: pickContext.value,
             bannedChampions: Array.from(bannedChampions.value)
@@ -566,7 +530,6 @@ export const useDraftStore = defineStore('draft', () => {
           // Save to Firestore
           await saveDraftDataToFirestore(workspaceStore.currentWorkspaceId, {
             draftSeries: draftSeries.value,
-            highlightedChampions: highlightedChampions.value,
             unavailablePanelState: unavailablePanelState.value,
             pickContext: pickContext.value,
             bannedChampions: Array.from(bannedChampions.value)
@@ -591,7 +554,6 @@ export const useDraftStore = defineStore('draft', () => {
       const data = await fetchDraftDataFromFirestore(workspaceId)
       if (data) {
         draftSeries.value = data.draftSeries || []
-        highlightedChampions.value = data.highlightedChampions || {}
         unavailablePanelState.value = data.unavailablePanelState || {
           top: Array(10).fill(null),
           jungle: Array(10).fill(null),
@@ -601,7 +563,7 @@ export const useDraftStore = defineStore('draft', () => {
         }
         pickContext.value = data.pickContext || []
         bannedChampions.value = new Set(data.bannedChampions || [])
-        
+
         // Reconstruct pickContext if missing (migration)
         if (pickContext.value.length === 0 && draftSeries.value.length > 0) {
           reconstructPickContext()
@@ -642,7 +604,6 @@ export const useDraftStore = defineStore('draft', () => {
     isLoading.value = true
     try {
       draftSeries.value = data.draftSeries || []
-      highlightedChampions.value = data.highlightedChampions || {}
       unavailablePanelState.value = data.unavailablePanelState || {
         top: Array(10).fill(null),
         jungle: Array(10).fill(null),
@@ -698,293 +659,13 @@ export const useDraftStore = defineStore('draft', () => {
   
   function balanceChampionsAcrossRoles() {
     const championsStore = useChampionsStore()
-    const roles = ['top', 'jungle', 'middle', 'bottom', 'support']
-    
-    // Clear all current placements
-    roles.forEach(role => {
-      unavailablePanelState.value[role] = Array(10).fill(null)
-    })
-    
-    const bannedChamps = draftSeries.value
-    if (bannedChamps.length === 0) {
-      queueSave()
-      return
-    }
-    
-    console.log('Balancing champions:', bannedChamps.length, 'champions')
-    
-    // Get champion metadata
-    const champData = {}
-    bannedChamps.forEach(champName => {
-      const champion = championsStore.allChampions.find(c => c.name === champName)
-      if (champion) {
-        const possibleRoles = new Set()
-        if (champion.mainRole && roles.includes(champion.mainRole)) {
-          possibleRoles.add(champion.mainRole)
-        }
-        if (champion.roles && Array.isArray(champion.roles)) {
-          champion.roles.forEach(r => {
-            if (r && roles.includes(r)) {
-              possibleRoles.add(r)
-            }
-          })
-        }
-        champData[champName] = {
-          mainRole: champion.mainRole && roles.includes(champion.mainRole) ? champion.mainRole : null,
-          possibleRoles: Array.from(possibleRoles)
-        }
-      } else {
-        // Champion not found in store - use all roles as fallback
-        champData[champName] = {
-          mainRole: null,
-          possibleRoles: [...roles]
-        }
-      }
-    })
-    
-    // === INFERENCE STEP ===
-    // Define forward and reverse sequences
-    const forwardSequence = roles
-    const reverseSequence = [...roles].reverse()
-    
-    // Count matches for each sequence
-    let forwardMatches = 0
-    let reverseMatches = 0
-    
-    bannedChamps.forEach((champName, index) => {
-      const champ = champData[champName]
-      if (!champ) return
-      
-      const forwardRole = forwardSequence[index % forwardSequence.length]
-      const reverseRole = reverseSequence[index % reverseSequence.length]
-      
-      if (champ.possibleRoles.includes(forwardRole)) {
-        forwardMatches++
-      }
-      if (champ.possibleRoles.includes(reverseRole)) {
-        reverseMatches++
-      }
-    })
-    
-    // Choose the sequence with more matches
-    const probableSequence = forwardMatches >= reverseMatches ? forwardSequence : reverseSequence
-    const probableRoles = {}
-    bannedChamps.forEach((champName, index) => {
-      probableRoles[champName] = probableSequence[index % probableSequence.length]
-    })
-    
-    // === PREFERENCE BUILDING ===
-    const championsWithPreferences = bannedChamps.map(champName => {
-      const champ = champData[champName]
-      if (!champ || champ.possibleRoles.length === 0) {
-        // If no metadata or no possible roles, assign to all roles as fallback
-        return {
-          name: champName,
-          preferences: [...roles],
-          possibleRolesCount: roles.length
-        }
-      }
-      
-      const preferences = []
-      
-      // 1. Add inferred probable role if possible
-      const inferredRole = probableRoles[champName]
-      if (inferredRole && champ.possibleRoles.includes(inferredRole) && !preferences.includes(inferredRole)) {
-        preferences.push(inferredRole)
-      }
-      
-      // 2. Add mainRole if not already included
-      if (champ.mainRole && champ.possibleRoles.includes(champ.mainRole) && !preferences.includes(champ.mainRole)) {
-        preferences.push(champ.mainRole)
-      }
-      
-      // 3. Add remaining possibleRoles
-      champ.possibleRoles.forEach(role => {
-        if (!preferences.includes(role)) {
-          preferences.push(role)
-        }
-      })
-      
-      return {
-        name: champName,
-        preferences,
-        possibleRolesCount: champ.possibleRoles.length
-          }
-        })
-    
-    // Sort by number of possibleRoles (fewest first) to assign restricted champions first
-    championsWithPreferences.sort((a, b) => a.possibleRolesCount - b.possibleRolesCount)
-    
-    // Calculate target count per role (scale for <10 bans)
-    const totalBans = bannedChamps.length
-    const targetCount = totalBans >= 10 ? 2 : Math.ceil(totalBans / roles.length)
-    
-    // === GREEDY ASSIGNMENT ===
-    const assignments = {}
-    const counts = {}
-    roles.forEach(role => {
-      assignments[role] = []
-      counts[role] = 0
-    })
-    
-    const placementOrder = [0, 5, 1, 6, 2, 7, 3, 8, 4, 9]
-    
-    championsWithPreferences.forEach(champ => {
-      let assigned = false
-      
-      // Try first preference where count < targetCount
-      for (const preferredRole of champ.preferences) {
-        if (counts[preferredRole] < targetCount) {
-          assignments[preferredRole].push(champ.name)
-          counts[preferredRole]++
-          assigned = true
-            break
-          }
-      }
-      
-      // If no preference available, try any possible role with space
-      if (!assigned) {
-        for (const role of champ.preferences) {
-          if (counts[role] < targetCount) {
-            assignments[role].push(champ.name)
-            counts[role]++
-            assigned = true
-              break
-          }
-        }
-      }
-      
-      // Final fallback: assign to role with fewest champions
-      if (!assigned) {
-        let bestRole = null
-        let minCount = Infinity
-        for (const role of champ.preferences) {
-          if (counts[role] < minCount) {
-            minCount = counts[role]
-            bestRole = role
-          }
-        }
-        if (bestRole) {
-          assignments[bestRole].push(champ.name)
-          counts[bestRole]++
-        } else if (champ.preferences.length > 0) {
-          // Last resort: use first preference
-          assignments[champ.preferences[0]].push(champ.name)
-          counts[champ.preferences[0]]++
-        }
-      }
-    })
-    
-    // === BALANCE ADJUSTMENT ===
-    const overfilled = []
-    const underfilled = []
-    
-    roles.forEach(role => {
-      if (counts[role] > targetCount) {
-        overfilled.push(role)
-      } else if (counts[role] < targetCount) {
-        underfilled.push(role)
-      }
-    })
-    
-    // Move champions from overfilled to underfilled roles
-    overfilled.forEach(overRole => {
-      const champsToMove = [...assignments[overRole]]
-      
-      for (const champName of champsToMove) {
-        if (counts[overRole] <= targetCount) break
-        
-        const champ = champData[champName]
-        if (!champ) continue
-        
-        // Try to move to an underfilled role
-        for (const underRole of underfilled) {
-          if (champ.possibleRoles.includes(underRole) && counts[underRole] < targetCount) {
-            // Move champion
-            assignments[overRole] = assignments[overRole].filter(n => n !== champName)
-            assignments[underRole].push(champName)
-            counts[overRole]--
-            counts[underRole]++
-            
-            // Update underfilled list
-            if (counts[underRole] >= targetCount) {
-              underfilled.splice(underfilled.indexOf(underRole), 1)
-            }
-              break
-            }
-          }
-        }
-    })
-    
-    // === ROUND-ROBIN FALLBACK ===
-    // For extreme cases, redistribute via round-robin
-    const hasExtremeImbalance = roles.some(role => counts[role] === 0 || counts[role] > 3)
-    
-    if (hasExtremeImbalance) {
-      // Clear and redistribute
-      roles.forEach(role => {
-        assignments[role] = []
-        counts[role] = 0
-      })
-      
-      let roleIndex = 0
-      championsWithPreferences.forEach(champ => {
-        let assigned = false
-        
-        // Try round-robin through roles
-        for (let i = 0; i < roles.length; i++) {
-          const role = roles[(roleIndex + i) % roles.length]
-          if (champ.preferences.includes(role) && counts[role] < 3) {
-            assignments[role].push(champ.name)
-            counts[role]++
-            roleIndex = (roleIndex + i + 1) % roles.length
-            assigned = true
-            break
-          }
-        }
-        
-        // If still not assigned, use any possible role
-        if (!assigned) {
-          for (let i = 0; i < roles.length; i++) {
-            const role = roles[(roleIndex + i) % roles.length]
-            if (champ.preferences.includes(role)) {
-              assignments[role].push(champ.name)
-              counts[role]++
-              roleIndex = (roleIndex + i + 1) % roles.length
-              break
-            }
-          }
-        }
-      })
-    }
-    
-    // === PLACE CHAMPIONS IN PANEL ===
-    let totalPlaced = 0
-    roles.forEach(role => {
-      assignments[role].forEach((champName, idx) => {
-        if (idx < placementOrder.length) {
-          unavailablePanelState.value[role][placementOrder[idx]] = champName
-          totalPlaced++
-      }
-    })
-    })
-    
-    console.log('Placed champions:', totalPlaced, 'out of', bannedChamps.length)
-    if (totalPlaced !== bannedChamps.length) {
-      console.warn('Not all champions were placed!', {
-        total: bannedChamps.length,
-        placed: totalPlaced,
-        assignments
-      })
-    }
-    
-    queueSave()
+    const balancer = new ChampionBalancer(championsStore)
+    balancer.balanceChampions(draftSeries.value, unavailablePanelState.value, queueSave)
   }
   
   return {
     // State
     draftSeries,
-    highlightedChampions,
     unavailablePanelState,
     pickContext,
     bannedChampions,
@@ -997,14 +678,11 @@ export const useDraftStore = defineStore('draft', () => {
     championsByRoleForCompactView,
     // Actions
     togglePick,
-    toggleHighlight,
     toggleBan,
     isUnavailable,
     isLcuUnavailable,
     isBannedChampion,
     isLcuBanned,
-    isHighlighted,
-    resetHighlighted,
     resetUnavailable,
     loadWorkspaceData,
     loadDraftData,

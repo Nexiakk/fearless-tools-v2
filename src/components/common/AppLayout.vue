@@ -23,11 +23,11 @@
     <!-- Modals -->
     <WorkspaceModal />
     <WorkspaceSwitcher />
-    <AuthModal v-model="isAuthModalOpen" />
     <SettingsModal />
     <ConfirmationModal />
     <NotesModal />
-    <MilestoneReviewModal />
+    <ChampionStatsModal />
+
     <AdminView />
     
     <!-- Network Error Banner -->
@@ -36,32 +36,26 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import AppHeader from './AppHeader.vue'
 import RightSidePanel from './RightSidePanel.vue'
 import WorkspaceModal from '../workspace/WorkspaceModal.vue'
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.vue'
-import AuthModal from './AuthModal.vue'
 import SettingsModal from './SettingsModal.vue'
 import ConfirmationModal from './ConfirmationModal.vue'
 import NotesModal from './NotesModal.vue'
-import MilestoneReviewModal from './MilestoneReviewModal.vue'
+import ChampionStatsModal from '@/components/champion-pool/ChampionStatsModal.vue'
+
 import AdminView from '@/views/AdminView.vue'
 import NetworkErrorBanner from './NetworkErrorBanner.vue'
 import ChampionPoolSkeleton from '@/components/champion-pool/ChampionPoolSkeleton.vue'
 
 const workspaceStore = useWorkspaceStore()
-const isAuthModalOpen = ref(false)
 
 // Show navbar only after initialization is complete AND workspace is actually loaded (not just modal open)
 const shouldShowUI = computed(() => {
   return !workspaceStore.isInitializing && workspaceStore.hasWorkspace
-})
-
-// Expose for external use
-defineExpose({
-  openAuthModal: () => { isAuthModalOpen.value = true }
 })
 </script>
 

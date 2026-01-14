@@ -13,7 +13,6 @@ export const useSettingsStore = defineStore("settings", () => {
       disableAnimations: false,
       centerCards: true,
       enableSearch: true, // Enable search bar feature, default: enabled
-      showBannedChampions: false, // Show banned champions container, default: hidden
     },
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
@@ -94,7 +93,6 @@ export const useSettingsStore = defineStore("settings", () => {
         disableAnimations: false,
         centerCards: true,
         enableSearch: true, // Enable search bar feature, default: enabled
-        showBannedChampions: false, // Show banned champions container, default: hidden
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled

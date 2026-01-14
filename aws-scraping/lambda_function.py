@@ -84,11 +84,11 @@ def scrape_and_store_data():
             abilities_data = scrape_champion_abilities(champion_display)
             print(f"Found {len(abilities_data)} abilities")
 
-            # Scrape Lolalytics build data using display name
+            # Scrape Lolalytics build data using internal champion key (not display name)
             print(f"Scraping lolalytics data for {champion_display} (patch {target_patch})...")
             lolalytics_scraper = LolalyticsBuildScraper()
             normalized_patch = normalize_patch_for_lolalytics(target_patch)
-            build_data = lolalytics_scraper.scrape_champion_build(champion_display, patch=normalized_patch)
+            build_data = lolalytics_scraper.scrape_champion_build(champion, patch=normalized_patch)
 
             # Get champion metadata
             champion_id = get_champion_id(champion)
@@ -99,8 +99,7 @@ def scrape_and_store_data():
                 'id': champion,                 # Internal champion name (like "KSante")
                 'imageName': champion_image_name, # Internal key for images
                 'name': champion_display,       # Display name
-                'abilities': abilities_data,
-                'lastUpdated': datetime.utcnow()
+                'abilities': abilities_data
             }
 
             # Add lolalytics data if available (flattened structure)
@@ -223,9 +222,6 @@ def store_combined_champion_data_smart(champion, current_data, new_data, update_
 
         # Start with current data or empty dict
         final_data = current_data.copy() if current_data else {}
-
-        # Update timestamp
-        final_data['lastUpdated'] = datetime.utcnow()
 
         # Apply selective updates based on decision
         if update_decision['abilities']:

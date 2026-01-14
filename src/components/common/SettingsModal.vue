@@ -13,7 +13,7 @@
 
         <TabsContent value="pool" class="space-y-4 mt-4">
           <div class="flex items-center justify-between">
-            <label class="font-medium">Frozen OP/Highlighted Cards</label>
+            <label class="font-medium">Tier Cards Frozen</label>
             <Switch
               :model-value="settingsStore.settings.pool.frozenChampions"
               @update:model-value="settingsStore.updatePoolSetting('frozenChampions', $event)"
@@ -40,7 +40,7 @@
 
               <div>
                 <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm">OP/Highlight Cards</label>
+                  <label class="text-sm">Tier Cards</label>
                   <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.highlightCardSize }}%</span>
                 </div>
                 <Slider
@@ -91,14 +91,6 @@
               @update:model-value="settingsStore.updatePoolSetting('enableSearch', $event)"
             />
           </div>
-
-          <div class="flex items-center justify-between">
-            <label class="font-medium">Show Banned Champions</label>
-            <Switch
-              :model-value="settingsStore.settings.pool.showBannedChampions"
-              @update:model-value="settingsStore.updatePoolSetting('showBannedChampions', $event)"
-            />
-          </div>
         </TabsContent>
 
         <TabsContent value="admin" class="space-y-4 mt-4">
@@ -114,12 +106,35 @@
 
           <div v-else>
             <h4 class="font-semibold mb-2">Admin Access</h4>
-            <p class="text-sm text-muted-foreground mb-3">
+            <p class="text-sm text-muted-foreground mb-4">
               Sign in with an admin account to access admin features.
             </p>
-            <Button @click="openAuthModal">
-              Sign In
-            </Button>
+
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Email</label>
+                <Input
+                  type="email"
+                  v-model="adminEmail"
+                  @keyup.enter="handleAdminSignIn"
+                  placeholder="admin@example.com"
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Password</label>
+                <Input
+                  type="password"
+                  v-model="adminPassword"
+                  @keyup.enter="handleAdminSignIn"
+                  placeholder="Enter password"
+                />
+              </div>
+              <p v-if="adminError" class="text-sm text-destructive">{{ adminError }}</p>
+              <Button @click="handleAdminSignIn" :disabled="adminLoading" class="w-full">
+                <span v-if="!adminLoading">Sign In</span>
+                <span v-else>Signing in...</span>
+              </Button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
@@ -132,9 +147,6 @@
           Close
         </Button>
       </DialogFooter>
-
-      <!-- Auth Modal -->
-      <AuthModal v-model="isAuthModalOpen" />
     </DialogContent>
   </Dialog>
 </template>
@@ -145,17 +157,23 @@ import { useSettingsStore } from "@/stores/settings";
 import { useAuthStore } from "@/stores/auth";
 import { useConfirmationStore } from "@/stores/confirmation";
 import { useAuth } from "@/composables/useAuth";
-import AuthModal from "./AuthModal.vue";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
 const confirmationStore = useConfirmationStore();
 const { signOut } = useAuth();
+
+// Admin login form state
+const adminEmail = ref('');
+const adminPassword = ref('');
+const adminError = ref('');
+const adminLoading = ref(false);
 
 // Computed properties for sliders (Slider component expects arrays)
 const normalCardSize = computed({
@@ -194,11 +212,26 @@ const handleReset = () => {
   });
 };
 
-const isAuthModalOpen = ref(false);
+const handleAdminSignIn = async () => {
+  if (!adminEmail.value || !adminPassword.value) {
+    adminError.value = 'Please enter email and password';
+    return;
+  }
 
-const openAuthModal = () => {
-  settingsStore.closeSettings();
-  isAuthModalOpen.value = true;
+  adminLoading.value = true;
+  adminError.value = '';
+
+  const result = await authStore.signIn(adminEmail.value, adminPassword.value);
+
+  if (result.success) {
+    // Successfully signed in, form will automatically hide due to v-if condition
+    adminEmail.value = '';
+    adminPassword.value = '';
+  } else {
+    adminError.value = result.error || 'Sign in failed';
+  }
+
+  adminLoading.value = false;
 };
 </script>
 

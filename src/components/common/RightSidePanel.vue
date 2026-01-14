@@ -22,45 +22,40 @@
             </svg>
             <span>Reset Unavailable</span>
           </button>
-          <button
-            @click="openConfirmation('Are you sure you want to reset highlighted picks?', () => draftStore.resetHighlighted())"
-            class="expanded-option-button"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Reset Highlighted</span>
-          </button>
+
         </div>
       </div>
       
-      <!-- Review Assignments Button -->
-      <div 
+
+      
+      <!-- Tier Settings Button (Editor Mode) - Only visible to admins when in editor mode -->
+      <div
+        v-if="authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous && adminStore.isEditorModeActive"
         class="expandable-button-group single-option"
-        @mouseenter="reviewHovered = true"
-        @mouseleave="reviewHovered = false"
+        @mouseenter="tierHovered = true"
+        @mouseleave="tierHovered = false"
       >
-        <button 
-          class="side-panel-icon-button single-option-button" 
-          title="Review Assignments"
-          @click="openMilestoneReview"
+        <button
+          class="side-panel-icon-button single-option-button"
+          title="Tier Settings"
+          @click="openTierManager"
         >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
           </svg>
-          <span class="button-text-expanded" v-if="reviewHovered">Review Assignments</span>
+          <span class="button-text-expanded" v-if="tierHovered">Tier Settings</span>
         </button>
       </div>
-      
+
       <!-- Admin Button (Editor Mode) - Only visible to admins -->
-      <div 
+      <div
         v-if="authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous"
         class="expandable-button-group single-option"
         @mouseenter="adminHovered = true"
         @mouseleave="adminHovered = false"
       >
-        <button 
-          class="side-panel-icon-button single-option-button" 
+        <button
+          class="side-panel-icon-button single-option-button"
           :class="{ 'editor-mode-active': adminStore.isEditorModeActive }"
           :title="adminStore.isEditorModeActive ? 'Exit Editor Mode' : 'Enter Editor Mode'"
           @click="toggleEditorMode"
@@ -82,19 +77,20 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDraftStore } from '@/stores/draft'
 import { useConfirmationStore } from '@/stores/confirmation'
-import { useMilestoneStore } from '@/stores/milestone'
+
 import { useAdminStore } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const draftStore = useDraftStore()
 const confirmationStore = useConfirmationStore()
-const milestoneStore = useMilestoneStore()
+
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
 
 const resetHovered = ref(false)
-const reviewHovered = ref(false)
+
+const tierHovered = ref(false)
 const adminHovered = ref(false)
 
 const toggleEditorMode = () => {
@@ -105,8 +101,12 @@ const openConfirmation = (message, confirmAction, isDanger = false) => {
   confirmationStore.open({ message, confirmAction, isDanger })
 }
 
-const openMilestoneReview = () => {
-  milestoneStore.open()
+
+
+const openTierManager = () => {
+  // Emit event to parent component to open tier manager modal
+  // This will be handled in ChampionPoolView
+  emit('openTierManager')
 }
 </script>
 

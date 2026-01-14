@@ -55,6 +55,16 @@ service cloud.firestore {
 
     }
 
+    // GLOBAL DEFAULT TIERS
+
+    match /tiers/default {
+
+      allow read: if isAuthenticated();
+
+      allow write: if isAdmin();
+
+    }
+
     // WORKSPACES
 
     match /workspaces/{workspaceId} {
@@ -86,6 +96,13 @@ service cloud.firestore {
       }
 
       match /savedDrafts/{draftId} {
+
+        allow read, write: if isAuthenticated();
+
+      }
+
+      // TIERS - workspace-specific tier management
+      match /tiers/{document=**} {
 
         allow read, write: if isAuthenticated();
 

@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Show skeleton when workspace is loading OR when workspace exists OR when saved workspace exists -->
-    <div v-if="showSkeletonContainer" class="container-fluid mx-auto p-6" :class="{ 'p-8': !shouldShowBannedChampions, 'p-6': shouldShowBannedChampions }">
+    <div v-if="showSkeletonContainer" class="container-fluid mx-auto p-6">
       <!-- Editor Mode Bottom Border -->
       <div v-if="adminStore.isEditorModeActive && workspaceStore.hasWorkspace" class="editor-mode-banner-bottom-line"></div>
       
@@ -11,23 +11,13 @@
         
         <!-- Actual Content - Show only when workspace exists and all data is loaded -->
         <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
-          <!-- Banned Champions Container -->
-          <div 
-            v-if="shouldShowBannedChampions" 
-            class="banned-champions-container"
-          >
-            <ChampionCard
-              v-for="champion in bannedChampionsList"
-              :key="`banned-${champion.id}`"
-              :champion="champion"
-              role=""
-              :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
-            />
-          </div>
-          
-          <div 
-            class="compact-view-container" 
-            :class="{ ...viewClasses, 'search-active': isSearchActive, 'has-banned': bannedChampionsList.length > 0 }"
+          <!-- Tier Selector (shown in editor mode) -->
+          <TierSelector @open-tier-manager="openTierManager" />
+
+          <!-- Role Pillars Container -->
+          <div
+            class="compact-view-container"
+            :class="{ ...viewClasses, 'search-active': isSearchActive, 'editor-mode': adminStore.isEditorModeActive }"
             :style="cardSizeStyles"
           >
             <RolePillar
@@ -48,6 +38,13 @@
         :champion="adminStore.selectedChampionForEditor"
         @close="closeChampionInfoModal"
       />
+
+      <!-- Tier Manager Modal -->
+      <TierManagerModal
+        v-if="workspaceStore.hasWorkspace"
+        :is-open="isTierManagerModalOpen"
+        @close="closeTierManagerModal"
+      />
     </div>
     
     <!-- Show "join workspace" only when not loading and no workspace -->
@@ -66,17 +63,21 @@ import { useChampionsStore } from '@/stores/champions'
 import { useSettingsStore } from '@/stores/settings'
 import { useAdminStore } from '@/stores/admin'
 import { useChampionSearchStore } from '@/stores/championSearch'
+import { useWorkspaceTiersStore } from '@/stores/workspaceTiers'
 import { workspaceService } from '@/services/workspace'
 import RolePillar from '@/components/champion-pool/RolePillar.vue'
 import ChampionInfoModal from '@/components/champion-pool/ChampionInfoModal.vue'
 import ChampionPoolSkeleton from '@/components/champion-pool/ChampionPoolSkeleton.vue'
 import ChampionCard from '@/components/champion-pool/ChampionCard.vue'
+import TierSelector from '@/components/champion-pool/TierSelector.vue'
+import TierManagerModal from '@/components/champion-pool/TierManagerModal.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftStore = useDraftStore()
 const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
 const adminStore = useAdminStore()
+const workspaceTiersStore = useWorkspaceTiersStore()
 
 // Get search active state for CSS class - use storeToRefs to ensure reactivity
 const championSearchStore = useChampionSearchStore()
@@ -101,27 +102,57 @@ if (typeof window !== 'undefined') {
 const hasSavedWorkspace = ref(initialSavedWorkspace)
 
 const championsByRole = computed(() => {
-  return draftStore.championsByRoleForCompactView
+  const baseChampionsByRole = draftStore.championsByRoleForCompactView
+
+  // Create a sorted version that prioritizes tier champions
+  const sortedChampionsByRole = {}
+
+  for (const role of roles) {
+    const roleChampions = baseChampionsByRole[role]
+
+    if (Array.isArray(roleChampions)) {
+      // Non-frozen view: sort champions by tier priority
+      sortedChampionsByRole[role] = sortChampionsByTier(roleChampions, role)
+    } else if (roleChampions && typeof roleChampions === 'object') {
+      // Frozen view: sort both sticky and scrollable arrays
+      sortedChampionsByRole[role] = {
+        sticky: sortChampionsByTier(roleChampions.sticky || [], role),
+        scrollable: sortChampionsByTier(roleChampions.scrollable || [], role)
+      }
+    } else {
+      sortedChampionsByRole[role] = roleChampions || []
+    }
+  }
+
+  return sortedChampionsByRole
 })
 
-// Get all banned champions as a list
-const bannedChampionsList = computed(() => {
-  const allBanned = new Set()
+// Helper function to sort champions by priority (banned/unavailable > tier > alphabetical)
+function sortChampionsByTier(champions, role) {
+  return [...champions].sort((a, b) => {
+    // Helper function to get priority for a champion
+    const getPriority = (champ) => {
+      // Banned and unavailable have highest priority (4)
+      if (draftStore.isBannedChampion(champ.name) || draftStore.isUnavailable(champ.name)) return 4
+      // Check for tier assignment per role (3)
+      const tier = workspaceTiersStore.getTierForChampion(champ.name, role)
+      if (tier) return 3 - (tier.order * 0.1) // Higher tiers get higher priority
+      if (championsStore.isOpForRole(champ.name, role)) return 2
 
-  // Combine manually banned and LCU banned
-  draftStore.bannedChampions.forEach(champ => allBanned.add(champ))
-  draftStore.lcuBannedChampions.forEach(champ => allBanned.add(champ))
+      return 0
+    }
 
-  // Convert to champion objects, sorted alphabetically
-  return (championsStore.allChampions || [])
-    .filter(champ => allBanned.has(champ.name))
-    .sort((a, b) => a.name.localeCompare(b.name))
-})
+    const priorityA = getPriority(a)
+    const priorityB = getPriority(b)
 
-// Determine if banned champions container should be shown
-const shouldShowBannedChampions = computed(() => {
-  return bannedChampionsList.value.length > 0 && settingsStore.settings.pool.showBannedChampions
-})
+    if (priorityA !== priorityB) return priorityB - priorityA
+    return (a.name || '').localeCompare(b.name || '')
+  })
+}
+
+
+
+
 
 const viewClasses = computed(() => ({
   'compact-mode': settingsStore.settings.pool.compactMode,
@@ -153,6 +184,17 @@ const closeChampionInfoModal = () => {
   adminStore.clearSelectedChampionForEditor()
 }
 
+// Tier Manager Modal state
+const isTierManagerModalOpen = ref(false)
+
+const openTierManager = () => {
+  isTierManagerModalOpen.value = true
+}
+
+const closeTierManagerModal = () => {
+  isTierManagerModalOpen.value = false
+}
+
 // Combined loading state - show skeleton until workspace, champions, and draft data are all loaded
 const isLoading = computed(() => {
   return workspaceStore.isLoading || championsStore.isLoading || draftStore.isLoading || (hasSavedWorkspace.value && !workspaceStore.hasWorkspace)
@@ -163,10 +205,12 @@ const showSkeletonContainer = computed(() => {
   return workspaceStore.isInitializing || isLoading.value || workspaceStore.hasWorkspace || hasSavedWorkspace.value || workspaceStore.isWorkspaceModalOpen
 })
 
-// Watch for when workspace is loaded to update hasSavedWorkspace
-watch(() => workspaceStore.hasWorkspace, (hasWorkspace) => {
+// Watch for when workspace is loaded to update hasSavedWorkspace and initialize tiers
+watch(() => workspaceStore.hasWorkspace, async (hasWorkspace) => {
   if (hasWorkspace) {
     hasSavedWorkspace.value = false
+    // Initialize workspace tiers when workspace loads
+    await workspaceTiersStore.initialize()
   }
 })
 

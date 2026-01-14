@@ -183,8 +183,13 @@ let focusInterval = null
 let clickHandler = null
 
 const maintainFocus = () => {
-  if (route.name === 'pool' && 
-      settingsStore.settings.pool.enableSearch && 
+  // Don't maintain focus if any modals are open
+  if (settingsStore.isSettingsOpen || workspaceStore.isWorkspaceModalOpen || workspaceStore.isWorkspaceSwitcherOpen) {
+    return
+  }
+
+  if (route.name === 'pool' &&
+      settingsStore.settings.pool.enableSearch &&
       searchInputRef.value &&
       document.activeElement !== searchInputRef.value) {
     searchInputRef.value.focus()
@@ -207,8 +212,13 @@ const setupAutoFocus = () => {
     
     // Handle clicks to refocus
     clickHandler = (e) => {
+      // Don't refocus if any modals are open
+      if (settingsStore.isSettingsOpen || workspaceStore.isWorkspaceModalOpen || workspaceStore.isWorkspaceSwitcherOpen) {
+        return
+      }
+
       // Don't refocus if clicking on the search input itself or its container
-      if (e.target === searchInputRef.value || 
+      if (e.target === searchInputRef.value ||
           searchInputRef.value?.contains(e.target) ||
           e.target.closest('.navbar-search-container')) {
         return

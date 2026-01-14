@@ -160,7 +160,7 @@ export const riotApiService = {
   },
 
   /**
-   * Fetch specific champions by their IDs
+   * Fetch specific champions by their IDs (uses cached data)
    */
   async getChampionsByIds(championIds, patchVersion) {
     if (!Array.isArray(championIds) || championIds.length === 0) {
@@ -172,8 +172,8 @@ export const riotApiService = {
     }
 
     try {
-      // Fetch all champion data (this is cached, so it's efficient)
-      const allChampions = await this.getChampionData(patchVersion)
+      // Get champion data from cache (will fetch if not cached)
+      const allChampions = await this.getChampionDataCached(patchVersion)
 
       // Filter to only the requested champion IDs
       const championMap = {}
@@ -220,5 +220,127 @@ export const riotApiService = {
     }
 
     return 0 // Versions are equal
+  },
+
+  /**
+   * Check if cached data is valid for a patch version
+   */
+  isCacheValid(patchVersion) {
+    if (!riotDataCache.championData ||
+        !riotDataCache.patchVersion ||
+        !riotDataCache.lastFetched) {
+      return false
+    }
+
+    // Check if patch version matches
+    if (riotDataCache.patchVersion !== patchVersion) {
+      return false
+    }
+
+    // Check if cache is older than 7 days
+    const cacheAge = Date.now() - riotDataCache.lastFetched
+    const maxAge = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+    return cacheAge < maxAge
+  },
+
+  /**
+   * Get cached champion data for a patch version
+   */
+  getCachedChampionData(patchVersion) {
+    if (this.isCacheValid(patchVersion)) {
+      console.log(`✅ Using cached Riot API data for patch ${patchVersion}`)
+      return riotDataCache.championData
+    }
+
+    console.log(`⚠️ Cache miss for patch ${patchVersion}`)
+    return null
+  },
+
+  /**
+   * Cache champion data for a patch version
+   */
+  setCachedChampionData(patchVersion, championData) {
+    riotDataCache.patchVersion = patchVersion
+    riotDataCache.championData = championData
+    riotDataCache.lastFetched = Date.now()
+    console.log(`💾 Cached Riot API data for patch ${patchVersion}`)
+  },
+
+  /**
+   * Clear the cache
+   */
+  clearCache() {
+    riotDataCache.patchVersion = null
+    riotDataCache.championData = null
+    riotDataCache.lastFetched = null
+    riotDataCache.isLoading = false
+    console.log('🗑️ Cleared Riot API cache')
+  },
+
+  /**
+   * Pre-load and cache champion data for the current patch
+   */
+  async preloadChampionData(patchVersion) {
+    if (!patchVersion) {
+      throw new Error('Patch version is required for preloading')
+    }
+
+    // Check if already cached and valid
+    if (this.isCacheValid(patchVersion)) {
+      console.log(`✅ Champion data already cached for patch ${patchVersion}`)
+      return riotDataCache.championData
+    }
+
+    // Check if already loading
+    if (riotDataCache.isLoading) {
+      console.log('⏳ Champion data already loading, waiting...')
+      // Wait for loading to complete (simple polling)
+      let attempts = 0
+      while (riotDataCache.isLoading && attempts < 50) { // Max 5 seconds
+        await new Promise(resolve => setTimeout(resolve, 100))
+        attempts++
+      }
+
+      if (this.isCacheValid(patchVersion)) {
+        return riotDataCache.championData
+      }
+    }
+
+    // Start loading
+    riotDataCache.isLoading = true
+
+    try {
+      console.log(`🌐 Pre-loading champion data for patch ${patchVersion}...`)
+      const championData = await this.getChampionDataWithRetry(patchVersion)
+      this.setCachedChampionData(patchVersion, championData)
+      return championData
+    } catch (error) {
+      console.error('❌ Failed to preload champion data:', error)
+      throw error
+    } finally {
+      riotDataCache.isLoading = false
+    }
+  },
+
+  /**
+   * Get champion data with caching (preferred method)
+   */
+  async getChampionDataCached(patchVersion) {
+    if (!patchVersion) {
+      throw new Error('Patch version is required')
+    }
+
+    // Try cache first
+    const cached = this.getCachedChampionData(patchVersion)
+    if (cached) {
+      return cached
+    }
+
+    // Cache miss - fetch and cache
+    console.log(`🌐 Fetching fresh champion data for patch ${patchVersion}...`)
+    const championData = await this.getChampionDataWithRetry(patchVersion)
+    this.setCachedChampionData(patchVersion, championData)
+    return championData
   }
 }

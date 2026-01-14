@@ -179,51 +179,83 @@ export async function migrateChampionDataToFirestore(workspaceId, allChampions, 
 }
 
 /**
- * NEW SYSTEM: Fetch champions from individual documents using role containers
+ * EFFICIENT SYSTEM: Fetch champions using role containers only (no individual document fetching)
  */
 export async function fetchChampionsFromIndividualDocs() {
   try {
-    console.log('🔄 Fetching champions from individual documents...')
+    console.log('🔄 Fetching champions from role containers...')
 
-    // First, get role containers to know which champions exist
+    // Import Riot API service dynamically to avoid circular dependency
+    const { riotApiService } = await import('@/services/riotApi')
+
+    // Get role containers to know which champions exist and their roles
     const roleData = await fetchChampionRolesFromContainers()
 
-    // Flatten all champion IDs
-    const allChampionIds = new Set()
-    Object.values(roleData).forEach(ids => {
-      ids.forEach(id => allChampionIds.add(id))
+    // Flatten all champion IDs and create role mappings
+    const championRoleMap = new Map()
+    Object.entries(roleData).forEach(([role, championIds]) => {
+      championIds.forEach(championId => {
+        if (!championRoleMap.has(championId)) {
+          championRoleMap.set(championId, [])
+        }
+        championRoleMap.get(championId).push(role)
+      })
     })
 
-    console.log(`📋 Found ${allChampionIds.size} champions across all roles`)
+    const allChampionIds = Array.from(championRoleMap.keys())
 
-    if (allChampionIds.size === 0) {
-      console.warn('⚠️ No champions found in role containers, falling back to global data')
-      return await fetchChampionDataFromFirestore('global')
+    console.log(`📋 Found ${allChampionIds.length} champions across all roles`)
+
+    if (allChampionIds.length === 0) {
+      console.error('❌ No champions found in role containers - database may be empty or corrupted')
+      throw new Error('No champions found in role containers')
     }
 
-    // Fetch all champion documents in batches to avoid overwhelming Firestore
-    const champions = await fetchChampionsInBatches(Array.from(allChampionIds))
+    // Get current patch version first
+    console.log('🌐 Getting current patch version...')
+    const currentPatchVersion = await riotApiService.getLatestPatchVersionWithRetry()
 
-    // Normalize champions for frontend compatibility
-    const normalizedChampions = champions.map(champion => {
-      const normalized = { ...champion }
+    // Get Riot API data to merge image information
+    console.log(`🌐 Fetching Riot API data for patch ${currentPatchVersion}...`)
+    const riotChampions = await riotApiService.getChampionDataCached(currentPatchVersion)
 
-      // Extract roles from the roles object and convert to array
-      if (normalized.roles && typeof normalized.roles === 'object') {
-        normalized.roles = Object.keys(normalized.roles)
-      } else if (!Array.isArray(normalized.roles)) {
-        normalized.roles = []
+    // Create a map of imageName -> riot data for quick lookup
+    const riotDataMap = {}
+    riotChampions.forEach(champion => {
+      if (champion.imageName) {
+        riotDataMap[champion.imageName] = champion
       }
-
-      // Set mainRole to first role if not set
-      if (!normalized.mainRole && normalized.roles.length > 0) {
-        normalized.mainRole = normalized.roles[0]
-      }
-
-      return normalized
     })
 
-    console.log(`✅ Successfully fetched ${normalizedChampions.length} champions from individual documents`)
+    // Create champion objects directly from role data and merge with Riot API data
+    const normalizedChampions = allChampionIds.map(championId => {
+      const roles = championRoleMap.get(championId) || []
+      const mainRole = roles.length > 0 ? roles[0] : null
+
+      // Merge with Riot API data for image information
+      const riotData = riotDataMap[championId] // championId is the internal name like "KSante"
+      if (riotData) {
+        return {
+          id: championId,
+          name: riotData.name, // Use proper display name
+          imageName: riotData.imageName,
+          roles: roles,
+          mainRole: mainRole
+        }
+      } else {
+        console.warn(`⚠️ No Riot API data found for champion ${championId}`)
+        // Fallback values
+        return {
+          id: championId,
+          name: championId, // Fallback to ID as name
+          imageName: championId, // Fallback to ID as imageName
+          roles: roles,
+          mainRole: mainRole
+        }
+      }
+    })
+
+    console.log(`✅ Successfully fetched ${normalizedChampions.length} champions from role containers`)
 
     return {
       allChampions: normalizedChampions,
@@ -233,10 +265,8 @@ export async function fetchChampionsFromIndividualDocs() {
     }
 
   } catch (error) {
-    console.error('❌ Error fetching champions from individual docs:', error)
-    // Fallback to old system
-    console.log('🔄 Falling back to global champion data...')
-    return await fetchChampionDataFromFirestore('global')
+    console.error('❌ Error fetching champions from role containers:', error)
+    throw error // Re-throw the error instead of falling back to non-existent data
   }
 }
 
@@ -305,7 +335,7 @@ async function fetchChampionsInBatches(championIds, batchSize = 10) {
         const docSnap = await getDoc(docRef)
 
         if (docSnap.exists()) {
-          return docSnap.data()
+          return { id: championId, ...docSnap.data() }
         } else {
           console.warn(`⚠️ Champion document ${championId} not found`)
           return null

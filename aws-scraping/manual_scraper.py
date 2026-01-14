@@ -145,7 +145,7 @@ class ManualScraper:
             patch_to_use = target_patch or get_current_patch()
             print(f"📊 Scraping lolalytics data (patch {patch_to_use})...")
             normalized_patch = normalize_patch_for_lolalytics(patch_to_use)
-            build_data = self.scraper.scrape_champion_build(champion_display, patch=normalized_patch)
+            build_data = self.scraper.scrape_champion_build(champion_internal, patch=normalized_patch)
 
             # Get champion metadata
             champion_id = get_champion_id(champion_internal)
@@ -156,8 +156,7 @@ class ManualScraper:
                 'id': champion_internal,        # Internal champion name (like "KSante")
                 'imageName': champion_image_name,
                 'name': champion_display,
-                'abilities': abilities_data,
-                'lastUpdated': datetime.utcnow()
+                'abilities': abilities_data
             }
 
             # Add lolalytics data if available

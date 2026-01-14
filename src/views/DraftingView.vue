@@ -27,144 +27,92 @@
           <div class="draft-creator-bans-header">
             <!-- Blue Bans -->
             <div class="draft-creator-bans blue-bans">
-              <div
+              <DraftSlot
                 v-for="i in 3"
                 :key="`blue-ban-${i}`"
-                class="draft-creator-slot ban-slot"
-                :class="{
-                  filled: currentDraft.blueBans[i - 1].champion,
-                  'selected-for-move':
-                    draftingStore.selectedChampionSource?.side === 'blue' &&
-                    draftingStore.selectedChampionSource?.type === 'bans' &&
-                    draftingStore.selectedChampionSource?.index === i - 1,
-                  'selected-for-targeting':
-                    draftingStore.selectedTargetSlot?.side === 'blue' &&
-                    draftingStore.selectedTargetSlot?.type === 'bans' &&
-                    draftingStore.selectedTargetSlot?.index === i - 1 &&
-                    !currentDraft.blueBans[i - 1].champion,
-                }"
-                @click="handleSlotClick('blue', 'bans', i - 1)"
-                @contextmenu.prevent="handleClearSlot('blue', 'bans', i - 1)"
-                title="Click to place/move/target, Right-click to clear"
-              >
-                <img
-                  v-if="currentDraft.blueBans[i - 1].champion"
-                  :src="
-                    championsStore.getChampionIconUrl(
-                      currentDraft.blueBans[i - 1].champion,
-                      'ban'
-                    )
-                  "
-                  :alt="currentDraft.blueBans[i - 1].champion"
-                  draggable="false"
-                  @error="handleImageError"
-                />
-              </div>
+                side="blue"
+                type="bans"
+                :index="i - 1"
+                :champion="currentDraft.blueBans[i - 1].champion"
+                :selected-for-move="
+                  draftingStore.selectedChampionSource?.side === 'blue' &&
+                  draftingStore.selectedChampionSource?.type === 'bans' &&
+                  draftingStore.selectedChampionSource?.index === i - 1"
+                :selected-for-targeting="
+                  draftingStore.selectedTargetSlot?.side === 'blue' &&
+                  draftingStore.selectedTargetSlot?.type === 'bans' &&
+                  draftingStore.selectedTargetSlot?.index === i - 1 &&
+                  !currentDraft.blueBans[i - 1].champion"
+                :icon-context="'ban'"
+                @click="handleSlotClick"
+                @clear="handleClearSlot"
+              />
               <div class="ban-group-separator horizontal"></div>
-              <div
+              <DraftSlot
                 v-for="i in 2"
                 :key="`blue-ban-${i + 3}`"
-                class="draft-creator-slot ban-slot"
-                :class="{
-                  filled: currentDraft.blueBans[i + 2].champion,
-                  'selected-for-move':
-                    draftingStore.selectedChampionSource?.side === 'blue' &&
-                    draftingStore.selectedChampionSource?.type === 'bans' &&
-                    draftingStore.selectedChampionSource?.index === i + 2,
-                  'selected-for-targeting':
-                    draftingStore.selectedTargetSlot?.side === 'blue' &&
-                    draftingStore.selectedTargetSlot?.type === 'bans' &&
-                    draftingStore.selectedTargetSlot?.index === i + 2 &&
-                    !currentDraft.blueBans[i + 2].champion,
-                }"
-                @click="handleSlotClick('blue', 'bans', i + 2)"
-                @contextmenu.prevent="handleClearSlot('blue', 'bans', i + 2)"
-                title="Click to place/move/target, Right-click to clear"
-              >
-                <img
-                  v-if="currentDraft.blueBans[i + 2].champion"
-                  :src="
-                    championsStore.getChampionIconUrl(
-                      currentDraft.blueBans[i + 2].champion,
-                      'ban'
-                    )
-                  "
-                  :alt="currentDraft.blueBans[i + 2].champion"
-                  draggable="false"
-                  @error="handleImageError"
-                />
-              </div>
+                side="blue"
+                type="bans"
+                :index="i + 2"
+                :champion="currentDraft.blueBans[i + 2].champion"
+                :selected-for-move="
+                  draftingStore.selectedChampionSource?.side === 'blue' &&
+                  draftingStore.selectedChampionSource?.type === 'bans' &&
+                  draftingStore.selectedChampionSource?.index === i + 2"
+                :selected-for-targeting="
+                  draftingStore.selectedTargetSlot?.side === 'blue' &&
+                  draftingStore.selectedTargetSlot?.type === 'bans' &&
+                  draftingStore.selectedTargetSlot?.index === i + 2 &&
+                  !currentDraft.blueBans[i + 2].champion"
+                :icon-context="'ban'"
+                @click="handleSlotClick"
+                @clear="handleClearSlot"
+              />
             </div>
 
             <!-- Red Bans -->
             <div class="draft-creator-bans red-bans">
-              <div
+              <DraftSlot
                 v-for="i in 2"
                 :key="`red-ban-${5 - i}`"
-                class="draft-creator-slot ban-slot"
-                :class="{
-                  filled: currentDraft.redBans[5 - i].champion,
-                  'selected-for-move':
-                    draftingStore.selectedChampionSource?.side === 'red' &&
-                    draftingStore.selectedChampionSource?.type === 'bans' &&
-                    draftingStore.selectedChampionSource?.index === 5 - i,
-                  'selected-for-targeting':
-                    draftingStore.selectedTargetSlot?.side === 'red' &&
-                    draftingStore.selectedTargetSlot?.type === 'bans' &&
-                    draftingStore.selectedTargetSlot?.index === 5 - i &&
-                    !currentDraft.redBans[5 - i].champion,
-                }"
-                @click="handleSlotClick('red', 'bans', 5 - i)"
-                @contextmenu.prevent="handleClearSlot('red', 'bans', 5 - i)"
-                title="Click to place/move/target, Right-click to clear"
-              >
-                <img
-                  v-if="currentDraft.redBans[5 - i].champion"
-                  :src="
-                    championsStore.getChampionIconUrl(
-                      currentDraft.redBans[5 - i].champion,
-                      'ban'
-                    )
-                  "
-                  :alt="currentDraft.redBans[5 - i].champion"
-                  draggable="false"
-                  @error="handleImageError"
-                />
-              </div>
+                side="red"
+                type="bans"
+                :index="5 - i"
+                :champion="currentDraft.redBans[5 - i].champion"
+                :selected-for-move="
+                  draftingStore.selectedChampionSource?.side === 'red' &&
+                  draftingStore.selectedChampionSource?.type === 'bans' &&
+                  draftingStore.selectedChampionSource?.index === 5 - i"
+                :selected-for-targeting="
+                  draftingStore.selectedTargetSlot?.side === 'red' &&
+                  draftingStore.selectedTargetSlot?.type === 'bans' &&
+                  draftingStore.selectedTargetSlot?.index === 5 - i &&
+                  !currentDraft.redBans[5 - i].champion"
+                :icon-context="'ban'"
+                @click="handleSlotClick"
+                @clear="handleClearSlot"
+              />
               <div class="ban-group-separator horizontal"></div>
-              <div
+              <DraftSlot
                 v-for="i in 3"
                 :key="`red-ban-${3 - i}`"
-                class="draft-creator-slot ban-slot"
-                :class="{
-                  filled: currentDraft.redBans[3 - i].champion,
-                  'selected-for-move':
-                    draftingStore.selectedChampionSource?.side === 'red' &&
-                    draftingStore.selectedChampionSource?.type === 'bans' &&
-                    draftingStore.selectedChampionSource?.index === 3 - i,
-                  'selected-for-targeting':
-                    draftingStore.selectedTargetSlot?.side === 'red' &&
-                    draftingStore.selectedTargetSlot?.type === 'bans' &&
-                    draftingStore.selectedTargetSlot?.index === 3 - i &&
-                    !currentDraft.redBans[3 - i].champion,
-                }"
-                @click="handleSlotClick('red', 'bans', 3 - i)"
-                @contextmenu.prevent="handleClearSlot('red', 'bans', 3 - i)"
-                title="Click to place/move/target, Right-click to clear"
-              >
-                <img
-                  v-if="currentDraft.redBans[3 - i].champion"
-                  :src="
-                    championsStore.getChampionIconUrl(
-                      currentDraft.redBans[3 - i].champion,
-                      'ban'
-                    )
-                  "
-                  :alt="currentDraft.redBans[3 - i].champion"
-                  draggable="false"
-                  @error="handleImageError"
-                />
-              </div>
+                side="red"
+                type="bans"
+                :index="3 - i"
+                :champion="currentDraft.redBans[3 - i].champion"
+                :selected-for-move="
+                  draftingStore.selectedChampionSource?.side === 'red' &&
+                  draftingStore.selectedChampionSource?.type === 'bans' &&
+                  draftingStore.selectedChampionSource?.index === 3 - i"
+                :selected-for-targeting="
+                  draftingStore.selectedTargetSlot?.side === 'red' &&
+                  draftingStore.selectedTargetSlot?.type === 'bans' &&
+                  draftingStore.selectedTargetSlot?.index === 3 - i &&
+                  !currentDraft.redBans[3 - i].champion"
+                :icon-context="'ban'"
+                @click="handleSlotClick"
+                @clear="handleClearSlot"
+              />
             </div>
           </div>
 
@@ -181,42 +129,24 @@
                     class="pick-row blue"
                   >
                     <span class="pick-label">B{{ i }}</span>
-                    <div
-                      class="draft-creator-slot pick-slot"
-                      :data-pick-order="`B${i}`"
-                      :class="{
-                        filled: currentDraft.bluePicks[i - 1].champion,
-                        'selected-for-move':
-                          draftingStore.selectedChampionSource?.side ===
-                            'blue' &&
-                          draftingStore.selectedChampionSource?.type ===
-                            'picks' &&
-                          draftingStore.selectedChampionSource?.index === i - 1,
-                        'selected-for-targeting':
-                          draftingStore.selectedTargetSlot?.side === 'blue' &&
-                          draftingStore.selectedTargetSlot?.type === 'picks' &&
-                          draftingStore.selectedTargetSlot?.index === i - 1 &&
-                          !currentDraft.bluePicks[i - 1].champion,
-                      }"
-                      @click="handleSlotClick('blue', 'picks', i - 1)"
-                      @contextmenu.prevent="
-                        handleClearSlot('blue', 'picks', i - 1)
-                      "
-                      title="Click to place/move/target, Right-click to clear"
-                    >
-                      <img
-                        v-if="currentDraft.bluePicks[i - 1].champion"
-                        :src="
-                          championsStore.getChampionIconUrl(
-                            currentDraft.bluePicks[i - 1].champion,
-                            'pick'
-                          )
-                        "
-                        :alt="currentDraft.bluePicks[i - 1].champion"
-                        draggable="false"
-                        @error="handleImageError"
-                      />
-                    </div>
+                    <DraftSlot
+                      side="blue"
+                      type="picks"
+                      :index="i - 1"
+                      :champion="currentDraft.bluePicks[i - 1].champion"
+                      :selected-for-move="
+                        draftingStore.selectedChampionSource?.side === 'blue' &&
+                        draftingStore.selectedChampionSource?.type === 'picks' &&
+                        draftingStore.selectedChampionSource?.index === i - 1"
+                      :selected-for-targeting="
+                        draftingStore.selectedTargetSlot?.side === 'blue' &&
+                        draftingStore.selectedTargetSlot?.type === 'picks' &&
+                        draftingStore.selectedTargetSlot?.index === i - 1 &&
+                        !currentDraft.bluePicks[i - 1].champion"
+                      :icon-context="'pick'"
+                      @click="handleSlotClick"
+                      @clear="handleClearSlot"
+                    />
                   </div>
                 </div>
               </div>
@@ -322,42 +252,24 @@
                     :key="`red-pick-${i}`"
                     class="pick-row red"
                   >
-                    <div
-                      class="draft-creator-slot pick-slot"
-                      :data-pick-order="`R${i}`"
-                      :class="{
-                        filled: currentDraft.redPicks[i - 1].champion,
-                        'selected-for-move':
-                          draftingStore.selectedChampionSource?.side ===
-                            'red' &&
-                          draftingStore.selectedChampionSource?.type ===
-                            'picks' &&
-                          draftingStore.selectedChampionSource?.index === i - 1,
-                        'selected-for-targeting':
-                          draftingStore.selectedTargetSlot?.side === 'red' &&
-                          draftingStore.selectedTargetSlot?.type === 'picks' &&
-                          draftingStore.selectedTargetSlot?.index === i - 1 &&
-                          !currentDraft.redPicks[i - 1].champion,
-                      }"
-                      @click="handleSlotClick('red', 'picks', i - 1)"
-                      @contextmenu.prevent="
-                        handleClearSlot('red', 'picks', i - 1)
-                      "
-                      title="Click to place/move/target, Right-click to clear"
-                    >
-                      <img
-                        v-if="currentDraft.redPicks[i - 1].champion"
-                        :src="
-                          championsStore.getChampionIconUrl(
-                            currentDraft.redPicks[i - 1].champion,
-                            'pick'
-                          )
-                        "
-                        :alt="currentDraft.redPicks[i - 1].champion"
-                        draggable="false"
-                        @error="handleImageError"
-                      />
-                    </div>
+                    <DraftSlot
+                      side="red"
+                      type="picks"
+                      :index="i - 1"
+                      :champion="currentDraft.redPicks[i - 1].champion"
+                      :selected-for-move="
+                        draftingStore.selectedChampionSource?.side === 'red' &&
+                        draftingStore.selectedChampionSource?.type === 'picks' &&
+                        draftingStore.selectedChampionSource?.index === i - 1"
+                      :selected-for-targeting="
+                        draftingStore.selectedTargetSlot?.side === 'red' &&
+                        draftingStore.selectedTargetSlot?.type === 'picks' &&
+                        draftingStore.selectedTargetSlot?.index === i - 1 &&
+                        !currentDraft.redPicks[i - 1].champion"
+                      :icon-context="'pick'"
+                      @click="handleSlotClick"
+                      @clear="handleClearSlot"
+                    />
                     <span class="pick-label">R{{ i }}</span>
                   </div>
                 </div>
@@ -387,6 +299,7 @@ import { useConfirmationStore } from "@/stores/confirmation";
 import { useSettingsStore } from "@/stores/settings";
 import SeriesNavigator from "@/components/drafting/SeriesNavigator.vue";
 import SeriesManager from "@/components/drafting/SeriesManager.vue";
+import DraftSlot from "@/components/drafting/DraftSlot.vue";
 
 const workspaceStore = useWorkspaceStore();
 const draftingStore = useDraftingStore();
@@ -474,7 +387,8 @@ const handleImageError = (e) => {
 };
 
 // Slot click handler
-function handleSlotClick(side, type, index) {
+function handleSlotClick(slotData) {
+  const { side, type, index } = slotData;
   if (!currentDraft.value) return;
 
   const slotKey = `${side}${type.charAt(0).toUpperCase() + type.slice(1)}`;
@@ -570,7 +484,8 @@ function handleSlotClick(side, type, index) {
 }
 
 // Clear slot handler
-function handleClearSlot(side, type, index) {
+function handleClearSlot(slotData) {
+  const { side, type, index } = slotData;
   if (!currentDraft.value) return;
   seriesStore.updateCurrentDraftSlot(side, type, index, null);
   if (

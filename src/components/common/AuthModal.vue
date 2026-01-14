@@ -1,5 +1,5 @@
 <template>
-  <Dialog :open="isOpen" @update:open="handleOpenChange">
+  <Dialog :open="authStore.isAuthModalOpen" @update:open="handleOpenChange">
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>Admin Login</DialogTitle>
@@ -44,21 +44,12 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-
-const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  }
-})
-
-const emit = defineEmits(['update:modelValue'])
 
 const { signIn } = useAuth()
 const authStore = useAuthStore()
@@ -68,15 +59,13 @@ const password = ref('')
 const error = ref('')
 const isLoading = ref(false)
 
-const isOpen = computed(() => props.modelValue)
-
 const handleOpenChange = (open) => {
   if (!open) {
     close()
   }
 }
 
-watch(() => props.modelValue, (newVal) => {
+watch(() => authStore.isAuthModalOpen, (newVal) => {
   if (newVal) {
     email.value = ''
     password.value = ''
@@ -85,7 +74,7 @@ watch(() => props.modelValue, (newVal) => {
 })
 
 const close = () => {
-  emit('update:modelValue', false)
+  authStore.closeAuthModal()
 }
 
 const handleSignIn = async () => {
