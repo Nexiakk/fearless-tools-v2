@@ -9,32 +9,7 @@
         <div class="header-content">
           <h3 class="text-xs font-semibold text-white/90">CHAMPION TIERS</h3>
 
-          <!-- Status info in header center -->
-          <div class="header-status">
-            <!-- No Tier Selected State -->
-            <div
-              v-if="!workspaceTiersStore.selectedTier"
-              class="no-selection-notice"
-            >
-              <svg class="w-3 h-3 text-gray-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span class="text-xs text-gray-500/80 ml-1">Select a tier</span>
-            </div>
 
-            <!-- Selected Tier Info -->
-            <div
-              v-else
-              class="selected-tier-info"
-            >
-              <div class="selected-tier-display" :style="getTierPreviewStyles(workspaceTiersStore.selectedTier)">
-                <span class="text-xs font-medium text-white">
-                  {{ workspaceTiersStore.selectedTier.name }}
-                </span>
-              </div>
-              <span class="text-xs text-gray-500/80 ml-2">Active</span>
-            </div>
-          </div>
 
           <button
             @click="$emit('openTierManager')"
@@ -173,9 +148,7 @@ function getTierPreviewStyles(tier) {
 }
 
 .tier-selector-header {
-  padding: 4px 16px;
-  border-bottom: 1px solid rgba(42, 42, 42, 0.6);
-  background: linear-gradient(135deg, #1f1f1f 0%, #181818 100%);
+  padding: 1px 16px;
   position: relative;
 }
 
@@ -186,6 +159,10 @@ function getTierPreviewStyles(tier) {
   position: relative;
 }
 
+.header-content h3 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
 .header-status {
   position: absolute;
   left: 50%;
@@ -193,7 +170,7 @@ function getTierPreviewStyles(tier) {
 }
 
 .tier-selector-content {
-  padding: 2px 16px;
+  padding: 1px 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;

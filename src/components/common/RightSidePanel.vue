@@ -28,24 +28,7 @@
       
 
       
-      <!-- Tier Settings Button (Editor Mode) - Only visible to admins when in editor mode -->
-      <div
-        v-if="authStore.isAdmin && authStore.isAuthenticated && !authStore.isAnonymous && adminStore.isEditorModeActive"
-        class="expandable-button-group single-option"
-        @mouseenter="tierHovered = true"
-        @mouseleave="tierHovered = false"
-      >
-        <button
-          class="side-panel-icon-button single-option-button"
-          title="Tier Settings"
-          @click="openTierManager"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-          </svg>
-          <span class="button-text-expanded" v-if="tierHovered">Tier Settings</span>
-        </button>
-      </div>
+
 
       <!-- Admin Button (Editor Mode) - Only visible to admins -->
       <div
@@ -90,7 +73,6 @@ const authStore = useAuthStore()
 
 const resetHovered = ref(false)
 
-const tierHovered = ref(false)
 const adminHovered = ref(false)
 
 const toggleEditorMode = () => {
@@ -99,14 +81,6 @@ const toggleEditorMode = () => {
 
 const openConfirmation = (message, confirmAction, isDanger = false) => {
   confirmationStore.open({ message, confirmAction, isDanger })
-}
-
-
-
-const openTierManager = () => {
-  // Emit event to parent component to open tier manager modal
-  // This will be handled in ChampionPoolView
-  emit('openTierManager')
 }
 </script>
 

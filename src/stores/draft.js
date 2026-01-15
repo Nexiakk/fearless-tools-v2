@@ -131,43 +131,45 @@ export const useDraftStore = defineStore('draft', () => {
     return 0
   }
   
-  // Helper function to convert champion IDs to names
-  function convertChampionIdsToNames(championIds, championsStore) {
-    const names = new Set()
-    championIds.forEach(id => {
-      // Champion IDs are stored as strings in LCU drafts
-      const idNum = parseInt(id, 10)
-      const champion = championsStore.allChampions.find(c => c.id === idNum)
-      if (champion && champion.name) {
-        names.add(champion.name)
+  // Helper function to validate champion names exist in the champion store
+  function validateChampionNames(championNames, championsStore) {
+    const validNames = new Set()
+    championNames.forEach(name => {
+      // Champion names are stored as strings in LCU drafts (already converted from IDs by Python client)
+      if (name && name !== '0' && typeof name === 'string') {
+        // Validate that this champion exists in our store
+        const champion = championsStore.allChampions.find(c => c.name === name)
+        if (champion) {
+          validNames.add(name)
+        }
       }
     })
-    return names
+    return validNames
   }
   
-  // Extract picked champions from LCU drafts and convert to names
+  // Extract picked champions from LCU drafts (already as names)
   function extractLcuUnavailableChampions(lcuDrafts, championsStore) {
-    const pickedChampionIds = new Set()
-    
+    const pickedChampionNames = new Set()
+
     lcuDrafts.forEach(draft => {
-      // Extract picks from both sides
+      // Extract picks from both sides (already champion names from Python client)
       const bluePicks = draft.blueSide?.picks || []
       const redPicks = draft.redSide?.picks || []
-      
-      bluePicks.forEach(id => {
-        if (id && id !== '0') {
-          pickedChampionIds.add(String(id))
+
+      bluePicks.forEach(name => {
+        if (name && name !== '0' && typeof name === 'string') {
+          pickedChampionNames.add(name)
         }
       })
-      
-      redPicks.forEach(id => {
-        if (id && id !== '0') {
-          pickedChampionIds.add(String(id))
+
+      redPicks.forEach(name => {
+        if (name && name !== '0' && typeof name === 'string') {
+          pickedChampionNames.add(name)
         }
       })
     })
-    
-    return convertChampionIdsToNames(pickedChampionIds, championsStore)
+
+    return validateChampionNames(pickedChampionNames, championsStore)
   }
   
   // Extract banned champions from the latest LCU draft only
@@ -176,12 +178,12 @@ export const useDraftStore = defineStore('draft', () => {
     if (!lcuDrafts || lcuDrafts.length === 0) {
       return new Set()
     }
-    
+
     // Find the latest draft by parsing the ID format '{sessionId}_{number}'
     // and finding the one with the highest number
     let latestDraft = null
     let maxNumber = -1
-    
+
     lcuDrafts.forEach(draft => {
       if (draft.id) {
         // Extract number from format '{sessionId}_{number}'
@@ -195,34 +197,34 @@ export const useDraftStore = defineStore('draft', () => {
         }
       }
     })
-    
+
     // If no draft found with the expected format, use the first one (most recent by updatedAt)
     if (!latestDraft && lcuDrafts.length > 0) {
       latestDraft = lcuDrafts[0]
     }
-    
+
     if (!latestDraft) {
       return new Set()
     }
-    
-    // Extract bans from the latest draft only
-    const bannedChampionIds = new Set()
+
+    // Extract bans from the latest draft only (already champion names from Python client)
+    const bannedChampionNames = new Set()
     const blueBans = latestDraft.blueSide?.bans || []
     const redBans = latestDraft.redSide?.bans || []
-    
-    blueBans.forEach(id => {
-      if (id && id !== '0') {
-        bannedChampionIds.add(String(id))
+
+    blueBans.forEach(name => {
+      if (name && name !== '0' && typeof name === 'string') {
+        bannedChampionNames.add(name)
       }
     })
-    
-    redBans.forEach(id => {
-      if (id && id !== '0') {
-        bannedChampionIds.add(String(id))
+
+    redBans.forEach(name => {
+      if (name && name !== '0' && typeof name === 'string') {
+        bannedChampionNames.add(name)
       }
     })
-    
-    return convertChampionIdsToNames(bannedChampionIds, championsStore)
+
+    return validateChampionNames(bannedChampionNames, championsStore)
   }
   
   // Update LCU unavailable champions from drafts
@@ -236,87 +238,86 @@ export const useDraftStore = defineStore('draft', () => {
   async function debugPrintLcuDrafts() {
     const workspaceStore = useWorkspaceStore()
     const championsStore = useChampionsStore()
-    
+
     if (!workspaceStore.currentWorkspaceId) {
       console.warn('❌ No workspace selected')
       return
     }
-    
+
     console.log('🔍 Fetching LCU drafts...')
     const lcuDrafts = await fetchLcuDraftsFromFirestore(workspaceStore.currentWorkspaceId)
-    
+
     if (lcuDrafts.length === 0) {
       console.log('ℹ️ No LCU drafts found')
       return
     }
-    
+
     console.log(`\n📊 Found ${lcuDrafts.length} LCU draft(s):\n`)
-    
+
     lcuDrafts.forEach((draft, index) => {
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
       console.log(`Draft #${index + 1} (Lobby: ${draft.lobbyId || 'N/A'}, Phase: ${draft.phase})`)
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-      
-      // Helper to convert ID to name
-      const getIdToName = (id) => {
-        if (!id || id === '0') return 'Unknown'
-        const idNum = parseInt(id, 10)
-        const champion = championsStore.allChampions.find(c => c.id === idNum)
-        return champion ? champion.name : `ID:${id} (not found)`
+
+      // Helper to validate champion name exists
+      const validateName = (name) => {
+        if (!name || name === '0') return 'Unknown'
+        const champion = championsStore.allChampions.find(c => c.name === name)
+        return champion ? name : `${name} (not found)`
       }
-      
+
       // Blue side picks
       const bluePicks = draft.blueSide?.picks || []
       if (bluePicks.length > 0) {
         console.log('\n🔵 BLUE SIDE PICKS:')
-        bluePicks.forEach((id, idx) => {
-          const name = getIdToName(id)
-          console.log(`  ${idx + 1}. ${name} (ID: ${id})`)
+        bluePicks.forEach((name, idx) => {
+          const validatedName = validateName(name)
+          console.log(`  ${idx + 1}. ${validatedName}`)
         })
       }
-      
+
       // Blue side bans
       const blueBans = draft.blueSide?.bans || []
       if (blueBans.length > 0) {
         console.log('\n🚫 BLUE SIDE BANS:')
-        blueBans.forEach((id, idx) => {
-          const name = getIdToName(id)
-          console.log(`  ${idx + 1}. ${name} (ID: ${id})`)
+        blueBans.forEach((name, idx) => {
+          const validatedName = validateName(name)
+          console.log(`  ${idx + 1}. ${validatedName}`)
         })
       }
-      
+
       // Red side picks
       const redPicks = draft.redSide?.picks || []
       if (redPicks.length > 0) {
         console.log('\n🔴 RED SIDE PICKS:')
-        redPicks.forEach((id, idx) => {
-          const name = getIdToName(id)
-          console.log(`  ${idx + 1}. ${name} (ID: ${id})`)
+        redPicks.forEach((name, idx) => {
+          const validatedName = validateName(name)
+          console.log(`  ${idx + 1}. ${validatedName}`)
         })
       }
-      
+
       // Red side bans
       const redBans = draft.redSide?.bans || []
       if (redBans.length > 0) {
         console.log('\n🚫 RED SIDE BANS:')
-        redBans.forEach((id, idx) => {
-          const name = getIdToName(id)
-          console.log(`  ${idx + 1}. ${name} (ID: ${id})`)
+        redBans.forEach((name, idx) => {
+          const validatedName = validateName(name)
+          console.log(`  ${idx + 1}. ${validatedName}`)
         })
       }
-      
+
       // Summary of unavailable champions (picks only)
-      const allPickedIds = new Set([...bluePicks, ...redPicks])
+      const allPickedNames = new Set([...bluePicks, ...redPicks])
       const unavailableNames = []
-      allPickedIds.forEach(id => {
-        if (id && id !== '0') {
-          const name = getIdToName(id)
-          if (name && !name.startsWith('ID:')) {
-            unavailableNames.push(name)
+      allPickedNames.forEach(name => {
+        if (name && name !== '0') {
+          const validatedName = validateName(name)
+          if (validatedName && !validatedName.includes('not found')) {
+            unavailableNames.push(validatedName)
           }
         }
       })
-      
+
       console.log('\n📋 SUMMARY - Unavailable Champions (from picks):')
       if (unavailableNames.length > 0) {
         unavailableNames.forEach((name, idx) => {
@@ -325,26 +326,25 @@ export const useDraftStore = defineStore('draft', () => {
       } else {
         console.log('  (none)')
       }
-      
+
       console.log('') // Empty line between drafts
     })
-    
+
     // Final summary
     const allUnavailable = new Set()
     lcuDrafts.forEach(draft => {
       const bluePicks = draft.blueSide?.picks || []
       const redPicks = draft.redSide?.picks || []
-      ;[...bluePicks, ...redPicks].forEach(id => {
-        if (id && id !== '0') {
-          const idNum = parseInt(id, 10)
-          const champion = championsStore.allChampions.find(c => c.id === idNum)
-          if (champion && champion.name) {
-            allUnavailable.add(champion.name)
+      ;[...bluePicks, ...redPicks].forEach(name => {
+        if (name && name !== '0' && typeof name === 'string') {
+          const champion = championsStore.allChampions.find(c => c.name === name)
+          if (champion) {
+            allUnavailable.add(name)
           }
         }
       })
     })
-    
+
     console.log(`\n✨ TOTAL UNIQUE UNAVAILABLE CHAMPIONS: ${allUnavailable.size}`)
     console.log('   ' + Array.from(allUnavailable).sort().join(', '))
     console.log('\n')

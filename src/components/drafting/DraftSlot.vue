@@ -60,7 +60,7 @@ const emit = defineEmits(['click', 'clear'])
 const championsStore = useChampionsStore()
 
 const slotClasses = computed(() => {
-  const classes = [`${props.type}-slot`]
+  const classes = [`${props.type.slice(0, -1)}-slot`]
 
   if (props.champion) {
     classes.push('filled')
@@ -108,7 +108,7 @@ const handleImageError = (e) => {
 }
 </script>
 
-<style scoped>
+<style>
 .draft-creator-slot {
   border: 1px solid #444444;
   border-radius: 4px;
