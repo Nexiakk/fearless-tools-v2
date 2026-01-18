@@ -273,11 +273,11 @@ class ScrapingOrchestrator:
         self.logger.info("Updating role containers for optimized queries...")
 
         try:
-            # Get all champion data (simplified approach)
+            # Get all champion data
             all_champions = {}
             champions_list = get_champion_list()
 
-            for champion_key in champions_list[:10]:  # Limit for testing
+            for champion_key in champions_list:
                 data = self.storage.get_champion_data(champion_key)
                 if data:
                     all_champions[champion_key] = data
