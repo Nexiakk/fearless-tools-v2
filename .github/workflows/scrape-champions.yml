@@ -196,13 +196,13 @@ jobs:
           cat << EOF > scrape_summary.json
           {
             "timestamp": "$(date -Iseconds)",
-            "environment": "${{ env.ENVIRONMENT }}",
-            "status": "${{ env.SCRAPE_STATUS }}",
-            "exit_code": ${{ env.SCRAPE_EXIT_CODE }},
+            "environment": "${ENVIRONMENT}",
+            "status": "${SCRAPE_STATUS}",
+            "exit_code": ${SCRAPE_EXIT_CODE},
             "duration_seconds": $duration,
-            "commit_sha": "${{ github.sha }}",
-            "run_id": "${{ github.run_id }}",
-            "trigger": "${{ github.event_name }}",
+            "commit_sha": "${GITHUB_SHA}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "trigger": "${GITHUB_EVENT_NAME}",
             "note": "Fallback summary - script did not create summary file"
           }
           EOF
