@@ -5,24 +5,24 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: "Environment to deploy to"
         required: false
-        default: 'production'
+        default: "production"
         type: choice
         options:
-        - development
-        - staging
-        - production
+          - development
+          - staging
+          - production
 
   # Scheduled execution every 24 hours
   schedule:
-    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+    - cron: "0 0 * * *" # Runs daily at midnight UTC
 
   # Run on push to main branch for testing
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
-      - 'aws-scraping/**'
+      - "aws-scraping/**"
 
 env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
@@ -35,26 +35,26 @@ jobs:
       should_deploy: ${{ steps.check.outputs.should_deploy }}
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Check if deployment is needed
-      id: check
-      run: |
-        # Check if there are actual changes to aws-scraping code
-        if git diff --name-only HEAD~1 | grep -q "^aws-scraping/"; then
-          echo "should_deploy=true" >> $GITHUB_OUTPUT
-          echo "🔄 Changes detected in aws-scraping directory"
-        elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "should_deploy=true" >> $GITHUB_OUTPUT
-          echo "🔄 Manual trigger - proceeding with deployment"
-        elif [ "${{ github.event_name }}" = "schedule" ]; then
-          echo "should_deploy=true" >> $GITHUB_OUTPUT
-          echo "🔄 Scheduled run - proceeding with scraping"
-        else
-          echo "should_deploy=false" >> $GITHUB_OUTPUT
-          echo "⏭️ No changes detected, skipping deployment"
-        fi
+      - name: Check if deployment is needed
+        id: check
+        run: |
+          # Check if there are actual changes to aws-scraping code
+          if git diff --name-only HEAD~1 | grep -q "^aws-scraping/"; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "🔄 Changes detected in aws-scraping directory"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "🔄 Manual trigger - proceeding with deployment"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "🔄 Scheduled run - proceeding with scraping"
+          else
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No changes detected, skipping deployment"
+          fi
 
   # Main scraping job
   scrape:
@@ -63,162 +63,162 @@ jobs:
     if: needs.validate.outputs.should_deploy == 'true'
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('aws-scraping/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('aws-scraping/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Install dependencies
-      run: |
-        cd aws-scraping
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          cd aws-scraping
+          pip install -r requirements.txt
 
-    - name: Validate configuration
-      run: |
-        cd aws-scraping
-        python -c "
-        from scraper.config import get_config
-        config = get_config()
-        print('✅ Configuration loaded successfully')
-        print(f'Environment: {config.environment}')
-        print(f'Debug: {config.debug}')
-        "
+      - name: Validate configuration
+        run: |
+          cd aws-scraping
+          python -c "
+          from scraper.config import get_config
+          config = get_config()
+          print('✅ Configuration loaded successfully')
+          print(f'Environment: {config.environment}')
+          print(f'Debug: {config.debug}')
+          "
 
-    - name: Run tests
-      run: |
-        cd aws-scraping
-        # Install test dependencies
-        pip install pytest
-        # Run tests if they exist
-        if [ -d "tests" ]; then
-          python -m pytest tests/ -v --tb=short
-        else
-          echo "⚠️ No tests directory found, skipping tests"
-        fi
+      - name: Run tests
+        run: |
+          cd aws-scraping
+          # Install test dependencies
+          pip install pytest
+          # Run tests if they exist
+          if [ -d "tests" ]; then
+            python -m pytest tests/ -v --tb=short
+          else
+            echo "⚠️ No tests directory found, skipping tests"
+          fi
 
-    - name: Run champion scraper
-      id: scrape
-      timeout-minutes: 20
-      env:
-        FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-        ENVIRONMENT: ${{ env.ENVIRONMENT }}
-        DEBUG: ${{ env.ENVIRONMENT == 'development' }}
-      run: |
-        cd aws-scraping
+      - name: Run champion scraper
+        id: scrape
+        timeout-minutes: 20
+        env:
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          DEBUG: ${{ env.ENVIRONMENT == 'development' }}
+        run: |
+          cd aws-scraping
 
-        # Set start time for monitoring
-        echo "SCRAPE_START_TIME=$(date +%s)" >> $GITHUB_ENV
+          # Set start time for monitoring
+          echo "SCRAPE_START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-        # Show initial progress
-        echo "🚀 Starting champion scraper..."
-        echo "⏰ Timeout: 20 minutes"
+          # Show initial progress
+          echo "🚀 Starting champion scraper..."
+          echo "⏰ Timeout: 20 minutes"
 
-        # Run with progress monitoring
-        (
-          # Show progress every 30 seconds
-          for i in {1..40}; do
-            if [ -f "scraper_output.log" ]; then
-              lines=$(wc -l < scraper_output.log 2>/dev/null || echo "0")
-              echo "📊 Progress: $lines lines logged (checkpoint $i/40)" >&2
-            fi
-            sleep 30
-          done
-        ) &
-        PROGRESS_PID=$!
+          # Run with progress monitoring
+          (
+            # Show progress every 30 seconds
+            for i in {1..40}; do
+              if [ -f "scraper_output.log" ]; then
+                lines=$(wc -l < scraper_output.log 2>/dev/null || echo "0")
+                echo "📊 Progress: $lines lines logged (checkpoint $i/40)" >&2
+              fi
+              sleep 30
+            done
+          ) &
+          PROGRESS_PID=$!
 
-        # Run the scraper with timeout
-        timeout 15m python lambda_function.py > scraper_output.log 2>&1 &
-        SCRAPER_PID=$!
-        wait $SCRAPER_PID
-        EXIT_CODE=$?
+          # Run the scraper with timeout
+          timeout 20m python lambda_function.py > scraper_output.log 2>&1 &
+          SCRAPER_PID=$!
+          wait $SCRAPER_PID
+          EXIT_CODE=$?
 
-        # Kill progress monitor
-        kill $PROGRESS_PID 2>/dev/null || true
+          # Kill progress monitor
+          kill $PROGRESS_PID 2>/dev/null || true
 
-        # Report results
-        if [ $EXIT_CODE -eq 0 ]; then
-          echo "SCRAPE_EXIT_CODE=0" >> $GITHUB_ENV
-          echo "✅ Scraping script completed successfully"
-        elif [ $EXIT_CODE -eq 124 ]; then
-          echo "SCRAPE_EXIT_CODE=124" >> $GITHUB_ENV
-          echo "⏰ Scraping script timed out after 15 minutes"
-        else
-          echo "SCRAPE_EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
-          echo "⚠️ Scraping script exited with code $EXIT_CODE"
-        fi
+          # Report results
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "SCRAPE_EXIT_CODE=0" >> $GITHUB_ENV
+            echo "✅ Scraping script completed successfully"
+          elif [ $EXIT_CODE -eq 124 ]; then
+            echo "SCRAPE_EXIT_CODE=124" >> $GITHUB_ENV
+            echo "⏰ Scraping script timed out after 20 minutes"
+          else
+            echo "SCRAPE_EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
+            echo "⚠️ Scraping script exited with code $EXIT_CODE"
+          fi
 
-        # Show final log stats
-        if [ -f "scraper_output.log" ]; then
-          lines=$(wc -l < scraper_output.log)
-          size=$(du -h scraper_output.log | cut -f1)
-          echo "📄 Log file: $lines lines, $size"
-          # Show last 10 lines of log
-          echo "📋 Last 10 lines of log:"
-          tail -10 scraper_output.log
-        fi
+          # Show final log stats
+          if [ -f "scraper_output.log" ]; then
+            lines=$(wc -l < scraper_output.log)
+            size=$(du -h scraper_output.log | cut -f1)
+            echo "📄 Log file: $lines lines, $size"
+            # Show last 10 lines of log
+            echo "📋 Last 10 lines of log:"
+            tail -10 scraper_output.log
+          fi
 
-        # Check if summary was created by the script
-        if [ -f "scrape_summary.json" ]; then
-          echo "SCRAPE_STATUS=success" >> $GITHUB_ENV
-          echo "✅ Summary file created by script"
-        else
-          echo "SCRAPE_STATUS=completed" >> $GITHUB_ENV
-          echo "⚠️ No summary file - script may have issues"
-        fi
-      continue-on-error: true
+          # Check if summary was created by the script
+          if [ -f "scrape_summary.json" ]; then
+            echo "SCRAPE_STATUS=success" >> $GITHUB_ENV
+            echo "✅ Summary file created by script"
+          else
+            echo "SCRAPE_STATUS=completed" >> $GITHUB_ENV
+            echo "⚠️ No summary file - script may have issues"
+          fi
+        continue-on-error: true
 
-    - name: Generate deployment summary
-      id: summary
-      run: |
-        # Calculate duration
-        end_time=$(date +%s)
-        start_time=${{ env.SCRAPE_START_TIME }}
-        duration=$((end_time - start_time))
+      - name: Generate deployment summary
+        id: summary
+        run: |
+          # Calculate duration
+          end_time=$(date +%s)
+          start_time=${{ env.SCRAPE_START_TIME }}
+          duration=$((end_time - start_time))
 
-        # Check if script created summary
-        if [ -f "aws-scraping/scrape_summary.json" ]; then
-          # Use the summary created by the script
-          cp aws-scraping/scrape_summary.json scrape_summary.json
-          echo "Using summary created by script"
-        else
-          # Create fallback summary
-          echo '{
-            "timestamp": "'$(date -Iseconds)'",
-            "environment": "'${ENVIRONMENT}'",
-            "status": "'${SCRAPE_STATUS}'",
-            "exit_code": '${SCRAPE_EXIT_CODE}',
-            "duration_seconds": '$duration',
-            "commit_sha": "'${GITHUB_SHA}'",
-            "run_id": "'${GITHUB_RUN_ID}'",
-            "trigger": "'${GITHUB_EVENT_NAME}'",
-            "note": "Fallback summary - script did not create summary file"
-          }' > scrape_summary.json
-          echo "Created fallback summary"
-        fi
+          # Check if script created summary
+          if [ -f "aws-scraping/scrape_summary.json" ]; then
+            # Use the summary created by the script
+            cp aws-scraping/scrape_summary.json scrape_summary.json
+            echo "Using summary created by script"
+          else
+            # Create fallback summary
+            echo '{
+              "timestamp": "'$(date -Iseconds)'",
+              "environment": "'${ENVIRONMENT}'",
+              "status": "'${SCRAPE_STATUS}'",
+              "exit_code": '${SCRAPE_EXIT_CODE}',
+              "duration_seconds": '$duration',
+              "commit_sha": "'${GITHUB_SHA}'",
+              "run_id": "'${GITHUB_RUN_ID}'",
+              "trigger": "'${GITHUB_EVENT_NAME}'",
+              "note": "Fallback summary - script did not create summary file"
+            }' > scrape_summary.json
+            echo "Created fallback summary"
+          fi
 
-        echo "summary=$(cat scrape_summary.json | jq -c .)" >> $GITHUB_OUTPUT
+          echo "summary=$(cat scrape_summary.json | jq -c .)" >> $GITHUB_OUTPUT
 
-    - name: Upload logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: scrape-logs-${{ github.run_id }}
-        path: |
-          aws-scraping/scraper.log
-          aws-scraping/scraper_output.log
-          scrape_summary.json
-        retention-days: 7
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-logs-${{ github.run_id }}
+          path: |
+            aws-scraping/scraper.log
+            aws-scraping/scraper_output.log
+            scrape_summary.json
+          retention-days: 7
 
   # Notification job
   notify:
@@ -227,51 +227,51 @@ jobs:
     if: always() && (needs.scrape.result == 'success' || needs.scrape.result == 'failure')
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Download logs
-      uses: actions/download-artifact@v4
-      with:
-        name: scrape-logs-${{ github.run_id }}
+      - name: Download logs
+        uses: actions/download-artifact@v4
+        with:
+          name: scrape-logs-${{ github.run_id }}
 
-    - name: Send notification
-      env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      run: |
-        # Read summary
-        if [ -f "scrape_summary.json" ]; then
-          summary=$(cat scrape_summary.json)
-          status=$(echo $summary | jq -r '.status')
-          duration=$(echo $summary | jq -r '.duration_seconds')
-          environment=$(echo $summary | jq -r '.environment')
-        else
-          status="unknown"
-          duration="unknown"
-          environment="${{ env.ENVIRONMENT }}"
-        fi
+      - name: Send notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          # Read summary
+          if [ -f "scrape_summary.json" ]; then
+            summary=$(cat scrape_summary.json)
+            status=$(echo $summary | jq -r '.status')
+            duration=$(echo $summary | jq -r '.duration_seconds')
+            environment=$(echo $summary | jq -r '.environment')
+          else
+            status="unknown"
+            duration="unknown"
+            environment="${{ env.ENVIRONMENT }}"
+          fi
 
-        # Create notification message
-        if [ "$status" = "success" ]; then
-          message="✅ Champion data scraping completed successfully\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        else
-          message="❌ Champion data scraping failed\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n• Check logs for details"
-        fi
+          # Create notification message
+          if [ "$status" = "success" ]; then
+            message="✅ Champion data scraping completed successfully\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          else
+            message="❌ Champion data scraping failed\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n• Check logs for details"
+          fi
 
-        # Send to Slack if webhook exists
-        if [ -n "$SLACK_WEBHOOK" ]; then
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"$message\"}" \
-            $SLACK_WEBHOOK
-        fi
+          # Send to Slack if webhook exists
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"$message\"}" \
+              $SLACK_WEBHOOK
+          fi
 
-        # Send to Discord if webhook exists
-        if [ -n "$DISCORD_WEBHOOK" ]; then
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"content\":\"$message\"}" \
-            $DISCORD_WEBHOOK
-        fi
+          # Send to Discord if webhook exists
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"content\":\"$message\"}" \
+              $DISCORD_WEBHOOK
+          fi
 
   # Health check job (runs after successful scraping)
   health_check:
@@ -280,17 +280,17 @@ jobs:
     if: needs.scrape.result == 'success'
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Run health checks
-      run: |
-        echo "🏥 Running post-deployment health checks..."
+      - name: Run health checks
+        run: |
+          echo "🏥 Running post-deployment health checks..."
 
-        # Check if Firebase data is accessible (basic connectivity test)
-        # This would be expanded based on your specific health check needs
+          # Check if Firebase data is accessible (basic connectivity test)
+          # This would be expanded based on your specific health check needs
 
-        echo "✅ Health checks completed"
+          echo "✅ Health checks completed"
 
   # Rollback job (manual trigger only)
   rollback:
@@ -298,13 +298,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Rollback procedure
-      run: |
-        echo "🔄 Performing rollback procedure..."
-        # Implement rollback logic here
-        # This could involve restoring from backup or previous deployment
+      - name: Rollback procedure
+        run: |
+          echo "🔄 Performing rollback procedure..."
+          # Implement rollback logic here
+          # This could involve restoring from backup or previous deployment
 
-        echo "✅ Rollback completed"
+          echo "✅ Rollback completed"
