@@ -109,6 +109,7 @@ jobs:
 
     - name: Run champion scraper
       id: scrape
+      timeout-minutes: 20
       env:
         FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
         ENVIRONMENT: ${{ env.ENVIRONMENT }}
@@ -119,13 +120,52 @@ jobs:
         # Set start time for monitoring
         echo "SCRAPE_START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-        # Run the scraper - always succeed even if Firebase fails
-        if python lambda_function.py > scraper_output.log 2>&1; then
+        # Show initial progress
+        echo "🚀 Starting champion scraper..."
+        echo "⏰ Timeout: 20 minutes"
+
+        # Run with progress monitoring
+        (
+          # Show progress every 30 seconds
+          for i in {1..40}; do
+            if [ -f "scraper_output.log" ]; then
+              lines=$(wc -l < scraper_output.log 2>/dev/null || echo "0")
+              echo "📊 Progress: $lines lines logged (checkpoint $i/40)" >&2
+            fi
+            sleep 30
+          done
+        ) &
+        PROGRESS_PID=$!
+
+        # Run the scraper with timeout
+        timeout 15m python lambda_function.py > scraper_output.log 2>&1 &
+        SCRAPER_PID=$!
+        wait $SCRAPER_PID
+        EXIT_CODE=$?
+
+        # Kill progress monitor
+        kill $PROGRESS_PID 2>/dev/null || true
+
+        # Report results
+        if [ $EXIT_CODE -eq 0 ]; then
           echo "SCRAPE_EXIT_CODE=0" >> $GITHUB_ENV
-          echo "✅ Scraping script completed"
+          echo "✅ Scraping script completed successfully"
+        elif [ $EXIT_CODE -eq 124 ]; then
+          echo "SCRAPE_EXIT_CODE=124" >> $GITHUB_ENV
+          echo "⏰ Scraping script timed out after 15 minutes"
         else
-          echo "SCRAPE_EXIT_CODE=$?" >> $GITHUB_ENV
-          echo "⚠️ Scraping script exited with code ${{ env.SCRAPE_EXIT_CODE }}"
+          echo "SCRAPE_EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
+          echo "⚠️ Scraping script exited with code $EXIT_CODE"
+        fi
+
+        # Show final log stats
+        if [ -f "scraper_output.log" ]; then
+          lines=$(wc -l < scraper_output.log)
+          size=$(du -h scraper_output.log | cut -f1)
+          echo "📄 Log file: $lines lines, $size"
+          # Show last 10 lines of log
+          echo "📋 Last 10 lines of log:"
+          tail -10 scraper_output.log
         fi
 
         # Check if summary was created by the script
