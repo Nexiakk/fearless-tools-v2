@@ -2,6 +2,7 @@ import os
 import json
 import time
 import requests
+from bs4 import BeautifulSoup
 from .lolalytics_build_scraper import LolalyticsBuildScraper
 from .wiki_scraper import scrape_champion_abilities
 from datetime import datetime
@@ -181,10 +182,22 @@ def normalize_patch_for_lolalytics(patch_version):
     return patch_version
 
 def parse_wiki_date(date_text):
-    """Parse wiki date format: 'January 8\n2026' -> datetime"""
+    """Parse wiki date format from various possible formats"""
     try:
-        # Handle the <br> tag creating newlines
+        import re
+
+        # Remove link references like [1], [2], etc.
+        date_text = re.sub(r'\s*\[\d+\]\s*$', '', date_text).strip()
+
+        # Handle the <br> tag creating newlines (if present)
         date_text = date_text.replace('\n', ' ').strip()
+
+        # Handle cases where day and year are concatenated (e.g., "January 82026" -> "January 8 2026")
+        # Look for pattern: Month DayYear
+        date_match = re.search(r'^([A-Za-z]+)\s+(\d+)(20\d{2})$', date_text)
+        if date_match:
+            month, day, year = date_match.groups()
+            date_text = f"{month} {day} {year}"
 
         # Parse format like "January 8 2026"
         return datetime.strptime(date_text, '%B %d %Y')
