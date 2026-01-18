@@ -141,6 +141,10 @@ def encode_champion_name_for_lolalytics(display_name):
     # Handle roman numerals (IV -> iv, etc.)
     # But keep them as is since they're already lowercase
 
+    # Hard-coded edge case: Monkey King is "wukong" on lolalytics
+    if encoded == 'monkeyking':
+        return 'wukong'
+
     return encoded
 
 def get_champion_list():
@@ -176,114 +180,140 @@ def normalize_patch_for_lolalytics(patch_version):
         return f"{parts[0]}.{parts[1]}"
     return patch_version
 
-def check_patch_viability(patch_version):
+def parse_wiki_date(date_text):
+    """Parse wiki date format: 'January 8\n2026' -> datetime"""
+    try:
+        # Handle the <br> tag creating newlines
+        date_text = date_text.replace('\n', ' ').strip()
+
+        # Parse format like "January 8 2026"
+        return datetime.strptime(date_text, '%B %d %Y')
+    except ValueError:
+        print(f"Could not parse date: {date_text}")
+        return None
+
+def wiki_to_riot_patch(wiki_version):
+    """Convert Wiki patch format V26.01 to Riot format 16.1"""
+    if not wiki_version.startswith('V'):
+        return None
+
+    try:
+        version = wiki_version[1:]  # Remove 'V' -> "26.01"
+        year_digit, patch_num = version.split('.')
+
+        # Convert year: 26 -> 16 (1 + last digit of year)
+        riot_major = f"1{year_digit[-1]}"  # 6 -> "16"
+
+        # Keep patch number as is
+        return f"{riot_major}.{int(patch_num)}"  # "16.1"
+
+    except (ValueError, IndexError):
+        print(f"Could not convert wiki version: {wiki_version}")
+        return None
+
+def scrape_wiki_patches(current_year):
+    """Scrape League Wiki annual cycle page for patches with release dates"""
+    url = f"https://wiki.leagueoflegends.com/en-us/Patch/{current_year}_Annual_Cycle"
+
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        patches = []
+
+        # Find the patch table
+        table = soup.find('table')
+        if not table:
+            return []
+
+        rows = table.find_all('tr')[1:]  # Skip header row
+
+        for row in rows:
+            cells = row.find_all(['th', 'td'])
+            if len(cells) < 2:
+                continue
+
+            # Extract date from first cell (th)
+            date_cell = cells[0]
+            date_text = date_cell.get_text().strip()
+
+            # Parse date format: "January 8\n2026" -> datetime
+            release_date = parse_wiki_date(date_text)
+            if not release_date:
+                continue
+
+            # Extract patch from second cell (td)
+            patch_cell = cells[1]
+            patch_link = patch_cell.find('a')
+            if patch_link:
+                patch_title = patch_link.get('title') or patch_link.get_text().strip()
+                patches.append({
+                    'title': patch_title,  # e.g., "V26.01"
+                    'release_date': release_date
+                })
+
+        return patches
+
+    except Exception as e:
+        print(f"Error scraping wiki patches: {e}")
+        return []
+
+def check_patch_viability(current_patch_full):
     """
-    Check if current patch has sufficient sample size by scraping Lolalytics tierlist.
+    Check if current patch has been released long enough using Wiki data.
     Returns tuple: (use_current_patch, target_patch, metrics)
     """
     try:
-        print(f"🔍 Checking patch {patch_version} viability...")
+        print(f"🔍 Checking patch {current_patch_full} viability using Wiki data...")
 
-        # Convert patch format for Lolalytics (remove .1 suffix)
-        lolalytics_patch = normalize_patch_for_lolalytics(patch_version)
+        # Normalize patch format (16.1.1 -> 16.1)
+        current_patch_short = normalize_patch_for_lolalytics(current_patch_full)
+        current_year = datetime.now().year
 
-        # Scrape Lolalytics tierlist for this patch
-        url = f"https://lolalytics.com/pl/lol/tierlist/?patch={lolalytics_patch}&tier=diamond_plus"
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
+        # Scrape wiki patches
+        wiki_patches = scrape_wiki_patches(current_year)
 
-        # Parse HTML to extract champion data
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(response.text, 'html.parser')
+        if not wiki_patches:
+            print("⚠️ No wiki patches found, falling back to previous patch")
+            return False, get_previous_patch(current_patch_full), {}
 
-        champions_data = []
+        # Find matching patch
+        for wiki_patch in wiki_patches:
+            riot_version = wiki_to_riot_patch(wiki_patch['title'])
 
-        # Find champion rows in the tierlist table
-        champion_rows = soup.find_all('tr', class_='ChampionRow')
+            if riot_version == current_patch_short:
+                days_since_release = (datetime.now() - wiki_patch['release_date']).days
 
-        for row in champion_rows:
-            try:
-                # Extract champion name
-                name_elem = row.find('a', class_='ChampionName')
-                if not name_elem:
-                    continue
-                champion_name = name_elem.get_text().strip()
+                print(f"✅ Found matching patch {wiki_patch['title']} -> {riot_version}")
+                print(f"   Released: {wiki_patch['release_date'].strftime('%Y-%m-%d')}")
+                print(f"   Days since release: {days_since_release}")
 
-                # Extract games count (usually in a span with specific class)
-                games_elem = row.find('span', string=lambda text: text and 'games' in text.lower())
-                if games_elem:
-                    games_text = games_elem.get_text().strip()
-                    # Parse number (e.g., "16,947 games" -> 16947)
-                    games_count = int(games_text.replace(',', '').replace(' games', ''))
+                # Use current patch if released more than 4 days ago
+                if days_since_release >= 4:
+                    print("✅ Patch is viable for scraping")
+                    return True, current_patch_full, {
+                        'days_since_release': days_since_release,
+                        'release_date': wiki_patch['release_date'],
+                        'wiki_title': wiki_patch['title']
+                    }
                 else:
-                    # Try alternative selectors for games count
-                    stats_div = row.find('div', class_='ChampionStats')
-                    if stats_div:
-                        games_text = stats_div.get_text()
-                        # Look for number pattern
-                        import re
-                        match = re.search(r'(\d{1,3}(?:,\d{3})*)', games_text)
-                        if match:
-                            games_count = int(match.group(1).replace(',', ''))
-                        else:
-                            continue
-                    else:
-                        continue
+                    print(f"⚠️ Patch too new ({days_since_release} days), falling back")
+                    return False, get_previous_patch(current_patch_full), {
+                        'days_since_release': days_since_release,
+                        'release_date': wiki_patch['release_date'],
+                        'reason': 'patch_too_new'
+                    }
 
-                champions_data.append({
-                    'name': champion_name,
-                    'games': games_count
-                })
-
-            except Exception as e:
-                print(f"⚠️ Error parsing champion row: {e}")
-                continue
-
-        if not champions_data:
-            print("⚠️ No champion data found in tierlist")
-            return False, get_previous_patch(patch_version), {}
-
-        # Sort by games descending and calculate metrics
-        champions_data.sort(key=lambda x: x['games'], reverse=True)
-
-        # Calculate top 10 total games
-        top_10_total = sum(champ['games'] for champ in champions_data[:10])
-
-        # Calculate average games per champion
-        avg_games = sum(champ['games'] for champ in champions_data) / len(champions_data)
-
-        metrics = {
-            'champion_count': len(champions_data),
-            'top_10_total_games': top_10_total,
-            'avg_games_per_champion': avg_games,
-            'top_10_champions': champions_data[:10]
-        }
-
-        # Check thresholds
-        top_10_threshold = 200000  # 200k
-        avg_threshold = 5000       # 5k
-
-        viable = (top_10_total >= top_10_threshold and avg_games >= avg_threshold)
-
-        target_patch = patch_version if viable else get_previous_patch(patch_version)
-
-        print("📊 Patch viability metrics:")
-        print(f"  - Champions analyzed: {len(champions_data)}")
-        print(f"  - Top 10 total games: {top_10_total:,} (threshold: {top_10_threshold:,})")
-        print(f"  - Average games/champion: {avg_games:.0f} (threshold: {avg_threshold})")
-        print(f"  - Result: {'✅ VIABLE' if viable else '❌ FALLBACK'}")
-
-        if not viable:
-            print(f"  - Fallback to patch: {target_patch}")
-
-        return viable, target_patch, metrics
+        # Patch not found on wiki
+        print(f"⚠️ Patch {current_patch_short} not found on Wiki, falling back")
+        return False, get_previous_patch(current_patch_full), {'reason': 'patch_not_on_wiki'}
 
     except Exception as e:
         print(f"❌ Error checking patch viability: {e}")
         import traceback
         traceback.print_exc()
-        # On error, fall back to previous patch
-        return False, get_previous_patch(patch_version), {}
+        return False, get_previous_patch(current_patch_full), {'error': str(e)}
 
 def scrape_and_store_data():
     """Main function to scrape data and store in Firebase"""
