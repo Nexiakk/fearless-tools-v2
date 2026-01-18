@@ -29,9 +29,19 @@ export const useDraftStore = defineStore('draft', () => {
   
   // Getters
   const unavailableChampions = computed(() => {
+    const championsStore = useChampionsStore()
+
     // Combine manually selected and LCU unavailable champions
-    const combined = new Set(draftSeries.value)
-    lcuUnavailableChampions.value.forEach(champ => combined.add(champ))
+    const combined = new Set(draftSeries.value) // draftSeries contains display names
+
+    // Convert LCU unavailable champions (internal IDs) to display names
+    lcuUnavailableChampions.value.forEach(internalId => {
+      const champion = championsStore.allChampions.find(c => c.id === internalId)
+      if (champion) {
+        combined.add(champion.name)
+      }
+    })
+
     return combined
   })
   
@@ -137,8 +147,8 @@ export const useDraftStore = defineStore('draft', () => {
     championNames.forEach(name => {
       // Champion names are stored as strings in LCU drafts (already converted from IDs by Python client)
       if (name && name !== '0' && typeof name === 'string') {
-        // Validate that this champion exists in our store
-        const champion = championsStore.allChampions.find(c => c.name === name)
+        // Validate that this champion exists in our store - use internal Riot ID (c.id) since LCU client sends internal names
+        const champion = championsStore.allChampions.find(c => c.id === name)
         if (champion) {
           validNames.add(name)
         }
@@ -204,6 +214,17 @@ export const useDraftStore = defineStore('draft', () => {
     }
 
     if (!latestDraft) {
+      return new Set()
+    }
+
+    // Check if all picks are done (10 picks total) - if so, don't show bans in pool
+    const bluePicks = latestDraft.blueSide?.picks || []
+    const redPicks = latestDraft.redSide?.picks || []
+    const totalPicks = bluePicks.filter(id => id && id !== '0').length +
+                       redPicks.filter(id => id && id !== '0').length
+
+    if (totalPicks >= 10) {
+      // All picks are done - clear bans from pool view
       return new Set()
     }
 
@@ -337,7 +358,7 @@ export const useDraftStore = defineStore('draft', () => {
       const redPicks = draft.redSide?.picks || []
       ;[...bluePicks, ...redPicks].forEach(name => {
         if (name && name !== '0' && typeof name === 'string') {
-          const champion = championsStore.allChampions.find(c => c.name === name)
+          const champion = championsStore.allChampions.find(c => c.id === name)
           if (champion) {
             allUnavailable.add(name)
           }
@@ -356,16 +377,34 @@ export const useDraftStore = defineStore('draft', () => {
   }
   
   function isLcuUnavailable(championName) {
-    return lcuUnavailableChampions.value.has(championName)
+    // Check if this display name corresponds to an unavailable internal ID
+    const championsStore = useChampionsStore()
+    const champion = championsStore.allChampions.find(c => c.name === championName)
+    return champion && lcuUnavailableChampions.value.has(champion.id)
   }
   
   function isBannedChampion(championName) {
-    // Check both manually banned and LCU banned champions
-    return bannedChampions.value.has(championName) || lcuBannedChampions.value.has(championName)
+    // Check manually banned champions (stored as display names)
+    if (bannedChampions.value.has(championName)) {
+      return true
+    }
+
+    // Check LCU banned champions (stored as internal names)
+    // Find the champion by display name and check if its internal ID is banned
+    const championsStore = useChampionsStore()
+    const champion = championsStore.allChampions.find(c => c.name === championName)
+    if (champion && lcuBannedChampions.value.has(champion.id)) {
+      return true
+    }
+
+    return false
   }
   
   function isLcuBanned(championName) {
-    return lcuBannedChampions.value.has(championName)
+    // Check if this display name corresponds to a banned internal ID
+    const championsStore = useChampionsStore()
+    const champion = championsStore.allChampions.find(c => c.name === championName)
+    return champion && lcuBannedChampions.value.has(champion.id)
   }
   
   function toggleBan(championName) {

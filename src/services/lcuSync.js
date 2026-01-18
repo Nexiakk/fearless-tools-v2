@@ -284,24 +284,23 @@ class LcuSyncService {
 
     if (!latestDraft) return
 
-    // Check if draft is complete (10 bans + 10 picks)
-    const blueBans = latestDraft.blueSide?.bans || []
-    const redBans = latestDraft.redSide?.bans || []
+    // Check if all picks are done (10 picks total)
     const bluePicks = latestDraft.blueSide?.picks || []
     const redPicks = latestDraft.redSide?.picks || []
 
-    const totalBans = blueBans.filter(id => id && id !== '0').length +
-                      redBans.filter(id => id && id !== '0').length
     const totalPicks = bluePicks.filter(id => id && id !== '0').length +
                        redPicks.filter(id => id && id !== '0').length
 
-    const isComplete = totalBans >= 10 && totalPicks >= 10
+    const allPicksDone = totalPicks >= 10
 
-    if (isComplete) {
-      console.log('[LCU Sync] Draft completed! Triggering ban cleanup')
-      this.triggerBanCleanup(latestDraft)
+    if (allPicksDone) {
+      console.log('[LCU Sync] All picks completed! Banned champions will be cleared from pool')
+      // Note: Ban clearing is now handled automatically by extractLcuBannedChampions() in draft store
+      // when it detects 10+ picks in the latest draft
     }
   }
+
+
 
   triggerBanCleanup(completedDraft) {
     // Extract all banned champion IDs from the completed draft
