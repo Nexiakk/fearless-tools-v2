@@ -1,177 +1,32 @@
+"""
+Refactored main scraper module.
+Uses shared utilities and modern Python practices.
+"""
+
 import os
-import json
-import time
-import requests
-from bs4 import BeautifulSoup
-from .lolalytics_build_scraper import LolalyticsBuildScraper
-from .wiki_scraper import scrape_champion_abilities
+from typing import Dict, List, Optional
 from datetime import datetime
 
-# Firebase will be initialized only when needed
-firebase_initialized = False
-db = None
+# Import refactored utilities
+from .utils import (
+    RiotAPIClient, ChampionNameMapper, PatchManager,
+    get_display_name, get_champion_id, get_champion_image_name,
+    get_champion_list, normalize_patch_for_lolalytics,
+    encode_champion_name_for_wiki, encode_champion_name_for_lolalytics
+)
+from .firebase_utils import FirebaseManager, FirebaseConfig
+from .logging_utils import get_logger, log_scraping_start, log_scraping_success, log_scraping_error
+from .config import get_config
+from .models import ChampionData, ScrapingResult
+from .lolalytics_build_scraper import LolalyticsBuildScraper
+from .wiki_scraper import scrape_champion_abilities
 
-def init_firebase():
-    """Initialize Firebase if not already done"""
-    global firebase_initialized, db
+# Legacy import for backward compatibility
+from .main_legacy import check_patch_viability
 
-    if firebase_initialized and db:
-        return True
-
-    try:
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-
-        if not firebase_admin._apps:
-            # For GitHub Actions / serverless environments, credentials from environment variable
-            cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_KEY')
-            if cred_json:
-                cred = credentials.Certificate(json.loads(cred_json))
-            else:
-                # Fallback for local testing - use firebase-key.json in current directory
-                cred_path = 'firebase-key.json'
-                if os.path.exists(cred_path):
-                    cred = credentials.Certificate(cred_path)
-                else:
-                    # Try parent directory
-                    cred_path = os.path.join(os.path.dirname(__file__), '..', '..', 'firebase-key.json')
-                    if os.path.exists(cred_path):
-                        cred = credentials.Certificate(cred_path)
-                    else:
-                        print("❌ No Firebase credentials found")
-                        return False
-
-            firebase_admin.initialize_app(cred)
-
-        db = firestore.client()
-        firebase_initialized = True
-        return True
-
-    except Exception as e:
-        print(f"❌ Firebase initialization failed: {e}")
-        return False
-
-# Simple in-memory cache for Riot API data
-riot_cache = {}
-
-# Champion name mapping cache
-champion_name_cache = {}
-champion_data_cache = {}
-
-def get_champion_data_mapping():
-    """Get comprehensive champion data mapping from Riot API"""
-    global champion_data_cache
-
-    # Return cached mapping if available
-    if champion_data_cache:
-        return champion_data_cache
-
-    try:
-        # Get latest patch version
-        current_patch = get_current_patch()
-
-        # Fetch champion data from Riot API
-        champions_url = f"https://ddragon.leagueoflegends.com/cdn/{current_patch}/data/en_US/champion.json"
-        response = requests.get(champions_url, timeout=10)
-        response.raise_for_status()
-        champions_data = response.json()
-
-        # Build comprehensive mapping: internal_key -> full data
-        mapping = {}
-        for key, champ_data in champions_data['data'].items():
-            mapping[key] = {
-                'id': int(champ_data['key']),  # Numeric champion ID
-                'imageName': key,              # Internal string key for images
-                'name': champ_data['name'],    # Display name
-                'internalKey': key             # Internal key for reference
-            }
-
-        # Cache the mapping
-        champion_data_cache.update(mapping)
-        return mapping
-
-    except Exception as e:
-        print(f"Error fetching champion data mapping: {e}")
-        return {}
-
-def get_display_name(internal_key):
-    """Convert Riot internal champion key to display name"""
-    mapping = get_champion_data_mapping()
-    return mapping.get(internal_key, {}).get('name', internal_key)
-
-def get_champion_id(internal_key):
-    """Get numeric champion ID from internal key"""
-    mapping = get_champion_data_mapping()
-    return mapping.get(internal_key, {}).get('id')
-
-def get_champion_image_name(internal_key):
-    """Get image name (internal key) for a champion"""
-    mapping = get_champion_data_mapping()
-    return mapping.get(internal_key, {}).get('imageName', internal_key)
-
-def get_simplified_key(internal_key):
-    """Generate simplified database key from internal key"""
-    display_name = get_display_name(internal_key)
-    return encode_champion_name_for_lolalytics(display_name)
-
-def encode_champion_name_for_wiki(display_name):
-    """Encode champion name for League Wiki URL format"""
-    # First replace spaces with underscores
-    encoded = display_name.replace(' ', '_')
-
-    # Then URL encode any remaining special characters (like apostrophes)
-    # Use quote() but allow underscores to remain
-    from urllib.parse import quote
-    encoded = quote(encoded, safe='_')
-
-    return encoded
-
-def encode_champion_name_for_lolalytics(display_name):
-    """Encode champion name for Lolalytics URL format (simplified, no special chars/spaces)"""
-    import re
-
-    # Convert to lowercase
-    encoded = display_name.lower()
-
-    # Remove apostrophes, quotes, and other special characters
-    encoded = re.sub(r"['\"]", '', encoded)
-
-    # Replace spaces with nothing (remove spaces)
-    encoded = encoded.replace(' ', '')
-
-    # Handle roman numerals (IV -> iv, etc.)
-    # But keep them as is since they're already lowercase
-
-    # Hard-coded edge case: Monkey King is "wukong" on lolalytics
-    if encoded == 'monkeyking':
-        return 'wukong'
-
-    return encoded
-
-def get_champion_list():
-    """Get list of all champions from Riot Data Dragon API"""
-    try:
-        # Get latest version
-        current_patch = get_current_patch()
-
-        # Get champion data
-        champions_url = f"https://ddragon.leagueoflegends.com/cdn/{current_patch}/data/en_US/champion.json"
-        champions_response = requests.get(champions_url, timeout=10)
-        champions_response.raise_for_status()
-        champions_data = champions_response.json()
-
-        # Return sorted list of champion names
-        champion_names = list(champions_data['data'].keys())
-        champion_names.sort()
-        return champion_names
-
-    except Exception as e:
-        print(f"Error fetching champion list from Riot API: {e}")
-        # Fallback to a smaller static list for testing
-        return [
-            'Aatrox', 'Ahri', 'Akali', 'Ashe', 'Jinx', 'Lux', 'Miss Fortune', 'Vayne', 'Yuumi',
-            'Yasuo', 'Zed', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus'
-        ]
+# Global instances
+_firebase_manager: Optional[FirebaseManager] = None
+_logger = get_logger(__name__)
 
 def normalize_patch_for_lolalytics(patch_version):
     """Convert Riot API patch format (x.y.z) to Lolalytics format (x.y)"""

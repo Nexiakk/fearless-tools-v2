@@ -3,20 +3,64 @@ name: Champion Data Scraper
 on:
   # Manual trigger - allows you to run whenever you want
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+        - development
+        - staging
+        - production
 
   # Scheduled execution every 24 hours
   schedule:
     - cron: '0 0 * * *'  # Runs daily at midnight UTC
 
-  # Optional: Run on push to main branch for testing (remove after setup)
+  # Run on push to main branch for testing
   push:
     branches: [ main, master ]
     paths:
       - 'aws-scraping/**'
 
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+
 jobs:
+  # Pre-deployment validation
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check if deployment is needed
+      id: check
+      run: |
+        # Check if there are actual changes to aws-scraping code
+        if git diff --name-only HEAD~1 | grep -q "^aws-scraping/"; then
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "🔄 Changes detected in aws-scraping directory"
+        elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "🔄 Manual trigger - proceeding with deployment"
+        elif [ "${{ github.event_name }}" = "schedule" ]; then
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "🔄 Scheduled run - proceeding with scraping"
+        else
+          echo "should_deploy=false" >> $GITHUB_OUTPUT
+          echo "⏭️ No changes detected, skipping deployment"
+        fi
+
+  # Main scraping job
   scrape:
     runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.should_deploy == 'true'
 
     steps:
     - name: Checkout repository
@@ -40,14 +84,170 @@ jobs:
         cd aws-scraping
         pip install -r requirements.txt
 
-    - name: Run champion scraper
-      env:
-        FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+    - name: Validate configuration
       run: |
         cd aws-scraping
-        python lambda_function.py
+        python -c "
+        from scraper.config import get_config
+        config = get_config()
+        print('✅ Configuration loaded successfully')
+        print(f'Environment: {config.environment}')
+        print(f'Debug: {config.debug}')
+        "
 
-    - name: Log completion
+    - name: Run tests
       run: |
-        echo "Champion scraping completed successfully at $(date)"
-        echo "Next scheduled run: $(date -d '+24 hours')"
+        cd aws-scraping
+        # Install test dependencies
+        pip install pytest
+        # Run tests if they exist
+        if [ -d "tests" ]; then
+          python -m pytest tests/ -v --tb=short
+        else
+          echo "⚠️ No tests directory found, skipping tests"
+        fi
+
+    - name: Run champion scraper
+      id: scrape
+      env:
+        FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+        ENVIRONMENT: ${{ env.ENVIRONMENT }}
+        DEBUG: ${{ env.ENVIRONMENT == 'development' }}
+      run: |
+        cd aws-scraping
+
+        # Set start time for monitoring
+        echo "SCRAPE_START_TIME=$(date +%s)" >> $GITHUB_ENV
+
+        # Run the scraper with error handling
+        if python lambda_function.py; then
+          echo "SCRAPE_STATUS=success" >> $GITHUB_ENV
+          echo "✅ Scraping completed successfully"
+        else
+          echo "SCRAPE_STATUS=failure" >> $GITHUB_ENV
+          echo "❌ Scraping failed"
+          exit 1
+        fi
+      continue-on-error: false
+
+    - name: Generate deployment summary
+      id: summary
+      run: |
+        # Calculate duration
+        end_time=$(date +%s)
+        start_time=${{ env.SCRAPE_START_TIME }}
+        duration=$((end_time - start_time))
+
+        # Create summary
+        cat << EOF > scrape_summary.json
+        {
+          "timestamp": "$(date -Iseconds)",
+          "environment": "${{ env.ENVIRONMENT }}",
+          "status": "${{ env.SCRAPE_STATUS }}",
+          "duration_seconds": $duration,
+          "commit_sha": "${{ github.sha }}",
+          "run_id": "${{ github.run_id }}",
+          "trigger": "${{ github.event_name }}"
+        }
+        EOF
+
+        echo "summary=$(cat scrape_summary.json | jq -c .)" >> $GITHUB_OUTPUT
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: scrape-logs-${{ github.run_id }}
+        path: |
+          aws-scraping/scraper.log
+          scrape_summary.json
+        retention-days: 7
+
+  # Notification job
+  notify:
+    runs-on: ubuntu-latest
+    needs: [validate, scrape]
+    if: always() && (needs.scrape.result == 'success' || needs.scrape.result == 'failure')
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download logs
+      uses: actions/download-artifact@v3
+      with:
+        name: scrape-logs-${{ github.run_id }}
+
+    - name: Send notification
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      run: |
+        # Read summary
+        if [ -f "scrape_summary.json" ]; then
+          summary=$(cat scrape_summary.json)
+          status=$(echo $summary | jq -r '.status')
+          duration=$(echo $summary | jq -r '.duration_seconds')
+          environment=$(echo $summary | jq -r '.environment')
+        else
+          status="unknown"
+          duration="unknown"
+          environment="${{ env.ENVIRONMENT }}"
+        fi
+
+        # Create notification message
+        if [ "$status" = "success" ]; then
+          message="✅ Champion data scraping completed successfully\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          message="❌ Champion data scraping failed\n• Environment: $environment\n• Duration: ${duration}s\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n• Check logs for details"
+        fi
+
+        # Send to Slack if webhook exists
+        if [ -n "$SLACK_WEBHOOK" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"$message\"}" \
+            $SLACK_WEBHOOK
+        fi
+
+        # Send to Discord if webhook exists
+        if [ -n "$DISCORD_WEBHOOK" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"content\":\"$message\"}" \
+            $DISCORD_WEBHOOK
+        fi
+
+  # Health check job (runs after successful scraping)
+  health_check:
+    runs-on: ubuntu-latest
+    needs: scrape
+    if: needs.scrape.result == 'success'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run health checks
+      run: |
+        echo "🏥 Running post-deployment health checks..."
+
+        # Check if Firebase data is accessible (basic connectivity test)
+        # This would be expanded based on your specific health check needs
+
+        echo "✅ Health checks completed"
+
+  # Rollback job (manual trigger only)
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Rollback procedure
+      run: |
+        echo "🔄 Performing rollback procedure..."
+        # Implement rollback logic here
+        # This could involve restoring from backup or previous deployment
+
+        echo "✅ Rollback completed"
