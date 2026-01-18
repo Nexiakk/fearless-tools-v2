@@ -18,6 +18,10 @@ def encode_champion_name_for_lolalytics(display_name):
 
     # Handle roman numerals (IV -> iv, etc.)
     # But keep them as is since they're already lowercase
+    
+    # Hard-coded edge case: Monkey King is "wukong" on lolalytics
+    if encoded == 'monkeyking':
+        return 'wukong'
 
     return encoded
 
