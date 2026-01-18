@@ -292,7 +292,7 @@ class ScrapingResult:
 
 # Validation functions
 def validate_champion_data(data: Dict[str, Any]) -> bool:
-    """Validate champion data structure"""
+    """Validate champion data structure and statistical ranges"""
     required_fields = ['id', 'imageName', 'name']
     for field in required_fields:
         if field not in data:
@@ -304,13 +304,14 @@ def validate_champion_data(data: Dict[str, Any]) -> bool:
             if not isinstance(ability, dict) or 'name' not in ability or 'type' not in ability:
                 return False
 
-    # Validate roles
+    # Validate roles and their statistics
     if 'roles' in data:
         for role_name, role_data in data['roles'].items():
             if not isinstance(role_data, dict) or 'stats' not in role_data:
                 return False
             stats = role_data['stats']
-            if not isinstance(stats, dict) or 'win_rate' not in stats or 'pick_rate' not in stats:
+            # Use the dedicated role stats validator
+            if not validate_role_stats(stats):
                 return False
 
     return True

@@ -214,11 +214,14 @@ class ScrapingOrchestrator:
         # Initialize services
         firebase_config = self.config.firebase
         self.firebase_manager = FirebaseManager(firebase_config)
-        self.firebase_manager.initialize()
+        self.firebase_available = self.firebase_manager.initialize()
+
+        if not self.firebase_available:
+            self.logger.warning("Firebase not available - running in offline mode")
 
         self.scraper = ChampionScraper(self.config)
         self.processor = DataProcessor(self.config)
-        self.storage = StorageService(self.firebase_manager, self.config)
+        self.storage = StorageService(self.firebase_manager, self.config) if self.firebase_available else None
 
     def scrape_and_store_champion(self, champion: str, target_patch: str) -> ScrapingResult:
         """Scrape and store data for a single champion"""

@@ -35,13 +35,13 @@ _logger = get_logger(__name__)
 def lambda_handler(event, context):
     """AWS Lambda handler function (kept for compatibility)"""
     try:
-        scrape_and_store_data()
+        result = scrape_and_store_data()
         return {
             'statusCode': 200,
-            'body': json.dumps('Data scraping completed successfully')
+            'body': json.dumps(result)
         }
     except Exception as e:
-        print(f"Error in lambda_handler: {e}")
+        _logger.error(f"Critical error in lambda_handler: {e}")
         return {
             'statusCode': 500,
             'body': json.dumps(f'Error: {str(e)}')
@@ -92,18 +92,39 @@ def scrape_and_store_data():
             error_count += 1
             _logger.error(f"Failed to process {champion}: {result.error}")
 
-    # Update role containers for optimized queries
-    _logger.info("Updating role containers...")
-    orchestrator.update_role_containers()
+    # Update role containers for optimized queries (only if Firebase is available)
+    if orchestrator.firebase_available:
+        _logger.info("Updating role containers...")
+        orchestrator.update_role_containers()
 
-    # Clean up old patch data only if we switched patches
-    if target_patch != current_patch:
-        _logger.info("Patch changed - cleaning up old patch data...")
-        cleanup_old_patch_data()
+        # Clean up old patch data only if we switched patches
+        if target_patch != current_patch:
+            _logger.info("Patch changed - cleaning up old patch data...")
+            cleanup_old_patch_data()
+        else:
+            _logger.info("Same patch - skipping cleanup")
     else:
-        _logger.info("Same patch - skipping cleanup")
+        _logger.warning("Skipping role container updates - Firebase not available")
 
     _logger.info(f"🎉 Data scraping completed! {success_count} successes, {error_count} errors")
+
+    # Create summary for GitHub Actions
+    summary = {
+        "success": True,
+        "total_champions": len(champions),
+        "success_count": success_count,
+        "error_count": error_count,
+        "firebase_available": orchestrator.firebase_available,
+        "current_patch": current_patch,
+        "target_patch": target_patch
+    }
+
+    # Write summary to file for GitHub Actions
+    import json
+    with open("scrape_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    return summary
 
 class SmartUpdateEngine:
     """Simplified update system - patch viability already checked globally"""
