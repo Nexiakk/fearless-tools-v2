@@ -39,7 +39,7 @@ exports.handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   }
 
   // Handle preflight
@@ -51,8 +51,8 @@ exports.handler = async (event, context) => {
     }
   }
 
-  // Only allow POST
-  if (event.httpMethod !== 'POST') {
+  // Allow GET for auth validation, POST for data
+  if (!['GET', 'POST'].includes(event.httpMethod)) {
     return {
       statusCode: 405,
       headers,
@@ -61,6 +61,74 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    // Handle authentication validation (GET request)
+    if (event.httpMethod === 'GET') {
+      const queryParams = event.queryStringParameters || {}
+
+      if (queryParams.action === 'validate') {
+        const { workspaceId, passwordHash } = queryParams
+
+        if (!workspaceId || !passwordHash) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'workspaceId and passwordHash are required' })
+          }
+        }
+
+        if (db) {
+          const workspaceRef = db.collection('workspaces').doc(workspaceId)
+          const metadataRef = workspaceRef.collection('metadata').doc('info')
+          const metadataDoc = await metadataRef.get()
+
+          if (!metadataDoc.exists()) {
+            return {
+              statusCode: 404,
+              headers,
+              body: JSON.stringify({ error: 'Workspace not found' })
+            }
+          }
+
+          const metadata = metadataDoc.data()
+          if (metadata.passwordHash !== passwordHash) {
+            return {
+              statusCode: 401,
+              headers,
+              body: JSON.stringify({ error: 'Invalid workspace credentials' })
+            }
+          }
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              workspaceId: workspaceId,
+              message: 'Credentials validated successfully'
+            })
+          }
+        } else {
+          // Test mode - accept any credentials
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              workspaceId: workspaceId,
+              message: 'Credentials validated (test mode)',
+              mode: 'test'
+            })
+          }
+        }
+      }
+
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid action parameter' })
+      }
+    }
+
     const draftData = JSON.parse(event.body)
     
     // Validate required fields
@@ -80,18 +148,35 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Validate workspace exists (if database is available)
+    // Validate workspace exists and password (if database is available)
     if (db) {
       const workspaceRef = db.collection('workspaces').doc(draftData.workspaceId)
       const metadataRef = workspaceRef.collection('metadata').doc('info')
       const metadataDoc = await metadataRef.get()
-      
-      if (!metadataDoc.exists) {
+
+      if (!metadataDoc.exists()) {
         return {
           statusCode: 404,
           headers,
           body: JSON.stringify({ error: 'Workspace not found' })
         }
+      }
+
+      const metadata = metadataDoc.data()
+
+      // Validate password hash if provided (LCU client authentication)
+      if (draftData._passwordHash) {
+        if (metadata.passwordHash !== draftData._passwordHash) {
+          return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({ error: 'Invalid workspace credentials' })
+          }
+        }
+      } else {
+        // For backwards compatibility, allow requests without password hash
+        // but log a warning
+        console.warn(`[LCU Draft] Warning: Request for workspace ${draftData.workspaceId} received without password authentication`)
       }
     }
 

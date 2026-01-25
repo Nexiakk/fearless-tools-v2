@@ -1,0 +1,31 @@
+{
+  "lcu": {
+    "auto_detect_client": true,
+    "preferred_port": 21076,
+    "use_tournament_client": false,
+    "connection_timeout": 30
+  },
+  "transmission": {
+    "endpoint_url": "https://fearless-tools.netlify.app/.netlify/functions/lcuDraft",
+    "batch_size": 10,
+    "batch_timeout_seconds": 1,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 2
+  },
+  "monitoring": {
+    "champ_select_interval": 1,
+    "lobby_interval": 10,
+    "active_game_interval": 60,
+    "enable_change_detection": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file_logging": false,
+    "log_file": "lcu_client.log"
+  },
+  "ui": {
+    "minimize_to_tray": true,
+    "show_notifications": true,
+    "start_minimized": false
+  }
+}
