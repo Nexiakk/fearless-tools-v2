@@ -141,6 +141,7 @@ class LCUMonitor:
 
     async def _process_gameflow_phase(self, phase_data: str):
         """Process gameflow phase change"""
+        old_phase = self.current_phase
         new_phase = phase_data.strip('"') if isinstance(phase_data, str) else str(phase_data)
 
         if new_phase != self.current_phase:
@@ -153,6 +154,16 @@ class LCUMonitor:
                 if self.last_draft_data:
                     await self.data_transmitter.send_deletion_request(
                         self.last_draft_data.lobby_id,
+                        self.workspace_id
+                    )
+                    self.last_draft_data = None
+                    self.current_lobby_id = None
+            elif old_phase == self.PHASE_CHAMP_SELECT and new_phase not in [self.PHASE_IN_PROGRESS, self.PHASE_CHAMP_SELECT]:
+                # Champion select was canceled (exited without starting game)
+                logger.info(f"Champion select canceled, deleting draft for lobby {self.current_lobby_id}")
+                if self.last_draft_data and self.current_lobby_id:
+                    await self.data_transmitter.send_deletion_request(
+                        self.current_lobby_id,
                         self.workspace_id
                     )
                     self.last_draft_data = None
@@ -221,15 +232,23 @@ class LCUMonitor:
                 phase=self._get_champ_select_phase(session_data)
             )
 
-            # Extract team data
-            my_team = session_data.get('myTeam', [])
-            their_team = session_data.get('theirTeam', [])
+            # Extract actions data (this is where bans and picks are stored)
+            actions = session_data.get('actions', [])
 
-            # Process blue side (my team)
-            draft_data.blue_side = self._extract_team_data(my_team)
+            # Process actions to extract bans and picks
+            blue_bans, blue_picks, red_bans, red_picks = self._extract_actions_data(actions)
 
-            # Process red side (their team)
-            draft_data.red_side = self._extract_team_data(their_team)
+            # Set team data
+            draft_data.blue_side.bans = blue_bans
+            draft_data.blue_side.picks = blue_picks
+            draft_data.red_side.bans = red_bans
+            draft_data.red_side.picks = red_picks
+
+            # Create ordered data (simplified - just by order they appear)
+            draft_data.blue_side.bans_ordered = [{'championId': ban, 'order': i + 1} for i, ban in enumerate(blue_bans)]
+            draft_data.blue_side.picks_ordered = [{'championId': pick, 'order': i + 1} for i, pick in enumerate(blue_picks)]
+            draft_data.red_side.bans_ordered = [{'championId': ban, 'order': i + 1} for i, ban in enumerate(red_bans)]
+            draft_data.red_side.picks_ordered = [{'championId': pick, 'order': i + 1} for i, pick in enumerate(red_picks)]
 
             # Check if this is a new game
             draft_data.is_new_game = self._is_new_game(draft_data)
@@ -240,8 +259,45 @@ class LCUMonitor:
             logger.error(f"Error extracting draft data: {e}")
             return None
 
+    def _extract_actions_data(self, actions: List[List[Dict[str, Any]]]) -> tuple:
+        """Extract bans and picks from actions data"""
+        blue_bans = []
+        blue_picks = []
+        red_bans = []
+        red_picks = []
+
+        try:
+            # Actions is an array of arrays, each containing actions of a specific type
+            # Typically: actions[0] = phase transitions, actions[1] = bans, actions[2] = picks
+            for action_group in actions:
+                for action in action_group:
+                    action_type = action.get('type')
+                    champion_id = action.get('championId', 0)
+                    is_ally_action = action.get('isAllyAction', True)
+                    completed = action.get('completed', False)
+
+                    # Only process completed actions with valid champion IDs
+                    if completed and champion_id > 0:
+                        champion_str = str(champion_id)
+
+                        if action_type == 'ban':
+                            if is_ally_action:
+                                blue_bans.append(champion_str)
+                            else:
+                                red_bans.append(champion_str)
+                        elif action_type == 'pick':
+                            if is_ally_action:
+                                blue_picks.append(champion_str)
+                            else:
+                                red_picks.append(champion_str)
+
+        except Exception as e:
+            logger.error(f"Error extracting actions data: {e}")
+
+        return blue_bans, blue_picks, red_bans, red_picks
+
     def _extract_team_data(self, team_data: List[Dict[str, Any]]) -> TeamData:
-        """Extract team data from LCU format"""
+        """Extract team data from LCU format (fallback method)"""
         team = TeamData()
 
         # Collect pick data with cell IDs for sorting
