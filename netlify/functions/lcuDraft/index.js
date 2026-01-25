@@ -35,6 +35,8 @@ try {
 }
 
 exports.handler = async (event, context) => {
+  console.log('[LCU Draft] Function invoked with method:', event.httpMethod)
+
   // Enable CORS
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -44,6 +46,7 @@ exports.handler = async (event, context) => {
 
   // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
+    console.log('[LCU Draft] Handling OPTIONS preflight')
     return {
       statusCode: 204,
       headers,
@@ -53,6 +56,7 @@ exports.handler = async (event, context) => {
 
   // Allow GET for auth validation, POST for data
   if (!['GET', 'POST'].includes(event.httpMethod)) {
+    console.log('[LCU Draft] Invalid method:', event.httpMethod)
     return {
       statusCode: 405,
       headers,
@@ -60,6 +64,7 @@ exports.handler = async (event, context) => {
     }
   }
 
+  console.log('[LCU Draft] Processing request...')
   try {
     // Handle authentication validation (GET request)
     if (event.httpMethod === 'GET') {
@@ -138,10 +143,13 @@ exports.handler = async (event, context) => {
       }
     }
 
+    console.log('[LCU Draft] Parsing request body...')
     const draftData = JSON.parse(event.body)
-    
+    console.log(`[LCU Draft] Received draft data for lobby ${draftData.lobbyId}, workspace ${draftData.workspaceId}`)
+
     // Validate required fields
     if (!draftData.lobbyId) {
+      console.log('[LCU Draft] Missing lobbyId')
       return {
         statusCode: 400,
         headers,
@@ -150,6 +158,7 @@ exports.handler = async (event, context) => {
     }
 
     if (!draftData.workspaceId) {
+      console.log('[LCU Draft] Missing workspaceId')
       return {
         statusCode: 400,
         headers,
@@ -284,32 +293,54 @@ exports.handler = async (event, context) => {
         .doc(String(workspaceId))
         .collection('lcuDrafts')
       
+      console.log(`[LCU Draft] Starting Firestore operations for lobby ${lobbyId}`)
+
       // Determine document ID: use format {lobbyId}_{number} for sequential ordering
       let docId = null
-      
+
       // First, check if a document with this lobbyId already exists (query by lobbyId field)
       // This handles updates to existing drafts
-      const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
-      if (!existingDocs.empty) {
-        docId = existingDocs.docs[0].id
-        docExists = true
-        console.log(`[LCU Draft] Found existing document ${docId} for lobby ${lobbyId}`)
+      console.log(`[LCU Draft] Checking for existing documents with lobbyId ${lobbyId}`)
+      try {
+        const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
+        if (!existingDocs.empty) {
+          docId = existingDocs.docs[0].id
+          docExists = true
+          console.log(`[LCU Draft] Found existing document ${docId} for lobby ${lobbyId}`)
+        }
+      } catch (error) {
+        console.error(`[LCU Draft] Error checking existing documents:`, error)
+        throw error
       }
-      
+
       // If it's a new game and no existing document found, get next sequential number
       if (!docId && draftDoc.isNewGame) {
-        // Count existing documents to get next number
-        const allDocs = await lcuDraftsRef.get()
-        const nextNumber = allDocs.size + 1
-        docId = `${lobbyId}_${nextNumber}`
-        console.log(`[LCU Draft] New game - assigning document ID: ${docId} (total drafts: ${allDocs.size})`)
+        console.log(`[LCU Draft] New game - counting documents to assign sequential ID`)
+        try {
+          // Count existing documents to get next number
+          const allDocs = await lcuDraftsRef.get()
+          const nextNumber = allDocs.size + 1
+          docId = `${lobbyId}_${nextNumber}`
+          console.log(`[LCU Draft] New game - assigning document ID: ${docId} (total drafts: ${allDocs.size})`)
+        } catch (error) {
+          console.error(`[LCU Draft] Error counting documents for new game:`, error)
+          throw error
+        }
       } else if (!docId) {
-        // Not a new game but no existing document - this shouldn't happen, but fallback to sequential number
-        const allDocs = await lcuDraftsRef.get()
-        const nextNumber = allDocs.size + 1
-        docId = `${lobbyId}_${nextNumber}`
-        console.warn(`[LCU Draft] Warning: No existing document found for lobby ${lobbyId}, creating new with ID: ${docId}`)
+        console.log(`[LCU Draft] No existing document found - counting documents for fallback ID`)
+        try {
+          // Not a new game but no existing document - this shouldn't happen, but fallback to sequential number
+          const allDocs = await lcuDraftsRef.get()
+          const nextNumber = allDocs.size + 1
+          docId = `${lobbyId}_${nextNumber}`
+          console.warn(`[LCU Draft] Warning: No existing document found for lobby ${lobbyId}, creating new with ID: ${docId}`)
+        } catch (error) {
+          console.error(`[LCU Draft] Error counting documents for fallback:`, error)
+          throw error
+        }
       }
+
+      console.log(`[LCU Draft] Using document ID: ${docId}`)
       
       const draftRef = lcuDraftsRef.doc(docId)
 

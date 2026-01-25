@@ -6,7 +6,7 @@
     "connection_timeout": 30
   },
   "transmission": {
-    "endpoint_url": "https://fearless-tools.netlify.app/.netlify/functions/lcuDraft",
+    "endpoint_url": "https://fearless-tuls.netlify.app/.netlify/functions/lcuDraft",
     "batch_size": 10,
     "batch_timeout_seconds": 1,
     "retry_attempts": 3,

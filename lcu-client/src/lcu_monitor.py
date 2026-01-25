@@ -176,24 +176,37 @@ class LCUMonitor:
     async def _process_champ_select_data(self, champ_select_data: Dict[str, Any]):
         """Process champion select session data"""
         try:
+            # Extract lobby_id from champ select data if not already set
+            if not self.current_lobby_id and 'gameId' in champ_select_data:
+                self.current_lobby_id = str(champ_select_data['gameId'])
+                logger.info(f"Set lobby_id from champ select data: {self.current_lobby_id}")
+
+            logger.info(f"Processing champ select data for lobby {self.current_lobby_id}, workspace {self.workspace_id}")
             if not self.current_lobby_id or not self.workspace_id:
+                logger.warning(f"Missing lobby_id ({self.current_lobby_id}) or workspace_id ({self.workspace_id}), skipping")
                 return
 
             # Extract draft data from champ select session
             draft_data = self._extract_draft_data(champ_select_data)
 
             if draft_data:
+                logger.info(f"Extracted draft data: phase={draft_data.phase}, blue_picks={len(draft_data.blue_side.picks)}, red_picks={len(draft_data.red_side.picks)}")
                 # Check for changes
                 if self._has_draft_changes(draft_data):
-                    logger.debug(f"Draft changes detected for lobby {self.current_lobby_id}")
+                    logger.info(f"Draft changes detected for lobby {self.current_lobby_id}")
 
                     # Convert champion IDs to names
                     self.champion_mapper.update_draft_with_names(draft_data)
                     draft_data.update_hash()
 
                     # Queue for transmission
-                    await self.data_transmitter.queue_draft_data(draft_data)
+                    success = await self.data_transmitter.queue_draft_data(draft_data)
+                    logger.info(f"Queued draft data for transmission: {success}")
                     self.last_draft_data = draft_data
+                else:
+                    logger.debug(f"No draft changes for lobby {self.current_lobby_id}")
+            else:
+                logger.warning(f"Failed to extract draft data from champ select session")
 
         except Exception as e:
             logger.error(f"Error processing champ select data: {e}")

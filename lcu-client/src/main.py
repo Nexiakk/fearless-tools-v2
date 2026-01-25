@@ -96,7 +96,7 @@ def main():
         print("🔐 No saved workspace credentials found.")
         try:
             workspace_id, password_hash = config_manager.prompt_workspace_credentials()
-            print(f"✅ Credentials saved for workspace: {workspace_id}")
+            # print(f"✅ Credentials saved for workspace: {workspace_id}")
         except KeyboardInterrupt:
             print("\n👋 Setup cancelled by user")
             return 1
