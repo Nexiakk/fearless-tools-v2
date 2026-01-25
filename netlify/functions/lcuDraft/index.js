@@ -84,11 +84,13 @@ exports.handler = async (event, context) => {
           console.log(`[LCU Draft] metadataDoc type:`, typeof metadataDoc)
           console.log(`[LCU Draft] metadataDoc:`, metadataDoc)
 
-          // Check if document exists
-          const exists = metadataDoc.exists ? metadataDoc.exists() : false
-          console.log(`[LCU Draft] Document exists:`, exists)
+          // QueryDocumentSnapshot always represents existing documents
+          // Just check if we have the document and it has data
+          const metadata = metadataDoc.data()
+          console.log(`[LCU Draft] Document exists:`, !!metadataDoc)
+          console.log(`[LCU Draft] Has data:`, !!metadata)
 
-          if (!exists) {
+          if (!metadataDoc || !metadata) {
             return {
               statusCode: 404,
               headers,
@@ -96,7 +98,6 @@ exports.handler = async (event, context) => {
             }
           }
 
-          const metadata = metadataDoc.data()
           console.log(`[LCU Draft] Metadata:`, metadata)
           if (!metadata || metadata.passwordHash !== passwordHash) {
             return {
