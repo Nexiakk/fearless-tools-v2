@@ -172,7 +172,7 @@ exports.handler = async (event, context) => {
       const metadataRef = workspaceRef.collection('metadata').doc('info')
       const metadataDoc = await metadataRef.get()
 
-      if (!metadataDoc.exists()) {
+      if (!metadataDoc.exists) {
         return {
           statusCode: 404,
           headers,
