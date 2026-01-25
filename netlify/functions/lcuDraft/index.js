@@ -79,9 +79,16 @@ exports.handler = async (event, context) => {
         if (db) {
           const workspaceRef = db.collection('workspaces').doc(workspaceId)
           const metadataRef = workspaceRef.collection('metadata').doc('info')
+          console.log(`[LCU Draft] Checking workspace: ${workspaceId}`)
           const metadataDoc = await metadataRef.get()
+          console.log(`[LCU Draft] metadataDoc type:`, typeof metadataDoc)
+          console.log(`[LCU Draft] metadataDoc:`, metadataDoc)
 
-          if (!metadataDoc.exists()) {
+          // Check if document exists
+          const exists = metadataDoc.exists ? metadataDoc.exists() : false
+          console.log(`[LCU Draft] Document exists:`, exists)
+
+          if (!exists) {
             return {
               statusCode: 404,
               headers,
@@ -90,7 +97,8 @@ exports.handler = async (event, context) => {
           }
 
           const metadata = metadataDoc.data()
-          if (metadata.passwordHash !== passwordHash) {
+          console.log(`[LCU Draft] Metadata:`, metadata)
+          if (!metadata || metadata.passwordHash !== passwordHash) {
             return {
               statusCode: 401,
               headers,
