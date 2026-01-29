@@ -1,9 +1,9 @@
 // Draft Composable
-import { computed } from 'vue'
-import { useDraftStore } from '@/stores/draft'
+import { computed } from "vue";
+import { useDraftStore } from "@/stores/draft";
 
 export function useDraft() {
-  const store = useDraftStore()
+  const store = useDraftStore();
 
   return {
     // State
@@ -11,10 +11,13 @@ export function useDraft() {
     unavailablePanelState: computed(() => store.unavailablePanelState),
     pickContext: computed(() => store.pickContext),
     unavailableChampions: computed(() => store.unavailableChampions),
-    championsByRoleForCompactView: computed(() => store.championsByRoleForCompactView),
+    championsByRoleForCompactView: computed(
+      () => store.championsByRoleForCompactView,
+    ),
     // Actions
     togglePick: store.togglePick,
     isUnavailable: store.isUnavailable,
-    resetUnavailable: store.resetUnavailable
-  }
+    resetUnavailable: store.resetUnavailable,
+    resetBans: store.resetBans,
+  };
 }
