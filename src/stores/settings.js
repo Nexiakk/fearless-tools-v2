@@ -35,7 +35,10 @@ export const useSettingsStore = defineStore("settings", () => {
           const mergedPool = { ...settings.value.pool, ...parsed.pool };
 
           // Then handle backward compatibility for size properties
-          if (parsed.pool.compactMode !== undefined && parsed.pool.normalCardSize === undefined) {
+          if (
+            parsed.pool.compactMode !== undefined &&
+            parsed.pool.normalCardSize === undefined
+          ) {
             mergedPool.normalCardSize = parsed.pool.compactMode ? 83 : 100;
           }
           if (parsed.pool.highlightCardSize === undefined) {
@@ -87,12 +90,12 @@ export const useSettingsStore = defineStore("settings", () => {
       pool: {
         frozenChampions: false,
         compactMode: false, // Deprecated, kept for backward compatibility
-        normalCardSize: 100, // Percentage scale (50-200), default 100
+        normalCardSize: 83, // Percentage scale (50-200), default 100
         highlightCardSize: 100, // Percentage scale (50-200), default 100
         unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
         disableAnimations: false,
-        centerCards: true,
-        enableSearch: true, // Enable search bar feature, default: enabled
+        centerCards: false,
+        enableSearch: false, // Enable search bar feature, default: enabled
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled
