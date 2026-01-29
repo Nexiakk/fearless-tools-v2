@@ -73,7 +73,7 @@
               />
             </svg>
 
-            <span>Clean bans</span>
+            <span>Clear bans</span>
           </button>
         </div>
       </div>
