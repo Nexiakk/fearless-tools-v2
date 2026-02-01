@@ -7,7 +7,7 @@ export const useSettingsStore = defineStore("settings", () => {
     pool: {
       frozenChampions: false,
       compactMode: false, // Deprecated, kept for backward compatibility
-      normalCardSize: 100, // Percentage scale (50-200), default 100
+      normalCardSize: 83, // Percentage scale (50-200), default 100
       highlightCardSize: 100, // Percentage scale (50-200), default 100
       unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
       disableAnimations: false,
