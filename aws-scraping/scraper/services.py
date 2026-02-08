@@ -29,18 +29,27 @@ class ChampionScraper:
         self.logger = get_logger(__name__)
         self.lolalytics_scraper = LolalyticsBuildScraper()
 
-    def scrape_champion_data(self, champion_internal: str, target_patch: str) -> Dict:
-        """Scrape all data for a single champion"""
+    def scrape_champion_data(self, champion_internal: str, current_patch: str, target_patch: str) -> Dict:
+        """
+        Scrape all data for a single champion.
+        
+        Args:
+            champion_internal: Internal champion key (e.g., 'Aatrox')
+            current_patch: Current live patch (for wiki abilities - always current)
+            target_patch: Target patch for lolalytics (may be fallback if current < 7 days old)
+        """
         log_scraping_start(champion_internal, "champion data scraping")
 
         try:
             # Get champion display name
             champion_display = get_display_name(champion_internal)
 
-            # Scrape League Wiki abilities data
+            # Scrape League Wiki abilities data - ALWAYS use current patch
+            # Abilities are patch-specific and should be scraped immediately on day 1
             abilities_data = scrape_champion_abilities(champion_display)
 
-            # Scrape Lolalytics build data
+            # Scrape Lolalytics build data - use target_patch (may be fallback)
+            # Lolalytics data needs 7+ days of samples to be viable
             normalized_patch = normalize_patch_for_lolalytics(target_patch)
             build_data = self.lolalytics_scraper.scrape_champion_build(
                 champion_internal,
@@ -57,7 +66,8 @@ class ChampionScraper:
                 'imageName': champion_image_name,
                 'name': champion_display,
                 'abilities': abilities_data,
-                'patch': target_patch,
+                'abilitiesPatch': current_patch,  # Track which patch abilities belong to
+                'patch': target_patch,  # Lolalytics patch (may be different from abilities)
                 'lastUpdated': datetime.utcnow()
             }
 
@@ -73,6 +83,60 @@ class ChampionScraper:
 
         except Exception as e:
             log_scraping_error(champion_internal, "champion data scraping", e)
+            raise
+
+    def scrape_wiki_abilities_only(self, champion_internal: str, current_patch: str) -> Dict:
+        """
+        Scrape only wiki abilities data for a champion.
+        Used for initial patch day when we want abilities immediately.
+        """
+        log_scraping_start(champion_internal, "wiki abilities scraping")
+
+        try:
+            champion_display = get_display_name(champion_internal)
+            abilities_data = scrape_champion_abilities(champion_display)
+
+            log_scraping_success(champion_internal, "wiki abilities scraping",
+                               f"{len(abilities_data)} abilities")
+
+            return {
+                'abilities': abilities_data,
+                'abilitiesPatch': current_patch,
+                'abilitiesLastUpdated': datetime.utcnow()
+            }
+
+        except Exception as e:
+            log_scraping_error(champion_internal, "wiki abilities scraping", e)
+            raise
+
+    def scrape_lolalytics_only(self, champion_internal: str, target_patch: str) -> Dict:
+        """
+        Scrape only lolalytics build data for a champion.
+        Used for daily updates when abilities are already current.
+        """
+        log_scraping_start(champion_internal, "lolalytics data scraping")
+
+        try:
+            normalized_patch = normalize_patch_for_lolalytics(target_patch)
+            build_data = self.lolalytics_scraper.scrape_champion_build(
+                champion_internal,
+                patch=normalized_patch
+            )
+
+            if build_data:
+                build_data.pop('tier', None)
+
+            log_scraping_success(champion_internal, "lolalytics data scraping",
+                               f"{len(build_data.get('roles', {})) if build_data else 0} roles")
+
+            return {
+                'roles': build_data.get('roles', {}) if build_data else {},
+                'patch': target_patch,
+                'lastUpdated': datetime.utcnow()
+            }
+
+        except Exception as e:
+            log_scraping_error(champion_internal, "lolalytics data scraping", e)
             raise
 
 
@@ -140,32 +204,52 @@ class DataProcessor:
             self.logger.error(f"Error processing champion data for {raw_data.get('id', 'unknown')}: {e}")
             raise
 
-    def should_update_champion(self, current_data: Optional[Dict], new_data: Dict) -> Dict:
-        """Determine if and how a champion should be updated"""
-        # Always update on patch changes
-        if new_data.get('patch') != current_data.get('patch') if current_data else True:
+    def should_update_champion(self, current_data: Optional[Dict], new_data: Dict, current_patch: str = None) -> Dict:
+        """
+        Determine if and how a champion should be updated.
+        
+        Logic:
+        - Abilities: Update only once per patch (tracked by abilitiesPatch field)
+        - Lolalytics: Always update (stats grow daily with more samples)
+        """
+        # Get current patch from new_data if not provided
+        if current_patch is None:
+            current_patch = new_data.get('abilitiesPatch') or new_data.get('patch')
+        
+        # Check stored abilities patch
+        stored_abilities_patch = current_data.get('abilitiesPatch') if current_data else None
+        
+        # Abilities should be updated if:
+        # 1. No current data exists (first time)
+        # 2. abilitiesPatch field doesn't exist (legacy data)
+        # 3. abilitiesPatch is different from current patch (new patch)
+        should_update_abilities = (
+            not current_data or 
+            not stored_abilities_patch or 
+            stored_abilities_patch != current_patch
+        )
+        
+        # Lolalytics should always update (growing sample size)
+        # But we track if patch actually changed for logging
+        lolalytics_patch_changed = (
+            new_data.get('patch') != current_data.get('patch') if current_data else True
+        )
+
+        if should_update_abilities:
             return {
                 'update': True,
                 'abilities': True,
                 'lolalytics': True,
-                'reason': f"Patch changed to {new_data['patch']}"
+                'reason': f"New patch: abilities_patch={current_patch}, lolalytics_patch={new_data.get('patch')}"
             }
-
-        # Same patch: Always update lolalytics data (stats change daily)
-        # Only skip abilities if they truly haven't changed (including cooldowns)
-        current_abilities = current_data.get('abilities', []) if current_data else []
-        new_abilities = new_data.get('abilities', [])
-
-        abilities_changed = self._abilities_changed(current_abilities, new_abilities)
-
-        # ALWAYS update lolalytics data on same patch (stats, counters change daily)
-        # Only skip abilities if they haven't changed
-        return {
-            'update': True,  # Always update for lolalytics data
-            'abilities': abilities_changed,  # Only update abilities if changed
-            'lolalytics': True,  # Always update lolalytics (growing sample)
-            'reason': f"Same patch: abilities_changed={abilities_changed}, lolalytics=always"
-        }
+        else:
+            # Same abilities patch: only update lolalytics (growing sample)
+            return {
+                'update': True,  # Always update for lolalytics data
+                'abilities': False,  # Skip abilities - already have current patch
+                'lolalytics': True,  # Always update lolalytics (growing sample)
+                'reason': f"Same abilities patch {stored_abilities_patch}: abilities=skip, lolalytics=always"
+            }
 
     def _abilities_changed(self, old_abilities: List[Dict], new_abilities: List[Dict]) -> bool:
         """Check if abilities have changed (including cooldown values)"""
@@ -236,11 +320,23 @@ class ScrapingOrchestrator:
         self.processor = DataProcessor(self.config)
         self.storage = StorageService(self.firebase_manager, self.config) if self.firebase_available else None
 
-    def scrape_and_store_champion(self, champion: str, target_patch: str) -> ScrapingResult:
-        """Scrape and store data for a single champion"""
+    def scrape_and_store_champion(self, champion: str, target_patch: str, current_patch: str = None) -> ScrapingResult:
+        """
+        Scrape and store data for a single champion.
+        
+        Args:
+            champion: Champion internal key (e.g., 'Aatrox')
+            target_patch: Target patch for lolalytics data (may be fallback)
+            current_patch: Current live patch for abilities (defaults to target_patch)
+        """
         try:
-            # Scrape data
-            raw_data = self.scraper.scrape_champion_data(champion, target_patch)
+            # If current_patch not provided, use target_patch
+            # This maintains backward compatibility
+            if current_patch is None:
+                current_patch = target_patch
+            
+            # Scrape data with both patches
+            raw_data = self.scraper.scrape_champion_data(champion, current_patch, target_patch)
 
             # Process data
             processed_data = self.processor.process_champion_data(raw_data)
@@ -248,8 +344,8 @@ class ScrapingOrchestrator:
             # Get current data for smart updates
             current_data = self.storage.get_champion_data(champion)
 
-            # Determine update strategy
-            update_decision = self.processor.should_update_champion(current_data, raw_data)
+            # Determine update strategy - pass current_patch for abilities tracking
+            update_decision = self.processor.should_update_champion(current_data, raw_data, current_patch)
 
             # Apply selective updates
             if update_decision['update']:
@@ -346,6 +442,11 @@ class ScrapingOrchestrator:
 
         if update_decision['abilities']:
             final_data['abilities'] = new_data.get('abilities', [])
+            # Also update abilitiesPatch to track when abilities were last updated
+            if 'abilitiesPatch' in new_data:
+                final_data['abilitiesPatch'] = new_data['abilitiesPatch']
+            if 'abilitiesLastUpdated' in new_data:
+                final_data['abilitiesLastUpdated'] = new_data['abilitiesLastUpdated']
 
         if update_decision['lolalytics']:
             lolalytics_fields = ['patch', 'roles']

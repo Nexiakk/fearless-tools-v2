@@ -61,14 +61,15 @@ def scrape_and_store_data():
 
     _logger.info(f"Current patch: {current_patch}")
 
-    # Check if current patch has sufficient sample size
+    # Check if current patch has sufficient sample size for lolalytics
     use_current, target_patch, viability_metrics = check_patch_viability(current_patch)
 
     if use_current:
         _logger.info(f"✅ Using current patch {current_patch} for scraping")
     else:
-        _logger.warning(f"⚠️ Current patch {current_patch} has insufficient data")
-        _logger.info(f"🔄 Falling back to patch {target_patch}")
+        _logger.warning(f"⚠️ Current patch {current_patch} has insufficient lolalytics data (< 7 days)")
+        _logger.info(f"🔄 Falling back to patch {target_patch} for lolalytics")
+        _logger.info(f"📋 Wiki abilities will still use current patch {current_patch}")
 
     # Initialize orchestrator
     orchestrator = ScrapingOrchestrator()
@@ -81,11 +82,12 @@ def scrape_and_store_data():
     error_count = 0
 
     # Process each champion using the orchestrator
+    # Pass both current_patch (for wiki abilities) and target_patch (for lolalytics)
     for i, champion in enumerate(champions):
         _logger.info(f"Processing champion {i+1}/{len(champions)}: {champion}")
 
         try:
-            result = orchestrator.scrape_and_store_champion(champion, target_patch)
+            result = orchestrator.scrape_and_store_champion(champion, target_patch, current_patch)
 
             if result.success:
                 success_count += 1

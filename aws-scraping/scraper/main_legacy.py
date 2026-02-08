@@ -42,8 +42,8 @@ def check_patch_viability(current_patch_full):
                 print(f"   Released: {wiki_patch['release_date'].strftime('%Y-%m-%d')}")
                 print(f"   Days since release: {days_since_release}")
 
-                # Use current patch if released more than 4 days ago
-                if days_since_release >= 4:
+                # Use current patch if released more than 7 days ago
+                if days_since_release >= 7:
                     print("✅ Patch is viable for scraping")
                     return True, current_patch_full, {
                         'days_since_release': days_since_release,

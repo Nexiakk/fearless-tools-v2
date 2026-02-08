@@ -20,7 +20,7 @@ class ScrapingConfig:
 
     # Scraping thresholds
     min_pickrate_threshold: float = 9.0  # Minimum pickrate for roles
-    patch_viability_days: int = 4  # Days patch must be released to be viable
+    patch_viability_days: int = 7  # Days patch must be released to be viable
 
 
 @dataclass

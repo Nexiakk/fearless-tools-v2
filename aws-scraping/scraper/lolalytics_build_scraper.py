@@ -110,15 +110,15 @@ class LolalyticsBuildScraper:
             first_stats = soup.find('div', class_='flex justify-around border border-[#333333] p-2 text-center')
             if first_stats:
                 stat_divs = first_stats.find_all('div', recursive=False)
-                if len(stat_divs) >= 3:
-                    # Win Rate
+                if len(stat_divs) >= 2:
+                    # Win Rate (first div, index 0)
                     win_rate_div = stat_divs[0]
                     win_rate_text = win_rate_div.find('div', class_='mb-1 font-bold')
                     if win_rate_text:
                         stats['win_rate'] = float(win_rate_text.get_text().strip().rstrip('%'))
 
-                    # Pick Rate (fourth div, index 3)
-                    pick_rate_div = stat_divs[3]
+                    # Pick Rate (second div, index 1)
+                    pick_rate_div = stat_divs[1]
                     pick_rate_text = pick_rate_div.find('div', class_='mb-1 font-bold')
                     if pick_rate_text:
                         stats['pick_rate'] = float(pick_rate_text.get_text().strip().rstrip('%'))
@@ -177,15 +177,15 @@ class LolalyticsBuildScraper:
             first_stats = soup.find('div', class_='flex justify-around border border-[#333333] p-2 text-center')
             if first_stats:
                 stat_divs = first_stats.find_all('div', recursive=False)
-                if len(stat_divs) >= 3:
-                    # Win Rate
+                if len(stat_divs) >= 2:
+                    # Win Rate (first div, index 0)
                     win_rate_div = stat_divs[0]
                     win_rate_text = win_rate_div.find('div', class_='mb-1 font-bold')
                     if win_rate_text:
                         stats['win_rate'] = float(win_rate_text.get_text().strip().rstrip('%'))
 
-                    # Pick Rate (fourth div, index 3)
-                    pick_rate_div = stat_divs[3]
+                    # Pick Rate (second div, index 1)
+                    pick_rate_div = stat_divs[1]
                     pick_rate_text = pick_rate_div.find('div', class_='mb-1 font-bold')
                     if pick_rate_text:
                         stats['pick_rate'] = float(pick_rate_text.get_text().strip().rstrip('%'))
