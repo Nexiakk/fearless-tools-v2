@@ -84,13 +84,20 @@ def scrape_and_store_data():
     for i, champion in enumerate(champions):
         _logger.info(f"Processing champion {i+1}/{len(champions)}: {champion}")
 
-        result = orchestrator.scrape_and_store_champion(champion, target_patch)
+        try:
+            result = orchestrator.scrape_and_store_champion(champion, target_patch)
 
-        if result.success:
-            success_count += 1
-        else:
+            if result.success:
+                success_count += 1
+            else:
+                error_count += 1
+                _logger.error(f"Failed to process {champion}: {result.error}")
+        except Exception as e:
             error_count += 1
-            _logger.error(f"Failed to process {champion}: {result.error}")
+            _logger.error(f"❌ Critical error processing {champion}: {e}")
+            import traceback
+            _logger.error(traceback.format_exc())
+            # Continue to next champion instead of crashing
 
     # Update role containers for optimized queries (only if Firebase is available)
     if orchestrator.firebase_available:

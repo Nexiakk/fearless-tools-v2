@@ -72,3 +72,11 @@ aws-scraping/*.zip
 test_results.json
 *.tmp
 temp/
+aws-scraping/tests/output/lolalytics_diana_test_20260208_125900.txt
+aws-scraping/tests/output/lolalytics_diana_test_20260208_130202.txt
+aws-scraping/tests/output/lolalytics_diana_test_20260208_130248.txt
+aws-scraping/tests/output/templates_20260208_131113.txt
+aws-scraping/tests/test_lolalytics_counters.py
+aws-scraping/tests/test_lolalytics_investigate.py
+aws-scraping/tests/test_lolalytics_templates.py
+aws-scraping/tests/output/investigation_20260208_131021.txt

@@ -192,20 +192,27 @@ jobs:
             cp aws-scraping/scrape_summary.json scrape_summary.json
             echo "Using summary created by script"
           else
-            # Create fallback summary
-            cat << EOF > scrape_summary.json
-            {
-              "timestamp": "$(date -Iseconds)",
-              "environment": "${{ env.ENVIRONMENT }}",
-              "status": "${{ env.SCRAPE_STATUS }}",
-              "exit_code": ${{ env.SCRAPE_EXIT_CODE }},
-              "duration_seconds": $duration,
-              "commit_sha": "${{ github.sha }}",
-              "run_id": "${{ github.run_id }}",
-              "trigger": "${{ github.event_name }}",
-              "note": "Fallback summary - script did not create summary file"
-            }
-            EOF
+            # Create fallback summary using jq to avoid heredoc issues
+            jq -n \
+              --arg timestamp "$(date -Iseconds)" \
+              --arg environment "${{ env.ENVIRONMENT }}" \
+              --arg status "${{ env.SCRAPE_STATUS }}" \
+              --argjson exit_code ${{ env.SCRAPE_EXIT_CODE }} \
+              --argjson duration "$duration" \
+              --arg commit_sha "${{ github.sha }}" \
+              --arg run_id "${{ github.run_id }}" \
+              --arg trigger "${{ github.event_name }}" \
+              '{
+                timestamp: $timestamp,
+                environment: $environment,
+                status: $status,
+                exit_code: $exit_code,
+                duration_seconds: $duration,
+                commit_sha: $commit_sha,
+                run_id: $run_id,
+                trigger: $trigger,
+                note: "Fallback summary - script did not create summary file"
+              }' > scrape_summary.json
             echo "Created fallback summary"
           fi
 

@@ -151,29 +151,42 @@ class DataProcessor:
                 'reason': f"Patch changed to {new_data['patch']}"
             }
 
-        # Same patch: Only update if abilities changed
+        # Same patch: Always update lolalytics data (stats change daily)
+        # Only skip abilities if they truly haven't changed (including cooldowns)
         current_abilities = current_data.get('abilities', []) if current_data else []
         new_abilities = new_data.get('abilities', [])
 
         abilities_changed = self._abilities_changed(current_abilities, new_abilities)
 
+        # ALWAYS update lolalytics data on same patch (stats, counters change daily)
+        # Only skip abilities if they haven't changed
         return {
-            'update': abilities_changed,
-            'abilities': abilities_changed,
+            'update': True,  # Always update for lolalytics data
+            'abilities': abilities_changed,  # Only update abilities if changed
             'lolalytics': True,  # Always update lolalytics (growing sample)
-            'reason': f"Same patch: abilities={abilities_changed}, lolalytics=True"
+            'reason': f"Same patch: abilities_changed={abilities_changed}, lolalytics=always"
         }
 
     def _abilities_changed(self, old_abilities: List[Dict], new_abilities: List[Dict]) -> bool:
-        """Check if abilities have changed"""
+        """Check if abilities have changed (including cooldown values)"""
         if len(old_abilities) != len(new_abilities):
             return True
 
         # Compare each ability
         for old, new in zip(old_abilities, new_abilities):
-            if (old.get('name') != new.get('name') or
-                old.get('cooldown') != new.get('cooldown') or
-                old.get('type') != new.get('type')):
+            # Compare name
+            if old.get('name') != new.get('name'):
+                return True
+            # Compare type (Q, W, E, R, Passive)
+            if old.get('type') != new.get('type'):
+                return True
+            # Compare cooldown (crucial for balance changes like "reduced by 1 second")
+            if old.get('cooldown') != new.get('cooldown'):
+                return True
+            # Compare cost if present
+            old_cost = old.get('cost', {})
+            new_cost = new.get('cost', {})
+            if old_cost != new_cost:
                 return True
 
         return False
