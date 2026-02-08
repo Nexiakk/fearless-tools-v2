@@ -290,7 +290,7 @@ class ScrapingOrchestrator:
             all_champions = {}
             champions_list = get_champion_list()
 
-            for champion_key in champions_list[:10]:  # Limit for testing
+            for champion_key in champions_list:
                 data = self.storage.get_champion_data(champion_key)
                 if data:
                     all_champions[champion_key] = data
