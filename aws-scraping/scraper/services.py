@@ -29,7 +29,7 @@ class ChampionScraper:
         self.logger = get_logger(__name__)
         self.lolalytics_scraper = LolalyticsBuildScraper()
 
-    def scrape_champion_data(self, champion_internal: str, current_patch: str, target_patch: str) -> Dict:
+    def scrape_champion_data(self, champion_internal: str, current_patch: str, target_patch: str, skip_wiki: bool = False) -> Dict:
         """
         Scrape all data for a single champion.
         
@@ -37,6 +37,7 @@ class ChampionScraper:
             champion_internal: Internal champion key (e.g., 'Aatrox')
             current_patch: Current live patch (for wiki abilities - always current)
             target_patch: Target patch for lolalytics (may be fallback if current < 7 days old)
+            skip_wiki: If True, skip wiki ability scraping (abilities already up to date globally)
         """
         log_scraping_start(champion_internal, "champion data scraping")
 
@@ -44,9 +45,15 @@ class ChampionScraper:
             # Get champion display name
             champion_display = get_display_name(champion_internal)
 
-            # Scrape League Wiki abilities data - ALWAYS use current patch
-            # Abilities are patch-specific and should be scraped immediately on day 1
-            abilities_data = scrape_champion_abilities(champion_display)
+            # Scrape League Wiki abilities data - ONLY if not skipped
+            # When skip_wiki is True, abilities are already up to date globally
+            if skip_wiki:
+                abilities_data = []  # Empty, won't be stored
+                self.logger.info(f"Skipping wiki abilities for {champion_internal} - patch already up to date")
+            else:
+                # Scrape League Wiki abilities data - ALWAYS use current patch
+                # Abilities are patch-specific and should be scraped immediately on day 1
+                abilities_data = scrape_champion_abilities(champion_display)
 
             # Scrape Lolalytics build data - use target_patch (may be fallback)
             # Lolalytics data needs 7+ days of samples to be viable
@@ -65,11 +72,14 @@ class ChampionScraper:
                 'id': champion_internal,
                 'imageName': champion_image_name,
                 'name': champion_display,
-                'abilities': abilities_data,
-                'abilitiesPatch': current_patch,  # Track which patch abilities belong to
                 'patch': target_patch,  # Lolalytics patch (may be different from abilities)
                 'lastUpdated': datetime.utcnow()
             }
+
+            # Only include abilities if we scraped them
+            if not skip_wiki:
+                combined_data['abilities'] = abilities_data
+                combined_data['abilitiesPatch'] = current_patch  # Track which patch abilities belong to
 
             # Add lolalytics data if available
             if build_data:
@@ -77,8 +87,9 @@ class ChampionScraper:
                 build_data.pop('tier', None)
                 combined_data.update(build_data)
 
+            ability_count = len(abilities_data) if not skip_wiki else 0
             log_scraping_success(champion_internal, "champion data scraping",
-                               f"{len(abilities_data)} abilities, {len(build_data.get('roles', {})) if build_data else 0} roles")
+                               f"{ability_count} abilities, {len(build_data.get('roles', {})) if build_data else 0} roles")
             return combined_data
 
         except Exception as e:
@@ -320,7 +331,7 @@ class ScrapingOrchestrator:
         self.processor = DataProcessor(self.config)
         self.storage = StorageService(self.firebase_manager, self.config) if self.firebase_available else None
 
-    def scrape_and_store_champion(self, champion: str, target_patch: str, current_patch: str = None) -> ScrapingResult:
+    def scrape_and_store_champion(self, champion: str, target_patch: str, current_patch: str = None, skip_wiki: bool = False) -> ScrapingResult:
         """
         Scrape and store data for a single champion.
         
@@ -328,6 +339,7 @@ class ScrapingOrchestrator:
             champion: Champion internal key (e.g., 'Aatrox')
             target_patch: Target patch for lolalytics data (may be fallback)
             current_patch: Current live patch for abilities (defaults to target_patch)
+            skip_wiki: If True, skip wiki ability scraping (abilities already up to date globally)
         """
         try:
             # If current_patch not provided, use target_patch
@@ -336,7 +348,7 @@ class ScrapingOrchestrator:
                 current_patch = target_patch
             
             # Scrape data with both patches
-            raw_data = self.scraper.scrape_champion_data(champion, current_patch, target_patch)
+            raw_data = self.scraper.scrape_champion_data(champion, current_patch, target_patch, skip_wiki)
 
             # Process data
             processed_data = self.processor.process_champion_data(raw_data)

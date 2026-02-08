@@ -74,6 +74,22 @@ def scrape_and_store_data():
     # Initialize orchestrator
     orchestrator = ScrapingOrchestrator()
 
+    # Check global patch info to see if wiki abilities are already up to date
+    skip_wiki = False
+    if orchestrator.firebase_available:
+        try:
+            global_patch_info = orchestrator.firebase_manager.get_global_patch_info()
+            if global_patch_info and global_patch_info.get('abilitiesPatch') == current_patch:
+                skip_wiki = True
+                _logger.info(f"⏭️ Global abilities patch already up to date ({current_patch}) - skipping wiki scraping for all champions")
+            else:
+                stored_patch = global_patch_info.get('abilitiesPatch') if global_patch_info else None
+                _logger.info(f"🔄 Wiki abilities need update: stored={stored_patch}, current={current_patch}")
+        except Exception as e:
+            _logger.warning(f"Could not check global patch info: {e}")
+    else:
+        _logger.warning("Firebase not available - cannot check global patch info, will scrape wiki for all champions")
+
     # Get champions to process
     champions = get_champion_list()
     _logger.info(f"Processing {len(champions)} champions")
@@ -87,7 +103,7 @@ def scrape_and_store_data():
         _logger.info(f"Processing champion {i+1}/{len(champions)}: {champion}")
 
         try:
-            result = orchestrator.scrape_and_store_champion(champion, target_patch, current_patch)
+            result = orchestrator.scrape_and_store_champion(champion, target_patch, current_patch, skip_wiki)
 
             if result.success:
                 success_count += 1
@@ -100,6 +116,16 @@ def scrape_and_store_data():
             import traceback
             _logger.error(traceback.format_exc())
             # Continue to next champion instead of crashing
+
+    # Update global patch info if we scraped wiki abilities (i.e., didn't skip)
+    if orchestrator.firebase_available and not skip_wiki:
+        try:
+            orchestrator.firebase_manager.update_global_patch_info(current_patch)
+            _logger.info(f"✅ Updated global abilities patch to {current_patch}")
+        except Exception as e:
+            _logger.error(f"❌ Failed to update global patch info: {e}")
+    elif skip_wiki:
+        _logger.info("⏭️ Skipped wiki scraping - global patch info unchanged")
 
     # Update role containers for optimized queries (only if Firebase is available)
     if orchestrator.firebase_available:

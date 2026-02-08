@@ -138,6 +138,35 @@ class FirebaseManager:
             print(f"Error updating role containers: {e}")
             return False
 
+    def get_global_patch_info(self) -> Optional[Dict[str, Any]]:
+        """Get global patch metadata from champions/data document"""
+        try:
+            doc_ref = self.db.collection('champions').document('data')
+            doc = doc_ref.get()
+            if doc.exists:
+                data = doc.to_dict()
+                return {
+                    'abilitiesPatch': data.get('abilitiesPatch'),
+                    'abilitiesLastUpdated': data.get('abilitiesLastUpdated')
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting global patch info: {e}")
+            return None
+
+    def update_global_patch_info(self, patch: str) -> bool:
+        """Update global patch metadata in champions/data document"""
+        try:
+            doc_ref = self.db.collection('champions').document('data')
+            doc_ref.set({
+                'abilitiesPatch': patch,
+                'abilitiesLastUpdated': datetime.utcnow()
+            }, merge=True)
+            return True
+        except Exception as e:
+            print(f"Error updating global patch info: {e}")
+            return False
+
     def archive_champion_data(self, champion_key: str, data: Dict[str, Any]) -> bool:
         """Archive champion data for a specific patch"""
         try:
