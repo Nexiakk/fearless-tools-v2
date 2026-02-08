@@ -6,7 +6,7 @@ Handles batching, retries, and rate limiting.
 import asyncio
 import logging
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timedelta
 
 import requests
@@ -33,6 +33,7 @@ class DataTransmitter:
         self.transmission_queue = None  # Defer creation until start()
         self.last_transmission_time = 0
         self.min_interval = 0.1  # Minimum 100ms between transmissions
+        self._blocked_lobbies: Set[str] = set()  # Lobbies that were cancelled
 
     def _create_session(self) -> requests.Session:
         """Create HTTP session with retry configuration"""
@@ -141,6 +142,15 @@ class DataTransmitter:
                 except asyncio.QueueEmpty:
                     break
 
+        # CRITICAL FIX: Filter out blocked lobbies before transmitting
+        # This prevents race conditions where data was queued before cancellation
+        original_count = len(batch.items)
+        batch.items = [item for item in batch.items if item.lobby_id not in self._blocked_lobbies]
+        filtered_count = original_count - len(batch.items)
+        
+        if filtered_count > 0:
+            logger.debug(f"Filtered out {filtered_count} item(s) for blocked lobbies")
+
         if batch.is_empty():
             return True
 
@@ -186,6 +196,11 @@ class DataTransmitter:
 
     async def _transmit_single_draft(self, draft: DraftData, endpoint_url: str) -> bool:
         """Transmit a single draft to the endpoint"""
+        # Check if this lobby was blocked (cancelled)
+        if draft.lobby_id in self._blocked_lobbies:
+            logger.debug(f"Skipping transmission for blocked lobby {draft.lobby_id}")
+            return False
+
         try:
             payload = draft.to_dict()
 
@@ -231,8 +246,57 @@ class DataTransmitter:
             logger.error(f"Unexpected error transmitting draft for lobby {draft.lobby_id}: {e}")
             return False
 
+    async def clear_pending_for_lobby(self, lobby_id: str) -> int:
+        """
+        Clear any pending draft transmissions for a specific lobby.
+        Called when a draft is cancelled to prevent race conditions.
+        Returns number of items cleared.
+        """
+        if not self.transmission_queue:
+            return 0
+
+        cleared = 0
+        temp_items = []
+
+        # Drain queue and filter out items for this lobby
+        while not self.transmission_queue.empty():
+            try:
+                item = self.transmission_queue.get_nowait()
+                if item.lobby_id == lobby_id:
+                    cleared += 1
+                else:
+                    temp_items.append(item)
+            except asyncio.QueueEmpty:
+                break
+
+        # Put back items for other lobbies
+        for item in temp_items:
+            await self.transmission_queue.put(item)
+
+        if cleared > 0:
+            logger.info(f"Cleared {cleared} pending transmission(s) for lobby {lobby_id}")
+
+        return cleared
+
+    def block_lobby(self, lobby_id: str) -> None:
+        """Block a lobby from being transmitted (called when draft is cancelled)"""
+        self._blocked_lobbies.add(lobby_id)
+        logger.debug(f"Blocked lobby {lobby_id} from future transmissions")
+
+    def clear_blocked_lobbies(self) -> None:
+        """Clear the blocked lobbies list (called when returning to idle)"""
+        if self._blocked_lobbies:
+            logger.debug(f"Clearing blocked lobbies: {self._blocked_lobbies}")
+            self._blocked_lobbies.clear()
+
     async def send_deletion_request(self, lobby_id: str, workspace_id: str) -> bool:
         """Send deletion request for cancelled champion select"""
+        # Block this lobby from any future transmissions
+        self.block_lobby(lobby_id)
+
+        # Clear any pending transmissions for this lobby from the queue
+        await self.clear_pending_for_lobby(lobby_id)
+
         transmission_settings = self.config_manager.get_transmission_settings()
         endpoint_url = transmission_settings.get("endpoint_url")
 

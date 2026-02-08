@@ -175,8 +175,8 @@ const openChampionStatsModal = async () => {
   const { useChampionStatsModalStore } = await import('@/stores/championStatsModal')
   const modalStore = useChampionStatsModalStore()
 
-  // Set the champion and open the modal
-  modalStore.openModal(props.champion)
+  // Set the champion and open the modal, passing the role from which champion was clicked
+  modalStore.openModal(props.champion, props.role)
 }
 
 const handleRightClick = () => {

@@ -12,6 +12,12 @@ const riotDataCache = {
   isLoading: false
 }
 
+// Cache for detailed champion data (abilities)
+const championDetailsCache = {
+  data: new Map(), // championId -> { data, timestamp }
+  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+}
+
 export const riotApiService = {
   /**
    * Fetch latest patch version from Riot API
@@ -342,5 +348,113 @@ export const riotApiService = {
     const championData = await this.getChampionDataWithRetry(patchVersion)
     this.setCachedChampionData(patchVersion, championData)
     return championData
+  },
+
+  /**
+   * Fetch detailed champion data including abilities
+   * Fetches from: /cdn/{patch}/data/en_US/champion/{championId}.json
+   */
+  async getChampionDetails(championId, patchVersion) {
+    if (!championId || !patchVersion) {
+      throw new Error('Champion ID and patch version are required')
+    }
+
+    // Check cache first
+    const cached = championDetailsCache.data.get(championId)
+    if (cached && (Date.now() - cached.timestamp) < championDetailsCache.maxAge) {
+      console.log(`✅ Using cached champion details for ${championId}`)
+      return cached.data
+    }
+
+    try {
+      const url = `${CHAMPION_DATA_BASE_URL}/${patchVersion}/data/en_US/champion/${championId}.json`
+      console.log(`🌐 Fetching champion details for ${championId}...`)
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      const championData = result.data?.[championId]
+
+      if (!championData) {
+        throw new Error(`Champion ${championId} not found in API response`)
+      }
+
+      // Extract ability data
+      const abilities = {
+        passive: {
+          name: championData.passive?.name || 'Passive',
+          description: this.cleanHtml(championData.passive?.description || ''),
+          image: championData.passive?.image?.full
+        },
+        spells: (championData.spells || []).map((spell, index) => ({
+          key: ['Q', 'W', 'E', 'R'][index],
+          name: spell.name || `${['Q', 'W', 'E', 'R'][index]} Ability`,
+          description: this.cleanHtml(spell.description || ''),
+          cooldown: spell.cooldownBurn || '',
+          cost: spell.costBurn || '',
+          image: spell.image?.full
+        }))
+      }
+
+      // Cache the result
+      championDetailsCache.data.set(championId, {
+        data: abilities,
+        timestamp: Date.now()
+      })
+
+      console.log(`✅ Fetched and cached abilities for ${championId}`)
+      return abilities
+
+    } catch (error) {
+      console.error(`Error fetching champion details for ${championId}:`, error)
+      // Return fallback data on error
+      return {
+        passive: { name: 'Passive', description: 'No description available', image: null },
+        spells: [
+          { key: 'Q', name: 'Q Ability', description: 'No description available', cooldown: '', cost: '', image: null },
+          { key: 'W', name: 'W Ability', description: 'No description available', cooldown: '', cost: '', image: null },
+          { key: 'E', name: 'E Ability', description: 'No description available', cooldown: '', cost: '', image: null },
+          { key: 'R', name: 'R Ability', description: 'No description available', cooldown: '', cost: '', image: null }
+        ]
+      }
+    }
+  },
+
+  /**
+   * Clean HTML tags from ability descriptions
+   */
+  cleanHtml(html) {
+    if (!html) return ''
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
+      .replace(/<[^>]*>/g, '')          // Remove other HTML tags
+      .replace(/&nbsp;/g, ' ')          // Convert &nbsp; to space
+      .replace(/&/g, '&')           // Convert & to &
+      .replace(/</g, '<')            // Convert < to <
+      .replace(/>/g, '>')            // Convert > to >
+      .trim()
+  },
+
+  /**
+   * Get ability icon URL
+   */
+  getAbilityIconUrl(imageName, patchVersion) {
+    if (!imageName || !patchVersion) {
+      return null
+    }
+    return `${CHAMPION_DATA_BASE_URL}/${patchVersion}/img/spell/${imageName}`
+  },
+
+  /**
+   * Get passive icon URL
+   */
+  getPassiveIconUrl(imageName, patchVersion) {
+    if (!imageName || !patchVersion) {
+      return null
+    }
+    return `${CHAMPION_DATA_BASE_URL}/${patchVersion}/img/passive/${imageName}`
   }
 }

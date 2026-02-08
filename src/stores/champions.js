@@ -2,7 +2,6 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import {
   fetchChampionsFromIndividualDocs,
-  fetchChampionRolesFromContainers,
 } from "@/services/firebase/championData";
 import { riotApiService } from "@/services/riotApi";
 
@@ -11,7 +10,12 @@ export const useChampionsStore = defineStore("champions", () => {
   const allChampions = ref([]);
   const opTierChampions = ref({});
   const isLoading = ref(false);
-  const patchVersion = ref("16.1.1");
+  const patchVersion = ref(localStorage.getItem('fearless_patch_version') || "16.1.1");
+  
+  // Private state for concurrency control
+  let loadingPromise = null;
+  let lastLoadTime = null;
+  const MIN_RELOAD_INTERVAL = 5000; // 5 seconds minimum between reloads
 
   // Getters
   const championsByRole = computed(() => {
@@ -37,28 +41,50 @@ export const useChampionsStore = defineStore("champions", () => {
   });
 
   // Actions
-  async function loadChampions() {
-    isLoading.value = true;
-    try {
-      console.log("=== LOADING CHAMPION DATA ===");
-
-      // Use the existing function that properly handles the new data structure
-      const result = await fetchChampionsFromIndividualDocs();
-
-      // Set the champions data
-      allChampions.value = result.allChampions || [];
-      opTierChampions.value = result.opTierChampions || {};
-
-      console.log(
-        `✅ Successfully loaded ${allChampions.value.length} champions`
-      );
-    } catch (error) {
-      console.error("=== ERROR loading champion data ===", error);
-      allChampions.value = [];
-      opTierChampions.value = {};
-    } finally {
-      isLoading.value = false;
+  async function loadChampions(forceReload = false) {
+    // Check if data is already loaded and not forcing reload
+    if (!forceReload && allChampions.value.length > 0) {
+      const timeSinceLastLoad = lastLoadTime ? Date.now() - lastLoadTime : Infinity;
+      if (timeSinceLastLoad < MIN_RELOAD_INTERVAL) {
+        console.log(`⏩ Skipping champion load - data already loaded (${allChampions.value.length} champions, ${Math.round(timeSinceLastLoad / 1000)}s ago)`);
+        return;
+      }
     }
+    
+    // Check if loading is already in progress
+    if (loadingPromise) {
+      console.log("⏳ Champion load already in progress, waiting...");
+      return loadingPromise;
+    }
+    
+    // Create new loading promise
+    loadingPromise = (async () => {
+      isLoading.value = true;
+      try {
+        console.log("=== LOADING CHAMPION DATA ===");
+
+        // Use the existing function that properly handles the new data structure
+        const result = await fetchChampionsFromIndividualDocs();
+
+        // Set the champions data
+        allChampions.value = result.allChampions || [];
+        opTierChampions.value = result.opTierChampions || {};
+        lastLoadTime = Date.now();
+
+        console.log(
+          `✅ Successfully loaded ${allChampions.value.length} champions`
+        );
+      } catch (error) {
+        console.error("=== ERROR loading champion data ===", error);
+        allChampions.value = [];
+        opTierChampions.value = {};
+      } finally {
+        isLoading.value = false;
+        loadingPromise = null;
+      }
+    })();
+    
+    return loadingPromise;
   }
 
   function setChampions(champions) {
@@ -80,21 +106,23 @@ export const useChampionsStore = defineStore("champions", () => {
         // Check if patch version changed
         const previousVersion = patchVersion.value;
         patchVersion.value = version;
+        
+        // Persist to localStorage
+        localStorage.setItem('fearless_patch_version', version);
 
         if (previousVersion !== version) {
           console.log(
             `Patch version changed from ${previousVersion} to ${version}`
           );
-          // Clear Riot API cache when patch changes
+          // Clear Riot API cache when patch changes (clearCache already logs)
           riotApiService.clearCache();
-          console.log("🗑️ Cleared Riot API cache due to patch change");
         } else {
           console.log(`Patch version loaded: ${version} (unchanged)`);
         }
       }
     } catch (error) {
       console.error("Error loading patch version:", error);
-      // Keep default patch version
+      // Keep existing (possibly cached) patch version
     }
   }
 

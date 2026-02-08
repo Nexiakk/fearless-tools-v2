@@ -91,6 +91,14 @@
               @update:model-value="settingsStore.updatePoolSetting('enableSearch', $event)"
             />
           </div>
+
+          <div class="flex items-center justify-between">
+            <label class="font-medium">Show Event History</label>
+            <Switch
+              :model-value="settingsStore.settings.pool.showEventHistory"
+              @update:model-value="settingsStore.updatePoolSetting('showEventHistory', $event)"
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="admin" class="space-y-4 mt-4">

@@ -20,12 +20,30 @@ class ChampionAction:
 
 
 @dataclass
+class ChampionEvent:
+    """Represents a champion pick or ban event with timestamp"""
+    champion_id: str
+    order: int
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization"""
+        return {
+            "championId": self.champion_id,
+            "order": self.order,
+            "timestamp": self.timestamp.isoformat()  # ISO format for JSON serialization
+        }
+
+
+@dataclass
 class TeamData:
     """Champion data for one team (blue or red side)"""
     picks: List[str] = field(default_factory=list)  # Champion names in cell order (0-4)
     bans: List[str] = field(default_factory=list)   # Champion names in ban order
     picks_ordered: List[Dict[str, Any]] = field(default_factory=list)  # [{"championId": name, "order": num}]
     bans_ordered: List[Dict[str, Any]] = field(default_factory=list)   # [{"championId": name, "order": num}]
+    pick_events: List[ChampionEvent] = field(default_factory=list)  # NEW: Timestamped pick events
+    ban_events: List[ChampionEvent] = field(default_factory=list)   # NEW: Timestamped ban events
 
 
 @dataclass
@@ -76,13 +94,17 @@ class DraftData:
                 "picks": self.blue_side.picks,
                 "bans": self.blue_side.bans,
                 "picks_ordered": self.blue_side.picks_ordered,
-                "bans_ordered": self.blue_side.bans_ordered
+                "bans_ordered": self.blue_side.bans_ordered,
+                "pick_events": [e.to_dict() for e in self.blue_side.pick_events],
+                "ban_events": [e.to_dict() for e in self.blue_side.ban_events]
             },
             "red_side": {
                 "picks": self.red_side.picks,
                 "bans": self.red_side.bans,
                 "picks_ordered": self.red_side.picks_ordered,
-                "bans_ordered": self.red_side.bans_ordered
+                "bans_ordered": self.red_side.bans_ordered,
+                "pick_events": [e.to_dict() for e in self.red_side.pick_events],
+                "ban_events": [e.to_dict() for e in self.red_side.ban_events]
             },
             "dataHash": self.data_hash
         }

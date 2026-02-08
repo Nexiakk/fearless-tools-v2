@@ -122,18 +122,8 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
       // Update default tiers with champion data
       updateDefaultTiersFromChampions()
 
-      // Try to load global default tiers first
-      const globalDefaults = await loadGlobalDefaults()
-      if (globalDefaults && globalDefaults.length > 0) {
-        // Merge global defaults with champion data
-        defaultTiers.value = globalDefaults.map(tier => ({
-          ...tier,
-          champions: tier.champions || {}
-        }))
-        console.log(`Loaded ${globalDefaults.length} global default tiers`)
-      }
-
-      // Try to load workspace-specific tiers
+      // Try to load workspace-specific tiers first (prioritize workspace over global)
+      let loadedWorkspaceTiers = false
       if (!workspaceStore.isLocalWorkspace) {
         const workspaceRef = doc(db, 'workspaces', workspaceStore.currentWorkspaceId)
         const tiersRef = doc(workspaceRef, 'tiers', 'current')
@@ -143,14 +133,28 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
           const data = docSnap.data()
           tiers.value = data.tiers || []
           console.log(`Loaded ${tiers.value.length} workspace tiers`)
+          loadedWorkspaceTiers = true
         } else {
-          // No workspace tiers, use defaults
+          // No workspace tiers, will fall back to global defaults
           tiers.value = []
         }
       } else {
         // Local workspace - no persistence
         tiers.value = []
         selectedTierId.value = null
+      }
+
+      // Only load global defaults if no workspace tiers exist
+      if (!loadedWorkspaceTiers) {
+        const globalDefaults = await loadGlobalDefaults()
+        if (globalDefaults && globalDefaults.length > 0) {
+          // Merge global defaults with champion data
+          defaultTiers.value = globalDefaults.map(tier => ({
+            ...tier,
+            champions: tier.champions || {}
+          }))
+          console.log(`Loaded ${globalDefaults.length} global default tiers`)
+        }
       }
     } catch (error) {
       console.error('Error loading tiers:', error)

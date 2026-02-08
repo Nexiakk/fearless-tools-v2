@@ -67,7 +67,7 @@ class ChampionMapper:
             for champ_key, champ_data in champions.items():
                 try:
                     champ_id = int(champ_data['key'])
-                    champ_name = champ_data['name']
+                    champ_name = champ_data['id']
 
                     self.champion_map[champ_id] = champ_name
                     self.reverse_map[champ_name] = champ_id

@@ -13,6 +13,7 @@ export const useSettingsStore = defineStore("settings", () => {
       disableAnimations: false,
       centerCards: true,
       enableSearch: true, // Enable search bar feature, default: enabled
+      showEventHistory: true, // Show EventHistory sidebar, default: enabled
     },
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
@@ -96,6 +97,7 @@ export const useSettingsStore = defineStore("settings", () => {
         disableAnimations: false,
         centerCards: false,
         enableSearch: false, // Enable search bar feature, default: enabled
+        showEventHistory: true, // Show EventHistory sidebar, default: enabled
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled

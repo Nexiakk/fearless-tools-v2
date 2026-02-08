@@ -35,16 +35,9 @@ function getWorkspacePath(workspaceId, ...path) {
  */
 export async function fetchDraftDataFromFirestore(workspaceId) {
   const defaultData = {
-    draftSeries: [],
-    unavailablePanelState: {
-      Top: Array(10).fill(null),
-      Jungle: Array(10).fill(null),
-      Mid: Array(10).fill(null),
-      Bot: Array(10).fill(null),
-      Support: Array(10).fill(null)
-    },
-    pickContext: [],
-    bannedChampions: []
+    pickedChampions: [],
+    bannedChampions: [],
+    eventContext: []
   }
 
   if (!workspaceId) {
@@ -59,11 +52,20 @@ export async function fetchDraftDataFromFirestore(workspaceId) {
 
     if (docSnap.exists()) {
       const data = docSnap.data()
+      
+      // Check if data is in old format (migration needed)
+      const isOldFormat = data.draftSeries !== undefined || data.pickContext !== undefined
+      
+      if (isOldFormat) {
+        // Migrate old format to new format
+        return migrateDraftData(data)
+      }
+      
+      // New format
       return {
-        draftSeries: Array.isArray(data.draftSeries) ? data.draftSeries : defaultData.draftSeries,
-        unavailablePanelState: data.unavailablePanelState || defaultData.unavailablePanelState,
-        pickContext: Array.isArray(data.pickContext) ? data.pickContext : defaultData.pickContext,
-        bannedChampions: Array.isArray(data.bannedChampions) ? data.bannedChampions : defaultData.bannedChampions
+        pickedChampions: Array.isArray(data.pickedChampions) ? data.pickedChampions : [],
+        bannedChampions: Array.isArray(data.bannedChampions) ? data.bannedChampions : [],
+        eventContext: Array.isArray(data.eventContext) ? data.eventContext : []
       }
     } else {
       console.log('No draft data found in Firestore, using defaults.')
@@ -72,6 +74,61 @@ export async function fetchDraftDataFromFirestore(workspaceId) {
   } catch (error) {
     console.error('Error fetching draft data:', error)
     return defaultData
+  }
+}
+
+/**
+ * Migrate old draft data format to new format
+ */
+function migrateDraftData(data) {
+  const now = new Date()
+  const eventContext = []
+  
+  // Migrate pickContext to eventContext (picks)
+  if (Array.isArray(data.pickContext)) {
+    data.pickContext.forEach((ctx, index) => {
+      eventContext.push({
+        championId: ctx.championName,
+        eventType: 'PICK',
+        eventOrder: ctx.pickOrder || index + 1,
+        timestamp: new Date(now.getTime() - (data.pickContext.length - index) * 1000)
+      })
+    })
+  }
+  
+  // Migrate manualEvents (bans with timestamps)
+  if (Array.isArray(data.manualEvents)) {
+    data.manualEvents.forEach((event) => {
+      if (event.isBan) {
+        eventContext.push({
+          championId: event.championName,
+          eventType: 'BAN',
+          eventOrder: 0, // Bans don't have order
+          timestamp: event.timestamp instanceof Date ? event.timestamp : new Date(event.timestamp)
+        })
+      }
+    })
+  } else if (Array.isArray(data.bannedChampions)) {
+    // If no manualEvents, migrate bannedChampions without timestamps
+    data.bannedChampions.forEach((championName, index) => {
+      eventContext.push({
+        championId: championName,
+        eventType: 'BAN',
+        eventOrder: 0,
+        timestamp: new Date(now.getTime() - (data.bannedChampions.length - index) * 1000)
+      })
+    })
+  }
+  
+  // Sort by timestamp
+  eventContext.sort((a, b) => a.timestamp - b.timestamp)
+  
+  console.log('[Migration] Migrated old draft data to new format')
+  
+  return {
+    pickedChampions: Array.isArray(data.draftSeries) ? data.draftSeries : [],
+    bannedChampions: Array.isArray(data.bannedChampions) ? data.bannedChampions : [],
+    eventContext
   }
 }
 
@@ -87,11 +144,20 @@ export async function saveDraftDataToFirestore(workspaceId, draftData) {
     const workspaceRef = doc(db, 'workspaces', workspaceId)
     const draftRef = doc(workspaceRef, 'drafts', DRAFT_TRACKER_DOC_ID)
     
+    // Convert Date objects to Firestore Timestamps for eventContext
+    const eventContext = Array.isArray(draftData.eventContext) 
+      ? draftData.eventContext.map(event => ({
+          ...event,
+          timestamp: event.timestamp instanceof Date 
+            ? Timestamp.fromDate(event.timestamp) 
+            : event.timestamp
+        }))
+      : []
+    
     const dataToSave = {
-      draftSeries: Array.isArray(draftData.draftSeries) ? draftData.draftSeries : [],
-      unavailablePanelState: draftData.unavailablePanelState || {},
-      pickContext: Array.isArray(draftData.pickContext) ? draftData.pickContext : [],
-      bannedChampions: Array.isArray(draftData.bannedChampions) ? draftData.bannedChampions : []
+      pickedChampions: Array.isArray(draftData.pickedChampions) ? draftData.pickedChampions : [],
+      bannedChampions: Array.isArray(draftData.bannedChampions) ? draftData.bannedChampions : [],
+      eventContext: eventContext
     }
 
     await setDoc(draftRef, dataToSave)
@@ -757,8 +823,24 @@ export async function fetchLcuDraftsFromFirestore(workspaceId) {
         id: docSnap.id,
         lobbyId: data.lobbyId || null,
         phase: data.phase || 'UNKNOWN',
-        blueSide: data.blueSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
-        redSide: data.redSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+        blueSide: {
+          picks: data.blueSide?.picks || [],
+          bans: data.blueSide?.bans || [],
+          picksOrdered: data.blueSide?.picksOrdered || [],
+          bansOrdered: data.blueSide?.bansOrdered || [],
+          // NEW: Timestamped events for accurate event history
+          pickEvents: data.blueSide?.pickEvents || [],
+          banEvents: data.blueSide?.banEvents || []
+        },
+        redSide: {
+          picks: data.redSide?.picks || [],
+          bans: data.redSide?.bans || [],
+          picksOrdered: data.redSide?.picksOrdered || [],
+          bansOrdered: data.redSide?.bansOrdered || [],
+          // NEW: Timestamped events for accurate event history
+          pickEvents: data.redSide?.pickEvents || [],
+          banEvents: data.redSide?.banEvents || []
+        },
         isNewGame: data.isNewGame || false,
         createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
         updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
@@ -820,8 +902,22 @@ export function setupLcuDraftsRealtimeSync(workspaceId, callback) {
             id: docSnap.id,
             lobbyId: data.lobbyId || null,
             phase: data.phase || 'UNKNOWN',
-            blueSide: data.blueSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
-            redSide: data.redSide || { picks: [], bans: [], picksOrdered: [], bansOrdered: [] },
+            blueSide: {
+              picks: data.blueSide?.picks || [],
+              bans: data.blueSide?.bans || [],
+              picksOrdered: data.blueSide?.picksOrdered || [],
+              bansOrdered: data.blueSide?.bansOrdered || [],
+              pickEvents: data.blueSide?.pickEvents || [],
+              banEvents: data.blueSide?.banEvents || []
+            },
+            redSide: {
+              picks: data.redSide?.picks || [],
+              bans: data.redSide?.bans || [],
+              picksOrdered: data.redSide?.picksOrdered || [],
+              bansOrdered: data.redSide?.bansOrdered || [],
+              pickEvents: data.redSide?.pickEvents || [],
+              banEvents: data.redSide?.banEvents || []
+            },
             isNewGame: data.isNewGame || false,
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt

@@ -11,22 +11,28 @@
         
         <!-- Actual Content - Show only when workspace exists and all data is loaded -->
         <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
-          <!-- Tier Selector (shown in editor mode) -->
-          <TierSelector @open-tier-manager="openTierManager" />
+          <!-- Event History - Left Side -->
+          <EventHistory v-if="settingsStore.settings.pool.showEventHistory" />
 
-          <!-- Role Pillars Container -->
-          <div
-            class="compact-view-container"
-            :class="{ ...viewClasses, 'search-active': isSearchActive, 'editor-mode': adminStore.isEditorModeActive }"
-            :style="cardSizeStyles"
-          >
-            <RolePillar
-              v-for="role in roles"
-              :key="role"
-              :role="role"
-              :champions="championsByRole[role]"
-              :ref="(el) => setPillarRef(el, role)"
-            />
+          <!-- Main Content Area -->
+          <div class="pool-content-area">
+            <!-- Tier Selector (shown in editor mode) -->
+            <TierSelector @open-tier-manager="openTierManager" />
+
+            <!-- Role Pillars Container -->
+            <div
+              class="compact-view-container"
+              :class="{ ...viewClasses, 'search-active': isSearchActive, 'editor-mode': adminStore.isEditorModeActive }"
+              :style="cardSizeStyles"
+            >
+              <RolePillar
+                v-for="role in roles"
+                :key="role"
+                :role="role"
+                :champions="championsByRole[role]"
+                :ref="(el) => setPillarRef(el, role)"
+              />
+            </div>
           </div>
         </div>
       </Transition>
@@ -45,6 +51,9 @@
         :is-open="isTierManagerModalOpen"
         @close="closeTierManagerModal"
       />
+
+      <!-- Champion Stats Modal (Bottom Drawer) -->
+      <ChampionStatsModal v-if="workspaceStore.hasWorkspace" />
     </div>
     
     <!-- Show "join workspace" only when not loading and no workspace -->
@@ -71,6 +80,8 @@ import ChampionPoolSkeleton from '@/components/champion-pool/ChampionPoolSkeleto
 import ChampionCard from '@/components/champion-pool/ChampionCard.vue'
 import TierSelector from '@/components/champion-pool/TierSelector.vue'
 import TierManagerModal from '@/components/champion-pool/TierManagerModal.vue'
+import EventHistory from '@/components/champion-pool/EventHistory.vue'
+import ChampionStatsModal from '@/components/champion-pool/ChampionStatsModal.vue'
 
 const workspaceStore = useWorkspaceStore()
 const draftStore = useDraftStore()
