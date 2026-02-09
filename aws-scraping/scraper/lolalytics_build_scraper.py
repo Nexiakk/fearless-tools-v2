@@ -5,6 +5,8 @@ import re
 import time
 from typing import Dict, List, Optional
 
+from .utils import get_internal_key_from_lolalytics
+
 def encode_champion_name_for_lolalytics(display_name):
     """Encode champion name for Lolalytics URL format (simplified, no special chars/spaces)"""
     # Convert to lowercase
@@ -317,7 +319,14 @@ class LolalyticsBuildScraper:
                         href = link['href']
                         match = re.search(r'/vs/([^/]+)/', href)
                         if match:
-                            counter_data['champion'] = match.group(1).replace('-', ' ').title()
+                            lolalytics_name = match.group(1)
+                            # Convert to internal champion key using proper mapping
+                            internal_key = get_internal_key_from_lolalytics(lolalytics_name)
+                            if internal_key:
+                                counter_data['champion'] = internal_key
+                            else:
+                                # Fallback to the old behavior if mapping fails
+                                counter_data['champion'] = lolalytics_name.replace('-', ' ').title()
 
                         # Extract win rate - look for percentage in the link content
                         link_text = link.get_text()

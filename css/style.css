@@ -13,9 +13,9 @@
   min-height: 40px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-/* Editor mode: orange bottom border on navbar */
+/* Editor mode: orange bottom border on navbar - REMOVED */
 .top-navbar.editor-mode-active {
-  border-bottom: 2px solid rgba(245, 158, 11, 0.8); /* Same orange as bottom border */
+  border-bottom: none;
 }
 /* Remove shadow on scouting page to avoid shadow where border was */
 .top-navbar.scouting-page:not(.editor-mode-active) {

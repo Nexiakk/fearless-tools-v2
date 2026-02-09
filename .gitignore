@@ -80,3 +80,4 @@ aws-scraping/tests/test_lolalytics_counters.py
 aws-scraping/tests/test_lolalytics_investigate.py
 aws-scraping/tests/test_lolalytics_templates.py
 aws-scraping/tests/output/investigation_20260208_131021.txt
+lcu-client/config/workspace.json

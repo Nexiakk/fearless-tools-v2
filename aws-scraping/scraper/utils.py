@@ -81,6 +81,7 @@ class ChampionNameMapper:
     def __init__(self, riot_client: RiotAPIClient):
         self.riot_client = riot_client
         self._mapping_cache = {}
+        self._lolalytics_to_internal_cache = {}
 
     def _get_mapping(self) -> Dict[str, Dict]:
         """Get comprehensive champion mapping"""
@@ -100,6 +101,41 @@ class ChampionNameMapper:
 
         self._mapping_cache = mapping
         return mapping
+
+    def _build_lolalytics_to_internal_mapping(self) -> Dict[str, str]:
+        """Build a mapping from lolalytics-format names to internal champion keys"""
+        if self._lolalytics_to_internal_cache:
+            return self._lolalytics_to_internal_cache
+
+        mapping = {}
+        for internal_key in self.get_champion_list():
+            # Convert internal key to lolalytics format
+            lolalytics_key = self.encode_for_lolalytics(self.get_display_name(internal_key))
+            mapping[lolalytics_key] = internal_key
+
+        self._lolalytics_to_internal_cache = mapping
+        return mapping
+
+    def get_internal_key_from_lolalytics(self, lolalytics_name: str) -> Optional[str]:
+        """
+        Convert a lolalytics-format champion name to internal champion key.
+        
+        Args:
+            lolalytics_name: Champion name in lolalytics format (e.g., 'leesin', 'xinzhao', 'missfortune')
+            
+        Returns:
+            Internal champion key (e.g., 'LeeSin', 'XinZhao', 'MissFortune') or None if not found
+        """
+        # Normalize the input: lowercase and remove spaces/hyphens
+        normalized = lolalytics_name.lower().replace('-', '').replace(' ', '').replace("'", '').replace('"', '')
+
+        # Handle special case: Monkey King is "wukong" on lolalytics
+        if normalized == 'monkeyking':
+            normalized = 'wukong'
+
+        # Build and use the reverse mapping
+        lolalytics_map = self._build_lolalytics_to_internal_mapping()
+        return lolalytics_map.get(normalized)
 
     def get_display_name(self, internal_key: str) -> str:
         """Convert internal key to display name"""
@@ -198,3 +234,7 @@ def normalize_patch_for_lolalytics(patch_version: str) -> str:
 
 def get_previous_patch(current_patch: str) -> Optional[str]:
     return _patch_manager.get_previous_patch(current_patch)
+
+def get_internal_key_from_lolalytics(lolalytics_name: str) -> Optional[str]:
+    """Convert a lolalytics-format champion name to internal champion key."""
+    return _name_mapper.get_internal_key_from_lolalytics(lolalytics_name)
