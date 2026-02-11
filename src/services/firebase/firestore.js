@@ -186,30 +186,31 @@ export function setupDraftRealtimeSync(workspaceId, callback) {
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data()
-          callback({
-            draftSeries: data.draftSeries || [],
-            unavailablePanelState: data.unavailablePanelState || {
-              Top: Array(10).fill(null),
-              Jungle: Array(10).fill(null),
-              Mid: Array(10).fill(null),
-              Bot: Array(10).fill(null),
-              Support: Array(10).fill(null)
-            },
-            pickContext: data.pickContext || [],
-            bannedChampions: data.bannedChampions || []
-          })
+          
+          // Check if data is in old format (migration needed)
+          const isOldFormat = data.draftSeries !== undefined || data.pickContext !== undefined
+          
+          if (isOldFormat) {
+            // Migrate old format to new format for real-time sync
+            const migratedData = migrateDraftData(data)
+            callback({
+              pickedChampions: migratedData.pickedChampions,
+              bannedChampions: migratedData.bannedChampions,
+              eventContext: migratedData.eventContext
+            })
+          } else {
+            // New format
+            callback({
+              pickedChampions: Array.isArray(data.pickedChampions) ? data.pickedChampions : [],
+              bannedChampions: Array.isArray(data.bannedChampions) ? data.bannedChampions : [],
+              eventContext: Array.isArray(data.eventContext) ? data.eventContext : []
+            })
+          }
         } else {
           callback({
-            draftSeries: [],
-            unavailablePanelState: {
-              Top: Array(10).fill(null),
-              Jungle: Array(10).fill(null),
-              Mid: Array(10).fill(null),
-              Bot: Array(10).fill(null),
-              Support: Array(10).fill(null)
-            },
-            pickContext: [],
-            bannedChampions: []
+            pickedChampions: [],
+            bannedChampions: [],
+            eventContext: []
           })
         }
       },

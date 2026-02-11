@@ -226,14 +226,25 @@ watch(searchQuery, () => {
 let focusInterval = null;
 let clickHandler = null;
 
-const maintainFocus = () => {
-  // Don't maintain focus if any modals are open
+const isAnyModalOpen = () => {
+  // Check store-based modal states
   if (
     settingsStore.isSettingsOpen ||
     workspaceStore.isWorkspaceModalOpen ||
     workspaceStore.isWorkspaceSwitcherOpen ||
     adminStore.isOpen
   ) {
+    return true;
+  }
+  
+  // Check for any open dialog/modal in the DOM (data-state="open" is used by reka-ui dialogs)
+  const openDialogs = document.querySelectorAll('[role="dialog"][data-state="open"], [data-radix-dialog-content]');
+  return openDialogs.length > 0;
+};
+
+const maintainFocus = () => {
+  // Don't maintain focus if any modals are open
+  if (isAnyModalOpen()) {
     return;
   }
 
@@ -264,11 +275,7 @@ const setupAutoFocus = () => {
     // Handle clicks to refocus
     clickHandler = (e) => {
       // Don't refocus if any modals are open
-      if (
-        settingsStore.isSettingsOpen ||
-        workspaceStore.isWorkspaceModalOpen ||
-        workspaceStore.isWorkspaceSwitcherOpen
-      ) {
+      if (isAnyModalOpen()) {
         return;
       }
 

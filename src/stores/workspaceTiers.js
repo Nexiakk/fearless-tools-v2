@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/services/firebase/config'
+import { workspaceService } from '@/services/workspace'
 import { useWorkspaceStore } from './workspace'
 import { useChampionsStore } from './champions'
 import { authService } from '@/services/firebase/auth'
@@ -582,14 +583,61 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     }
   }
 
-  // Cleanup
-  function cleanup() {
+  // Reset store state for workspace switch
+  function reset() {
+    // Clean up real-time sync
     if (unsubscribeRealtimeSync) {
       unsubscribeRealtimeSync()
       unsubscribeRealtimeSync = null
     }
+    // Reset state
+    tiers.value = []
+    selectedTierId.value = null
     isInitialized.value = false
+    error.value = ''
+    // Clear any pending save
+    if (saveTimeout) {
+      clearTimeout(saveTimeout)
+      saveTimeout = null
+    }
+    isSaving.value = false
   }
+
+  // Cleanup
+  function cleanup() {
+    reset()
+  }
+
+  // Watch for workspace changes and reload tiers
+  let workspaceWatcherUnsubscribe = null
+  function setupWorkspaceWatcher() {
+    // Clean up existing watcher if any
+    if (workspaceWatcherUnsubscribe) {
+      workspaceWatcherUnsubscribe()
+      workspaceWatcherUnsubscribe = null
+    }
+
+    const workspaceStore = useWorkspaceStore()
+    
+    workspaceWatcherUnsubscribe = watch(
+      () => workspaceStore.currentWorkspaceId,
+      async (newWorkspaceId, oldWorkspaceId) => {
+        if (newWorkspaceId && newWorkspaceId !== oldWorkspaceId) {
+          console.log(`Workspace changed from ${oldWorkspaceId} to ${newWorkspaceId}, reloading tiers...`)
+          // Reset and reinitialize for the new workspace
+          reset()
+          await initialize()
+        } else if (!newWorkspaceId) {
+          // No workspace selected, clean up
+          reset()
+        }
+      },
+      { immediate: false }
+    )
+  }
+
+  // Initialize the workspace watcher immediately
+  setupWorkspaceWatcher()
 
   return {
     // State

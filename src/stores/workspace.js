@@ -133,16 +133,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         return
       }
 
-      // Update draft store with remote changes
-      if (JSON.stringify(draftStore.draftSeries) !== JSON.stringify(data.draftSeries)) {
-        draftStore.draftSeries = data.draftSeries
+      // Update draft store with remote changes using new data structure
+      if (JSON.stringify(draftStore.pickedChampions) !== JSON.stringify(data.pickedChampions)) {
+        draftStore.pickedChampions = data.pickedChampions || []
       }
 
-      if (JSON.stringify(draftStore.unavailablePanelState) !== JSON.stringify(data.unavailablePanelState)) {
-        draftStore.unavailablePanelState = data.unavailablePanelState
+      const bannedChampionsSet = new Set(data.bannedChampions || [])
+      if (JSON.stringify(Array.from(draftStore.bannedChampions)) !== JSON.stringify(data.bannedChampions || [])) {
+        draftStore.bannedChampions = bannedChampionsSet
       }
-      if (JSON.stringify(draftStore.pickContext) !== JSON.stringify(data.pickContext)) {
-        draftStore.pickContext = data.pickContext
+
+      if (JSON.stringify(draftStore.eventContext) !== JSON.stringify(data.eventContext)) {
+        draftStore.eventContext = data.eventContext || []
       }
 
       setSyncing(false)
