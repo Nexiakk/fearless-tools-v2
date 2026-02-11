@@ -127,7 +127,7 @@ class LcuSyncService {
     // Convert LCU champion IDs to names
     const championsStore = useDraftStore().$pinia._s.get('champions')
     const championIdToName = (id) => {
-      if (!id || id === '0') return null
+      if (!id || id === 'None') return null
       const idNum = parseInt(id, 10)
       const champion = championsStore.allChampions.find(c => c.id === idNum)
       return champion ? champion.name : null
@@ -135,14 +135,19 @@ class LcuSyncService {
 
     // Populate blue side
     if (latestDraft.blueSide) {
-      // Bans (first 5 positions)
+      // Bans (first 5 positions) - skip empty bans but maintain positions
       if (latestDraft.blueSide.bans) {
-        latestDraft.blueSide.bans.forEach((banId, index) => {
-          if (index < 5) {
+        let actualBanIndex = 0
+        latestDraft.blueSide.bans.forEach((banId) => {
+          if (actualBanIndex < 5 && banId !== 'None') {
             const championName = championIdToName(banId)
             if (championName) {
-              this.draftStore.updateCurrentDraftSlot('blue', 'bans', index, championName)
+              this.draftStore.updateCurrentDraftSlot('blue', 'bans', actualBanIndex, championName)
+              actualBanIndex++
             }
+          } else if (banId === 'None') {
+            // Empty ban - just increment the index to skip this slot
+            actualBanIndex++
           }
         })
       }
@@ -162,14 +167,19 @@ class LcuSyncService {
 
     // Populate red side
     if (latestDraft.redSide) {
-      // Bans (first 5 positions)
+      // Bans (first 5 positions) - skip empty bans but maintain positions
       if (latestDraft.redSide.bans) {
-        latestDraft.redSide.bans.forEach((banId, index) => {
-          if (index < 5) {
+        let actualBanIndex = 0
+        latestDraft.redSide.bans.forEach((banId) => {
+          if (actualBanIndex < 5 && banId !== 'None') {
             const championName = championIdToName(banId)
             if (championName) {
-              this.draftStore.updateCurrentDraftSlot('red', 'bans', index, championName)
+              this.draftStore.updateCurrentDraftSlot('red', 'bans', actualBanIndex, championName)
+              actualBanIndex++
             }
+          } else if (banId === 'None') {
+            // Empty ban - just increment the index to skip this slot
+            actualBanIndex++
           }
         })
       }
@@ -216,8 +226,8 @@ class LcuSyncService {
     const bluePicks = latestDraft.blueSide?.picks || []
     const redPicks = latestDraft.redSide?.picks || []
 
-    const hasBans = blueBans.some(id => id && id !== '0') || redBans.some(id => id && id !== '0')
-    const hasPicks = bluePicks.some(id => id && id !== '0') || redPicks.some(id => id && id !== '0')
+    const hasBans = blueBans.some(id => id && id !== 'None') || redBans.some(id => id && id !== 'None')
+    const hasPicks = bluePicks.some(id => id && id !== 'None') || redPicks.some(id => id && id !== 'None')
 
     if (!hasBans && !hasPicks) return false // No active game data
 
@@ -288,8 +298,8 @@ class LcuSyncService {
     const bluePicks = latestDraft.blueSide?.picks || []
     const redPicks = latestDraft.redSide?.picks || []
 
-    const totalPicks = bluePicks.filter(id => id && id !== '0').length +
-                       redPicks.filter(id => id && id !== '0').length
+    const totalPicks = bluePicks.filter(id => id && id !== 'None').length +
+                       redPicks.filter(id => id && id !== 'None').length
 
     const allPicksDone = totalPicks >= 10
 
@@ -308,13 +318,13 @@ class LcuSyncService {
 
     if (completedDraft.blueSide?.bans) {
       completedDraft.blueSide.bans.forEach(id => {
-        if (id && id !== '0') bannedIds.add(id)
+        if (id && id !== 'None') bannedIds.add(id)
       })
     }
 
     if (completedDraft.redSide?.bans) {
       completedDraft.redSide.bans.forEach(id => {
-        if (id && id !== '0') bannedIds.add(id)
+        if (id && id !== 'None') bannedIds.add(id)
       })
     }
 

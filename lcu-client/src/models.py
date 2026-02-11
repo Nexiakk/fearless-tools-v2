@@ -103,6 +103,70 @@ class DraftData:
             "dataHash": self.data_hash
         }
 
+    def has_meaningful_data(self) -> bool:
+        """
+        Check if draft has any meaningful data (picks or bans).
+        Ghost documents with empty picks and bans should be rejected.
+        """
+        has_picks = len(self.blue_side.picks) > 0 or len(self.red_side.picks) > 0
+        has_bans = len(self.blue_side.bans) > 0 or len(self.red_side.bans) > 0
+        return has_picks or has_bans
+    
+    def is_valid(self) -> bool:
+        """
+        Validate that this draft data is valid and should be transmitted.
+        Rejects drafts with UNKNOWN, empty, or None lobby_id.
+        Also rejects ghost documents with no picks or bans.
+        """
+        # Check lobby_id is not None
+        if self.lobby_id is None:
+            return False
+        
+        # Check lobby_id is a string and not empty/whitespace
+        if not isinstance(self.lobby_id, str) or not self.lobby_id.strip():
+            return False
+        
+        # Check lobby_id is not "UNKNOWN" (case-insensitive)
+        if self.lobby_id.strip().upper() == "UNKNOWN":
+            return False
+        
+        # Check workspace_id is also valid
+        if self.workspace_id is None:
+            return False
+        
+        if not isinstance(self.workspace_id, str) or not self.workspace_id.strip():
+            return False
+        
+        # CRITICAL FIX: Check that draft has meaningful data (picks or bans)
+        # This prevents ghost documents from being created
+        if not self.has_meaningful_data():
+            return False
+        
+        return True
+    
+    def get_validation_error(self) -> Optional[str]:
+        """Get a human-readable validation error message if invalid."""
+        if self.lobby_id is None:
+            return "lobby_id is None"
+        
+        if not isinstance(self.lobby_id, str) or not self.lobby_id.strip():
+            return f"lobby_id is empty or invalid: {repr(self.lobby_id)}"
+        
+        if self.lobby_id.strip().upper() == "UNKNOWN":
+            return f"lobby_id is UNKNOWN"
+        
+        if self.workspace_id is None:
+            return "workspace_id is None"
+        
+        if not isinstance(self.workspace_id, str) or not self.workspace_id.strip():
+            return f"workspace_id is empty or invalid: {repr(self.workspace_id)}"
+        
+        # CRITICAL FIX: Check for ghost documents (no picks or bans)
+        if not self.has_meaningful_data():
+            return f"ghost document - no picks or bans (blue_picks: {len(self.blue_side.picks)}, red_picks: {len(self.red_side.picks)}, blue_bans: {len(self.blue_side.bans)}, red_bans: {len(self.red_side.bans)})"
+        
+        return None
+
 
 @dataclass
 class GameflowPhase:

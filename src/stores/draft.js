@@ -10,6 +10,7 @@ import {
 import { workspaceService } from "@/services/workspace";
 import { useWorkspaceStore } from "./workspace";
 import { useChampionsStore } from "./champions";
+import { canWrite } from "@/composables/usePermissions";
 
 export const useDraftStore = defineStore("draft", () => {
   // State - NEW STRUCTURE
@@ -240,6 +241,12 @@ export const useDraftStore = defineStore("draft", () => {
   }
 
   function toggleBan(championName) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[DraftStore] toggleBan blocked: User is in view-only mode');
+      return;
+    }
+
     if (isLcuBanned(championName)) {
       return;
     }
@@ -267,6 +274,12 @@ export const useDraftStore = defineStore("draft", () => {
   }
 
   function togglePick(championName) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[DraftStore] togglePick blocked: User is in view-only mode');
+      return;
+    }
+
     if (isLcuUnavailable(championName) || isBannedChampion(championName)) {
       return;
     }
@@ -298,6 +311,12 @@ export const useDraftStore = defineStore("draft", () => {
   }
 
   async function resetUnavailable() {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[DraftStore] resetUnavailable blocked: User is in view-only mode');
+      return;
+    }
+
     pickedChampions.value = [];
     bannedChampions.value = new Set();
     eventContext.value = [];
@@ -322,6 +341,12 @@ export const useDraftStore = defineStore("draft", () => {
   }
 
   async function resetBans() {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[DraftStore] resetBans blocked: User is in view-only mode');
+      return;
+    }
+
     bannedChampions.value = new Set();
     // Remove ban events from eventContext
     eventContext.value = eventContext.value.filter((e) => e.eventType !== "BAN");

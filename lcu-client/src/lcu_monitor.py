@@ -7,8 +7,10 @@ Uses state machine pattern for optimized resource usage.
 import asyncio
 import logging
 from enum import Enum, auto
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Tuple
 from datetime import datetime
+import json
+import time
 
 from lcu_driver import Connector
 from lcu_driver.events.responses import WebsocketEventResponse
@@ -27,6 +29,29 @@ except ImportError:
     from notifications import get_notifier, NotificationType
 
 logger = logging.getLogger(__name__)
+
+# Event counter for tracking event frequency
+_event_counter = {"count": 0, "last_reset": time.time()}
+
+def _log_event_frequency(event_type: str):
+    """Log event frequency to detect spam"""
+    _event_counter["count"] += 1
+    elapsed = time.time() - _event_counter["last_reset"]
+    if elapsed >= 5.0:  # Log every 5 seconds
+        rate = _event_counter["count"] / elapsed
+        logger.info(f"[EVENT_RATE] {event_type}: {_event_counter['count']} events in {elapsed:.1f}s ({rate:.1f}/sec)")
+        _event_counter["count"] = 0
+        _event_counter["last_reset"] = time.time()
+
+def _truncate_data(data: Any, max_len: int = 500) -> str:
+    """Truncate data for logging"""
+    try:
+        json_str = json.dumps(data, default=str, indent=None)
+        if len(json_str) > max_len:
+            return json_str[:max_len] + f"... [truncated, total: {len(json_str)} chars]"
+        return json_str
+    except:
+        return str(data)[:max_len]
 
 
 class MonitorState(Enum):
@@ -82,6 +107,10 @@ class LCUMonitor:
 
         # Event handlers will be set up when connector is created
         self._event_handlers_setup = False
+        
+        # CRITICAL FIX: Store raw ID-based draft data for proper change detection
+        # This prevents the bug where names are compared against IDs
+        self._last_raw_draft_data: Optional[DraftData] = None
 
     def _set_state(self, new_state: MonitorState) -> None:
         """Change monitor state with logging and notification"""
@@ -134,12 +163,26 @@ class LCUMonitor:
         @self.connector.ws.register(self.CHAMP_SELECT_URL)
         async def champ_select_update(connection, event):
             """Handle champion select session updates - only process in monitoring state"""
+            # Log event frequency to detect spam
+            _log_event_frequency("champ_select")
+            
             # OPTIMIZATION: Ignore champ select events when not monitoring
             if self.state != MonitorState.MONITORING_CHAMP_SELECT:
-                logger.debug(f"Ignoring champ select event in {self.state.value} state")
+                logger.debug(f"[CHAMP_SELECT_EVENT] Ignoring event - current state: {self.state.value}")
                 return
 
             if event.data:
+                # Log key info about the event
+                timer = event.data.get('timer', {})
+                phase = timer.get('phase', 'UNKNOWN')
+                internal_phase = event.data.get('internalPhase', 'UNKNOWN')
+                logger.debug(f"[CHAMP_SELECT_EVENT] Phase: {phase}, InternalPhase: {internal_phase}")
+                
+                # Log actions summary
+                actions = event.data.get('actions', [])
+                total_actions = sum(len(ag) for ag in actions) if actions else 0
+                logger.debug(f"[CHAMP_SELECT_EVENT] Actions groups: {len(actions)}, Total actions: {total_actions}")
+                
                 await self._process_champ_select_data(event.data)
 
         @self.connector.ws.register(self.GAMEFLOW_URL)
@@ -370,46 +413,85 @@ class LCUMonitor:
     async def _process_champ_select_data(self, champ_select_data: Dict[str, Any]):
         """Process champion select session data - only called in MONITORING state"""
         try:
+            logger.debug(f"[PROCESS_CHAMP_SELECT] Starting processing for lobby {self.current_lobby_id}")
+            
             # GUARD: Must be in monitoring state
             if self.state != MonitorState.MONITORING_CHAMP_SELECT:
-                logger.debug(f"Ignoring champ select data in {self.state.value} state")
+                logger.debug(f"[GUARD_FAIL] Not in monitoring state, current: {self.state.value}")
                 return
 
-            # GUARD: Must have valid lobby_id
-            if not self.current_lobby_id:
+            # GUARD: Must have valid lobby_id (not None, empty, or "UNKNOWN")
+            if not self.current_lobby_id or self.current_lobby_id.strip().upper() == "UNKNOWN":
                 # Try to extract from champ select data
                 if 'gameId' in champ_select_data:
-                    self.current_lobby_id = str(champ_select_data['gameId'])
-                    logger.info(f"Set lobby_id from champ select: {self.current_lobby_id}")
+                    extracted_lobby_id = str(champ_select_data['gameId'])
+                    # Validate extracted lobby_id is not UNKNOWN
+                    if extracted_lobby_id.strip().upper() == "UNKNOWN":
+                        logger.warning(f"[GUARD_FAIL] Extracted lobby_id is UNKNOWN, skipping")
+                        return
+                    self.current_lobby_id = extracted_lobby_id
+                    logger.info(f"[LOBBY_ID_SET] Set lobby_id from champ select: {self.current_lobby_id}")
                     # Send notification now that we have the lobby ID
                     if not self._champ_select_notification_sent:
                         self.notifier.on_champ_select_started(self.current_lobby_id)
                         self._champ_select_notification_sent = True
                 else:
-                    logger.warning("No lobby_id available, skipping champ select data")
+                    logger.warning("[GUARD_FAIL] No lobby_id available, skipping champ select data")
                     return
 
             # GUARD: Must have workspace_id
             if not self.workspace_id:
-                logger.warning("No workspace_id configured, skipping")
+                logger.warning("[GUARD_FAIL] No workspace_id configured, skipping")
                 return
 
             # GUARD: Validate champ select data isn't empty/stale
             if not self._is_valid_champ_select_data(champ_select_data):
-                logger.debug("Invalid or empty champ select data, skipping")
+                logger.debug("[GUARD_FAIL] Invalid or empty champ select data, skipping")
                 return
+
+            # Log raw team data for debugging
+            my_team = champ_select_data.get('myTeam', [])
+            their_team = champ_select_data.get('theirTeam', [])
+            logger.debug(f"[TEAM_DATA] myTeam: {len(my_team)} players, theirTeam: {len(their_team)} players")
+            
+            # Log each player's champion assignment
+            for player in my_team:
+                logger.debug(f"[MY_TEAM] cellId={player.get('cellId')}, champId={player.get('championId')}, team={player.get('team')}")
+            for player in their_team:
+                logger.debug(f"[THEIR_TEAM] cellId={player.get('cellId')}, champId={player.get('championId')}, team={player.get('team')}")
 
             # Extract draft data
             draft_data = self._extract_draft_data(champ_select_data)
 
             if draft_data:
-                # Check for meaningful changes
-                if self._has_draft_changes(draft_data):
-                    logger.debug(f"Draft changes detected for lobby {self.current_lobby_id}")
+                # Log extracted data
+                logger.debug(f"[EXTRACTED] Blue picks: {draft_data.blue_side.picks}, Red picks: {draft_data.red_side.picks}")
+                logger.debug(f"[EXTRACTED] Blue bans: {draft_data.blue_side.bans}, Red bans: {draft_data.red_side.bans}")
+                logger.debug(f"[EXTRACTED] Phase: {draft_data.phase}")
+                
+                # CRITICAL FIX: Reject ghost documents (no picks or bans)
+                if not draft_data.has_meaningful_data():
+                    logger.debug(f"[GUARD_FAIL] Draft has no picks or bans - ghost document rejected for lobby {self.current_lobby_id}")
+                    return
+                
+                # CRITICAL FIX: Compare using raw ID-based data (not converted names)
+                # This prevents the bug where names are compared against IDs
+                has_changes, change_details = self._has_draft_changes_detailed(draft_data)
+                
+                if has_changes:
+                    logger.info(f"[CHANGE_DETECTED] {change_details}")
+
+                    # Store the raw ID-based data for future comparison
+                    import copy
+                    self._last_raw_draft_data = copy.deepcopy(draft_data)
 
                     # Convert champion IDs to names
                     self.champion_mapper.update_draft_with_names(draft_data)
                     draft_data.update_hash()
+                    
+                    logger.debug(f"[HASH] New hash: {draft_data.data_hash}")
+                    if self.last_draft_data:
+                        logger.debug(f"[HASH] Old hash: {self.last_draft_data.data_hash}")
 
                     # Queue for transmission
                     success = await self.data_transmitter.queue_draft_data(draft_data)
@@ -417,15 +499,55 @@ class LCUMonitor:
                     if success:
                         pick_count = len(draft_data.blue_side.picks) + len(draft_data.red_side.picks)
                         ban_count = len(draft_data.blue_side.bans) + len(draft_data.red_side.bans)
+                        logger.info(f"[TRANSMIT_QUEUED] Picks: {pick_count}, Bans: {ban_count} for lobby {self.current_lobby_id}")
                         self.notifier.on_draft_saved(self.current_lobby_id, pick_count, ban_count)
                         self.last_draft_data = draft_data
+                    else:
+                        logger.warning(f"[TRANSMIT_FAIL] Failed to queue draft data for lobby {self.current_lobby_id}")
                 else:
-                    logger.debug(f"No draft changes for lobby {self.current_lobby_id}")
+                    logger.debug(f"[NO_CHANGE] No meaningful draft changes for lobby {self.current_lobby_id}")
             else:
-                logger.warning("Failed to extract draft data from champ select session")
+                logger.warning("[EXTRACTION_FAIL] Failed to extract draft data from champ select session")
 
         except Exception as e:
-            logger.error(f"Error processing champ select data: {e}")
+            logger.error(f"[ERROR] Error processing champ select data: {e}", exc_info=True)
+
+    def _has_draft_changes_detailed(self, new_draft: DraftData) -> tuple[bool, str]:
+        """Check if draft data has changed with detailed reason"""
+        monitoring_settings = self.config_manager.get_monitoring_settings()
+
+        if not monitoring_settings.get("enable_change_detection", True):
+            return True, "Change detection disabled"
+
+        # CRITICAL FIX: Use _last_raw_draft_data (ID-based) for comparison
+        if not self._last_raw_draft_data:
+            return True, "No previous data (first transmission)"
+
+        changes = []
+        
+        # Check phase change
+        if new_draft.phase != self._last_raw_draft_data.phase:
+            changes.append(f"phase: {self._last_raw_draft_data.phase} -> {new_draft.phase}")
+        
+        # Check blue picks
+        if new_draft.blue_side.picks != self._last_raw_draft_data.blue_side.picks:
+            changes.append(f"blue_picks: {self._last_raw_draft_data.blue_side.picks} -> {new_draft.blue_side.picks}")
+        
+        # Check red picks
+        if new_draft.red_side.picks != self._last_raw_draft_data.red_side.picks:
+            changes.append(f"red_picks: {self._last_raw_draft_data.red_side.picks} -> {new_draft.red_side.picks}")
+        
+        # Check blue bans
+        if new_draft.blue_side.bans != self._last_raw_draft_data.blue_side.bans:
+            changes.append(f"blue_bans: {self._last_raw_draft_data.blue_side.bans} -> {new_draft.blue_side.bans}")
+        
+        # Check red bans
+        if new_draft.red_side.bans != self._last_raw_draft_data.red_side.bans:
+            changes.append(f"red_bans: {self._last_raw_draft_data.red_side.bans} -> {new_draft.red_side.bans}")
+        
+        if changes:
+            return True, "; ".join(changes)
+        return False, "No changes detected"
 
     def _is_valid_champ_select_data(self, session_data: Dict[str, Any]) -> bool:
         """Validate that champ select data is meaningful and not empty/stale"""
@@ -517,6 +639,10 @@ class LCUMonitor:
         Picks are NOT extracted from actions because they would include
         champions that are only selected (not locked in). Instead, picks
         are extracted from team data which only contains locked-in champions.
+        
+        NOTE: Empty bans (championId = 0 or -1) are now tracked as "None" to preserve ban order.
+        This ensures that when a player chooses "no ban", the slot is still recorded
+        and subsequent bans appear in the correct position.
         """
         blue_bans = []
         red_bans = []
@@ -539,9 +665,15 @@ class LCUMonitor:
 
                     # Only process bans (not picks) from actions
                     # Bans are committed immediately when completed
-                    if action_type == 'ban' and completed and champion_id > 0:
-                        champion_str = str(champion_id)
+                    # FIX: Track empty bans (championId <= 0) as "None" to preserve order
+                    if action_type == 'ban' and completed:
                         event_timestamp = datetime.now()
+                        
+                        # Determine champion string: "None" for empty bans, actual ID for real bans
+                        if champion_id > 0:
+                            champion_str = str(champion_id)
+                        else:
+                            champion_str = "None"  # Empty ban placeholder
                         
                         if is_ally_action:
                             blue_ban_order += 1

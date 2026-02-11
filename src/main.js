@@ -38,6 +38,12 @@ async function initializeApp() {
   // Initialize auth store (will set up listener automatically)
   const authStore = useAuthStore()
 
+  // Load global settings early (for anonymous user mode check)
+  const { useAdminStore } = await import('@/stores/admin')
+  const adminStore = useAdminStore()
+  await adminStore.loadGlobalSettings()
+  console.log('Global settings loaded:', adminStore.globalSettings)
+
   // Initialize patch version
   const championsStore = useChampionsStore()
   await championsStore.initializePatchVersion()

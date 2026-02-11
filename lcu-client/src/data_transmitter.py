@@ -79,17 +79,45 @@ class DataTransmitter:
 
         logger.info("Data transmitter stopped")
 
+    def _is_valid_lobby_id(self, lobby_id: str) -> bool:
+        """Check if lobby_id is valid (not None, empty, or UNKNOWN)"""
+        if lobby_id is None:
+            return False
+        if not isinstance(lobby_id, str):
+            return False
+        if not lobby_id.strip():
+            return False
+        if lobby_id.strip().upper() == "UNKNOWN":
+            return False
+        return True
+
     async def queue_draft_data(self, draft_data: DraftData) -> bool:
         """Queue draft data for transmission"""
+        logger.debug(f"[QUEUE] Attempting to queue draft for lobby {draft_data.lobby_id}")
+        
         if not self.is_running:
-            logger.warning("Transmitter not running, cannot queue data")
+            logger.warning("[QUEUE_FAIL] Transmitter not running, cannot queue data")
+            return False
+
+        # CRITICAL FIX: Validate draft data before queuing
+        # This is the last line of defense against UNKNOWN lobby IDs
+        if not draft_data.is_valid():
+            error_msg = draft_data.get_validation_error()
+            logger.error(f"[QUEUE_FAIL] Invalid draft data rejected: {error_msg}")
+            return False
+
+        # Additional explicit check for UNKNOWN lobby_id
+        if not self._is_valid_lobby_id(draft_data.lobby_id):
+            logger.error(f"[QUEUE_FAIL] Invalid lobby_id '{draft_data.lobby_id}' - draft rejected")
             return False
 
         try:
             await self.transmission_queue.put(draft_data)
+            queue_size = self.transmission_queue.qsize()
+            logger.debug(f"[QUEUE_SUCCESS] Draft queued for lobby {draft_data.lobby_id}. Queue size: {queue_size}")
             return True
         except Exception as e:
-            logger.error(f"Failed to queue draft data: {e}")
+            logger.error(f"[QUEUE_FAIL] Failed to queue draft data: {e}")
             return False
 
     async def _transmission_worker(self):

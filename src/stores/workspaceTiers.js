@@ -6,6 +6,7 @@ import { workspaceService } from '@/services/workspace'
 import { useWorkspaceStore } from './workspace'
 import { useChampionsStore } from './champions'
 import { authService } from '@/services/firebase/auth'
+import { canWrite } from '@/composables/usePermissions'
 
 export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   // State
@@ -231,6 +232,12 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   }
 
   function assignChampionToTier(championName, tierId, role = null) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[WorkspaceTiersStore] assignChampionToTier blocked: User is in view-only mode')
+      return
+    }
+
     // If we don't have workspace tiers yet, copy defaults to workspace tiers
     if (!hasWorkspaceTiers.value) {
       tiers.value = [...defaultTiers.value.map(t => ({ ...t, isDefault: false }))]

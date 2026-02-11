@@ -157,12 +157,79 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // CRITICAL FIX: Reject UNKNOWN lobbyId
+    if (draftData.lobbyId.toString().trim().toUpperCase() === 'UNKNOWN') {
+      console.error(`[LCU Draft] Rejected draft with UNKNOWN lobbyId`)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'lobbyId cannot be UNKNOWN' })
+      }
+    }
+
+    // Reject empty lobbyId
+    if (!draftData.lobbyId.toString().trim()) {
+      console.error(`[LCU Draft] Rejected draft with empty lobbyId`)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'lobbyId cannot be empty' })
+      }
+    }
+
     if (!draftData.workspaceId) {
       console.log('[LCU Draft] Missing workspaceId')
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'workspaceId is required' })
+      }
+    }
+
+    // Reject empty workspaceId
+    if (!draftData.workspaceId.toString().trim()) {
+      console.error(`[LCU Draft] Rejected draft with empty workspaceId`)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'workspaceId cannot be empty' })
+      }
+    }
+
+    // CRITICAL FIX: Reject ghost documents (empty drafts with no meaningful data)
+    const blueSide = draftData.blue_side || {}
+    const redSide = draftData.red_side || {}
+    
+    const hasBluePicks = Array.isArray(blueSide.picks) && blueSide.picks.length > 0
+    const hasRedPicks = Array.isArray(redSide.picks) && redSide.picks.length > 0
+    const hasBlueBans = Array.isArray(blueSide.bans) && blueSide.bans.length > 0
+    const hasRedBans = Array.isArray(redSide.bans) && redSide.bans.length > 0
+    
+    const hasAnyPicks = hasBluePicks || hasRedPicks
+    const hasAnyBans = hasBlueBans || hasRedBans
+    
+    if (!hasAnyPicks && !hasAnyBans) {
+      console.error(`[LCU Draft] Rejected ghost document for lobby ${draftData.lobbyId} - no picks or bans`)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Draft rejected - no picks or bans found. Ghost documents are not allowed.' 
+        })
+      }
+    }
+
+    // CRITICAL FIX: Reject UNKNOWN phase for new games
+    // If phase is UNKNOWN and it's marked as a new game, reject it
+    const draftPhase = (draftData.phase || 'UNKNOWN').toString().toUpperCase()
+    if (draftPhase === 'UNKNOWN' && draftData.isNewGame === true) {
+      console.error(`[LCU Draft] Rejected draft with UNKNOWN phase for new game, lobby ${draftData.lobbyId}`)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Draft rejected - UNKNOWN phase not allowed for new games' 
+        })
       }
     }
 

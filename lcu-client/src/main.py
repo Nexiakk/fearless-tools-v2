@@ -19,18 +19,45 @@ except ImportError:
     from .config_manager import get_config_manager
     from .lcu_monitor import get_lcu_monitor
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Setup logging - will be configured in main based on --debug flag
 logger = logging.getLogger(__name__)
+
+
+def setup_logging(debug: bool = False):
+    """Configure logging with optional debug mode"""
+    level = logging.DEBUG if debug else logging.INFO
+    format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    
+    logging.basicConfig(
+        level=level,
+        format=format_str,
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    # Set level for specific loggers
+    logging.getLogger('lcu_monitor').setLevel(level)
+    logging.getLogger('data_transmitter').setLevel(level)
+    
+    if debug:
+        print("🔍 DEBUG mode enabled - verbose logging active")
 
 
 def main():
     """Main entry point for LCU monitoring"""
     print("🤖 Fearless Tools LCU Client v1.0.0")
     print("=" * 50)
+
+    # Check for debug flag first (before other processing)
+    debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    setup_logging(debug_mode)
+    
+    # Remove debug flags from argv so they don't interfere with other commands
+    if '--debug' in sys.argv:
+        sys.argv.remove('--debug')
+    if '-d' in sys.argv:
+        sys.argv.remove('-d')
 
     # Initialize configuration
     config_manager = get_config_manager()
@@ -156,6 +183,7 @@ def print_usage():
     print("🤖 Fearless Tools LCU Client v1.0.0")
     print("\nUsage:")
     print("  python main.py                        # Start LCU monitoring")
+    print("  python main.py --debug                 # Start with verbose debug logging")
     print("  python main.py --setup-credentials        # Setup workspace credentials")
     print("  python main.py --test-credentials         # Test saved credentials")
     print("  python main.py --clear-credentials        # Clear saved credentials")
@@ -167,6 +195,7 @@ def print_usage():
     print("\nExamples:")
     print("  python main.py --setup-credentials      # First time setup")
     print("  python main.py --test-credentials       # Verify credentials work")
+    print("  python main.py --debug                  # Start with full debug logging")
     print("  python main.py                          # Start monitoring")
 
 

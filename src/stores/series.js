@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, onUnmounted } from 'vue'
 import { useWorkspaceStore } from './workspace'
+import { canWrite } from '@/composables/usePermissions'
 import {
   createSeriesInFirestore,
   saveSeriesToFirestore,
@@ -104,6 +105,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Create new series
   async function createNewSeries(name = 'New Series') {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] createNewSeries blocked: User is in view-only mode')
+      return null
+    }
+
     const workspaceStore = useWorkspaceStore()
     if (!workspaceStore.currentWorkspaceId || workspaceStore.isLocalWorkspace) {
       // Local workspace - just create in memory
@@ -202,6 +209,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Delete series
   async function deleteSeries(seriesId) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] deleteSeries blocked: User is in view-only mode')
+      return
+    }
+
     const workspaceStore = useWorkspaceStore()
     if (!workspaceStore.currentWorkspaceId || workspaceStore.isLocalWorkspace) {
       console.warn('Cannot delete series in local workspace')
@@ -223,6 +236,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Add game
   function addGame() {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] addGame blocked: User is in view-only mode')
+      return
+    }
+
     if (!currentSeries.value || !canAddGame.value) return
     
     const gameNumber = (currentSeries.value.games?.length || 0) + 1
@@ -233,6 +252,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Remove game
   function removeGame(gameNumber) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] removeGame blocked: User is in view-only mode')
+      return
+    }
+
     if (!currentSeries.value) return
     
     currentSeries.value.games = currentSeries.value.games.filter(g => g.gameNumber !== gameNumber)
@@ -251,6 +276,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Add draft iteration
   function addDraftIteration() {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] addDraftIteration blocked: User is in view-only mode')
+      return
+    }
+
     const game = currentGame.value
     if (!game) return
     
@@ -265,6 +296,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Remove draft iteration
   function removeDraftIteration(draftIndex) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] removeDraftIteration blocked: User is in view-only mode')
+      return
+    }
+
     const game = currentGame.value
     if (!game || !game.drafts || game.drafts.length <= 1) return
     
@@ -300,6 +337,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Update current draft slot
   function updateCurrentDraftSlot(side, type, index, champion) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] updateCurrentDraftSlot blocked: User is in view-only mode')
+      return
+    }
+
     const draft = currentDraft.value
     if (!draft) return
     
@@ -320,6 +363,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Update current draft slot notes
   function updateCurrentDraftSlotNotes(side, type, index, notes) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] updateCurrentDraftSlotNotes blocked: User is in view-only mode')
+      return
+    }
+
     const draft = currentDraft.value
     if (!draft) return
     
@@ -340,6 +389,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Update current draft general notes
   function updateCurrentDraftGeneralNotes(notes) {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] updateCurrentDraftGeneralNotes blocked: User is in view-only mode')
+      return
+    }
+
     const draft = currentDraft.value
     if (!draft) return
     
@@ -444,6 +499,12 @@ export const useSeriesStore = defineStore('series', () => {
 
   // Save series
   async function saveSeries() {
+    // Check permissions - block if in view-only mode
+    if (!canWrite()) {
+      console.log('[SeriesStore] saveSeries blocked: User is in view-only mode')
+      return
+    }
+
     if (!currentSeries.value) return
     
     const workspaceStore = useWorkspaceStore()

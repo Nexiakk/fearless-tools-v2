@@ -149,37 +149,64 @@ class ChampionMapper:
 
         return ids
 
+    def _convert_ids_to_names_with_none(self, id_list: List[str]) -> List[str]:
+        """Convert champion IDs to names, preserving 'None' placeholders"""
+        result = []
+        for item in id_list:
+            if not item or item == '0':
+                continue
+            if item == "None":
+                # Preserve "None" as-is (represents no ban)
+                result.append("None")
+            else:
+                try:
+                    champ_id = int(item)
+                    name = self.get_champion_name(champ_id)
+                    if name:
+                        result.append(name)
+                except (ValueError, TypeError):
+                    # If it's already a name (not an ID), keep it
+                    result.append(item)
+        return result
+
     def update_draft_with_names(self, draft: DraftData) -> bool:
         """Update a draft object to use champion names instead of IDs"""
         try:
+            logger.debug(f"[CHAMP_MAP] Converting draft for lobby {draft.lobby_id}")
+            
             # Update blue side
             if draft.blue_side:
                 # Convert picks
-                pick_ids = [int(pid) for pid in draft.blue_side.picks if pid and pid != '0']
+                pick_ids = [int(pid) for pid in draft.blue_side.picks if pid and pid != '0' and pid != 'None']
+                logger.debug(f"[CHAMP_MAP] Blue picks (IDs): {pick_ids}")
                 draft.blue_side.picks = self.map_champion_ids_to_names(pick_ids)
+                logger.debug(f"[CHAMP_MAP] Blue picks (names): {draft.blue_side.picks}")
 
-                # Convert bans
-                ban_ids = [int(bid) for bid in draft.blue_side.bans if bid and bid != '0']
-                draft.blue_side.bans = self.map_champion_ids_to_names(ban_ids)
+                # Convert bans - preserve "None" placeholders for empty bans
+                logger.debug(f"[CHAMP_MAP] Blue bans (raw): {draft.blue_side.bans}")
+                draft.blue_side.bans = self._convert_ids_to_names_with_none(draft.blue_side.bans)
+                logger.debug(f"[CHAMP_MAP] Blue bans (names): {draft.blue_side.bans}")
 
                 # Update pick events with champion names
                 for event in draft.blue_side.pick_events:
-                    if event.champion_id:
+                    if event.champion_id and event.champion_id != "None":
                         try:
                             champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
+                                logger.debug(f"[CHAMP_MAP] Blue pick event: {event.champion_id} -> {name}")
                                 event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 
-                # Update ban events with champion names
+                # Update ban events with champion names - preserve "None" for empty bans
                 for event in draft.blue_side.ban_events:
-                    if event.champion_id:
+                    if event.champion_id and event.champion_id != "None":
                         try:
                             champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
+                                logger.debug(f"[CHAMP_MAP] Blue ban event: {event.champion_id} -> {name}")
                                 event.champion_id = name
                         except (ValueError, TypeError):
                             pass
@@ -187,31 +214,36 @@ class ChampionMapper:
             # Update red side
             if draft.red_side:
                 # Convert picks
-                pick_ids = [int(pid) for pid in draft.red_side.picks if pid and pid != '0']
+                pick_ids = [int(pid) for pid in draft.red_side.picks if pid and pid != '0' and pid != 'None']
+                logger.debug(f"[CHAMP_MAP] Red picks (IDs): {pick_ids}")
                 draft.red_side.picks = self.map_champion_ids_to_names(pick_ids)
+                logger.debug(f"[CHAMP_MAP] Red picks (names): {draft.red_side.picks}")
 
-                # Convert bans
-                ban_ids = [int(bid) for bid in draft.red_side.bans if bid and bid != '0']
-                draft.red_side.bans = self.map_champion_ids_to_names(ban_ids)
+                # Convert bans - preserve "None" placeholders for empty bans
+                logger.debug(f"[CHAMP_MAP] Red bans (raw): {draft.red_side.bans}")
+                draft.red_side.bans = self._convert_ids_to_names_with_none(draft.red_side.bans)
+                logger.debug(f"[CHAMP_MAP] Red bans (names): {draft.red_side.bans}")
 
                 # Update pick events with champion names
                 for event in draft.red_side.pick_events:
-                    if event.champion_id:
+                    if event.champion_id and event.champion_id != "None":
                         try:
                             champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
+                                logger.debug(f"[CHAMP_MAP] Red pick event: {event.champion_id} -> {name}")
                                 event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 
-                # Update ban events with champion names
+                # Update ban events with champion names - preserve "None" for empty bans
                 for event in draft.red_side.ban_events:
-                    if event.champion_id:
+                    if event.champion_id and event.champion_id != "None":
                         try:
                             champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
+                                logger.debug(f"[CHAMP_MAP] Red ban event: {event.champion_id} -> {name}")
                                 event.champion_id = name
                         except (ValueError, TypeError):
                             pass
@@ -219,7 +251,7 @@ class ChampionMapper:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update draft with champion names: {e}")
+            logger.error(f"[CHAMP_MAP] Failed to update draft with champion names: {e}")
             return False
 
     def get_all_champions(self) -> Dict[int, str]:

@@ -133,6 +133,7 @@ import { useConfirmationStore } from "@/stores/confirmation";
 
 import { useAdminStore } from "@/stores/admin";
 import { useAuthStore } from "@/stores/auth";
+import { usePermissions } from "@/composables/usePermissions";
 
 const route = useRoute();
 const draftStore = useDraftStore();
@@ -140,6 +141,7 @@ const confirmationStore = useConfirmationStore();
 
 const adminStore = useAdminStore();
 const authStore = useAuthStore();
+const { isViewOnly } = usePermissions();
 
 const resetHovered = ref(false);
 
@@ -150,6 +152,11 @@ const toggleEditorMode = () => {
 };
 
 const openConfirmation = (message, confirmAction, isDanger = false) => {
+  // Don't open modal in view-only mode
+  if (isViewOnly.value) {
+    console.log('[RightSidePanel] Action blocked: User is in view-only mode');
+    return;
+  }
   confirmationStore.open({ message, confirmAction, isDanger });
 };
 </script>
