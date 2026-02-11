@@ -27,16 +27,6 @@
             >
               Join Workspace
             </button>
-            <button
-              @click="workspaceStore.workspaceModalTab = 'createLocal'"
-              :class="{
-                'border-b-2 border-amber-500 text-amber-500': workspaceStore.workspaceModalTab === 'createLocal',
-                'text-gray-400 hover:text-white': workspaceStore.workspaceModalTab !== 'createLocal'
-              }"
-              class="flex-1 px-4 py-3 font-medium transition-colors"
-            >
-              Create Local
-            </button>
           </div>
 
           <div class="p-6">
