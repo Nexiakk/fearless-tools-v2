@@ -436,6 +436,34 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     return true
   }
 
+  async function fullReset() {
+    const workspaceStore = useWorkspaceStore()
+
+    // Check permissions
+    if (!workspaceStore.isLocalWorkspace) {
+      const isAdmin = await authService.isAdmin()
+      if (!isAdmin) {
+        error.value = 'Admin access required to reset tiers'
+        return false
+      }
+    }
+
+    // Create workspace tiers with default structure but empty champions
+    const emptyDefaultTiers = defaultTiers.value.map(tier => ({
+      ...tier,
+      isDefault: false,
+      champions: {} // Empty champions object
+    }))
+
+    tiers.value = emptyDefaultTiers
+    selectedTierId.value = null
+
+    // Save immediately to persist
+    await saveTiers()
+
+    return true
+  }
+
   async function saveAsGlobalDefaults() {
     const workspaceStore = useWorkspaceStore()
 
@@ -587,6 +615,7 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     deleteTier,
     reorderTiers,
     resetToDefaults,
+    fullReset,
     saveTiers,
     queueSave,
     cleanup,

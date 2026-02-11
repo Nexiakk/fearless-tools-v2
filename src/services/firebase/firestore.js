@@ -826,18 +826,14 @@ export async function fetchLcuDraftsFromFirestore(workspaceId) {
         blueSide: {
           picks: data.blueSide?.picks || [],
           bans: data.blueSide?.bans || [],
-          picksOrdered: data.blueSide?.picksOrdered || [],
-          bansOrdered: data.blueSide?.bansOrdered || [],
-          // NEW: Timestamped events for accurate event history
+          // Timestamped events containing championId, order, and timestamp
           pickEvents: data.blueSide?.pickEvents || [],
           banEvents: data.blueSide?.banEvents || []
         },
         redSide: {
           picks: data.redSide?.picks || [],
           bans: data.redSide?.bans || [],
-          picksOrdered: data.redSide?.picksOrdered || [],
-          bansOrdered: data.redSide?.bansOrdered || [],
-          // NEW: Timestamped events for accurate event history
+          // Timestamped events containing championId, order, and timestamp
           pickEvents: data.redSide?.pickEvents || [],
           banEvents: data.redSide?.banEvents || []
         },
@@ -905,16 +901,14 @@ export function setupLcuDraftsRealtimeSync(workspaceId, callback) {
             blueSide: {
               picks: data.blueSide?.picks || [],
               bans: data.blueSide?.bans || [],
-              picksOrdered: data.blueSide?.picksOrdered || [],
-              bansOrdered: data.blueSide?.bansOrdered || [],
+              // Timestamped events containing championId, order, and timestamp
               pickEvents: data.blueSide?.pickEvents || [],
               banEvents: data.blueSide?.banEvents || []
             },
             redSide: {
               picks: data.redSide?.picks || [],
               bans: data.redSide?.bans || [],
-              picksOrdered: data.redSide?.picksOrdered || [],
-              bansOrdered: data.redSide?.bansOrdered || [],
+              // Timestamped events containing championId, order, and timestamp
               pickEvents: data.redSide?.pickEvents || [],
               banEvents: data.redSide?.banEvents || []
             },

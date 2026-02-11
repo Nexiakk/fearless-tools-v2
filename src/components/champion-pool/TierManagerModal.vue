@@ -209,6 +209,14 @@
           >
             Reset to Defaults
           </button>
+
+          <button
+            v-if="!showCreateForm && !editingTier"
+            @click="fullReset"
+            class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+          >
+            Full Reset
+          </button>
         </div>
       </DialogFooter>
     </DialogContent>
@@ -348,6 +356,16 @@ async function resetToDefaults() {
     const success = await workspaceTiersStore.resetToDefaults()
     if (success) {
       successMessage.value = 'Tiers reset to defaults successfully'
+      setTimeout(() => successMessage.value = '', 3000)
+    }
+  }
+}
+
+async function fullReset() {
+  if (confirm('Are you sure you want to do a full reset? This will create workspace tiers with default structure but 0 champions.')) {
+    const success = await workspaceTiersStore.fullReset()
+    if (success) {
+      successMessage.value = 'Full reset completed successfully - tiers created with 0 champions'
       setTimeout(() => successMessage.value = '', 3000)
     }
   }

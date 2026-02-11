@@ -469,16 +469,14 @@ class LCUMonitor:
                 phase=self._get_champ_select_phase(session_data)
             )
 
-            # Extract actions data (this is where bans and picks are stored)
+            # Extract actions data (this is where bans are stored)
             actions = session_data.get('actions', [])
 
-            # Process actions to extract bans and picks with timestamps
-            blue_bans, blue_picks, red_bans, red_picks, \
-            blue_ban_events, blue_pick_events, red_ban_events, red_pick_events = self._extract_actions_data(actions)
+            # Process actions to extract bans only (picks come from team data)
+            blue_bans, red_bans, blue_ban_events, red_ban_events = self._extract_bans_from_actions(actions)
 
-            # CRITICAL FIX: Also extract picks from team data (for bots/pre-assigned champions)
-            # Bots have champions assigned directly in myTeam/theirTeam, not through actions
-            # We need to extract by ACTUAL side (team=1 is blue, team=2 is red), not by my/their team
+            # Extract picks from team data (myTeam + theirTeam)
+            # This ensures only LOCKED IN champions are captured (not just selected)
             my_team = session_data.get('myTeam', [])
             their_team = session_data.get('theirTeam', [])
             
@@ -487,13 +485,8 @@ class LCUMonitor:
             their_team_blue, their_team_red = self._extract_team_picks_by_side(their_team)
             
             # Combine picks from both arrays for each side
-            all_blue_team_picks = my_team_blue + their_team_blue
-            all_red_team_picks = my_team_red + their_team_red
-            
-            # Merge team picks with action picks (avoid duplicates)
-            # Action picks take precedence for players, team picks fill in bots
-            blue_picks = self._merge_picks(blue_picks, all_blue_team_picks)
-            red_picks = self._merge_picks(red_picks, all_red_team_picks)
+            blue_picks = my_team_blue + their_team_blue
+            red_picks = my_team_red + their_team_red
 
             # Set team data
             draft_data.blue_side.bans = blue_bans
@@ -501,17 +494,13 @@ class LCUMonitor:
             draft_data.red_side.bans = red_bans
             draft_data.red_side.picks = red_picks
 
-            # Set timestamped events
+            # Set timestamped events for bans (from actions)
             draft_data.blue_side.ban_events = blue_ban_events
-            draft_data.blue_side.pick_events = blue_pick_events
             draft_data.red_side.ban_events = red_ban_events
-            draft_data.red_side.pick_events = red_pick_events
-
-            # Create ordered data (simplified - just by order they appear)
-            draft_data.blue_side.bans_ordered = [{'championId': ban, 'order': i + 1} for i, ban in enumerate(blue_bans)]
-            draft_data.blue_side.picks_ordered = [{'championId': pick, 'order': i + 1} for i, pick in enumerate(blue_picks)]
-            draft_data.red_side.bans_ordered = [{'championId': ban, 'order': i + 1} for i, ban in enumerate(red_bans)]
-            draft_data.red_side.picks_ordered = [{'championId': pick, 'order': i + 1} for i, pick in enumerate(red_picks)]
+            
+            # Set timestamped events for picks (from team data)
+            draft_data.blue_side.pick_events = self._create_pick_events_from_team(blue_picks)
+            draft_data.red_side.pick_events = self._create_pick_events_from_team(red_picks)
 
             # Check if this is a new game
             draft_data.is_new_game = self._is_new_game(draft_data)
@@ -521,6 +510,75 @@ class LCUMonitor:
         except Exception as e:
             logger.error(f"Error extracting draft data: {e}")
             return None
+
+    def _extract_bans_from_actions(self, actions: List[List[Dict[str, Any]]]) -> tuple:
+        """Extract bans from actions data only.
+        
+        Picks are NOT extracted from actions because they would include
+        champions that are only selected (not locked in). Instead, picks
+        are extracted from team data which only contains locked-in champions.
+        """
+        blue_bans = []
+        red_bans = []
+        
+        # Timestamped ban events
+        blue_ban_events: List[ChampionEvent] = []
+        red_ban_events: List[ChampionEvent] = []
+
+        try:
+            # Track order counters for bans
+            blue_ban_order = 0
+            red_ban_order = 0
+            
+            for action_group in actions:
+                for action in action_group:
+                    action_type = action.get('type')
+                    champion_id = action.get('championId', 0)
+                    is_ally_action = action.get('isAllyAction', True)
+                    completed = action.get('completed', False)
+
+                    # Only process bans (not picks) from actions
+                    # Bans are committed immediately when completed
+                    if action_type == 'ban' and completed and champion_id > 0:
+                        champion_str = str(champion_id)
+                        event_timestamp = datetime.now()
+                        
+                        if is_ally_action:
+                            blue_ban_order += 1
+                            blue_bans.append(champion_str)
+                            blue_ban_events.append(ChampionEvent(
+                                champion_id=champion_str,
+                                order=blue_ban_order,
+                                timestamp=event_timestamp
+                            ))
+                        else:
+                            red_ban_order += 1
+                            red_bans.append(champion_str)
+                            red_ban_events.append(ChampionEvent(
+                                champion_id=champion_str,
+                                order=red_ban_order,
+                                timestamp=event_timestamp
+                            ))
+
+        except Exception as e:
+            logger.error(f"Error extracting bans from actions: {e}")
+
+        return blue_bans, red_bans, blue_ban_events, red_ban_events
+
+    def _create_pick_events_from_team(self, picks: List[str]) -> List[ChampionEvent]:
+        """Create pick events from team data picks.
+        
+        Since team data only contains locked-in champions,
+        we create events with the current timestamp.
+        """
+        events = []
+        for i, champion_id in enumerate(picks):
+            events.append(ChampionEvent(
+                champion_id=champion_id,
+                order=i + 1,
+                timestamp=datetime.now()
+            ))
+        return events
 
     def _extract_team_picks_by_side(self, team_data: List[Dict[str, Any]]) -> tuple:
         """Extract champion picks from team data separated by actual blue/red side
@@ -552,95 +610,6 @@ class LCUMonitor:
         
         return blue_picks, red_picks
 
-    def _merge_picks(self, action_picks: List[str], team_picks: List[str]) -> List[str]:
-        """Merge picks from actions and team data, avoiding duplicates"""
-        # Start with action picks (these are from actual player selections)
-        merged = list(action_picks)
-        
-        # Add team picks that aren't already in the list (these are likely bots)
-        for pick in team_picks:
-            if pick not in merged:
-                merged.append(pick)
-        
-        return merged
-
-    def _extract_actions_data(self, actions: List[List[Dict[str, Any]]]) -> tuple:
-        """Extract bans and picks from actions data with timestamps"""
-        blue_bans = []
-        blue_picks = []
-        red_bans = []
-        red_picks = []
-        
-        # NEW: Timestamped events
-        blue_ban_events: List[ChampionEvent] = []
-        blue_pick_events: List[ChampionEvent] = []
-        red_ban_events: List[ChampionEvent] = []
-        red_pick_events: List[ChampionEvent] = []
-
-        try:
-            # Actions is an array of arrays, each containing actions of a specific type
-            # Typically: actions[0] = phase transitions, actions[1] = bans, actions[2] = picks
-            
-            # Track order counters for each type
-            blue_ban_order = 0
-            blue_pick_order = 0
-            red_ban_order = 0
-            red_pick_order = 0
-            
-            for action_group in actions:
-                for action in action_group:
-                    action_type = action.get('type')
-                    champion_id = action.get('championId', 0)
-                    is_ally_action = action.get('isAllyAction', True)
-                    completed = action.get('completed', False)
-
-                    # Only process completed actions with valid champion IDs
-                    if completed and champion_id > 0:
-                        champion_str = str(champion_id)
-                        # Capture current timestamp for this event
-                        event_timestamp = datetime.now()
-
-                        if action_type == 'ban':
-                            if is_ally_action:
-                                blue_ban_order += 1
-                                blue_bans.append(champion_str)
-                                blue_ban_events.append(ChampionEvent(
-                                    champion_id=champion_str,
-                                    order=blue_ban_order,
-                                    timestamp=event_timestamp
-                                ))
-                            else:
-                                red_ban_order += 1
-                                red_bans.append(champion_str)
-                                red_ban_events.append(ChampionEvent(
-                                    champion_id=champion_str,
-                                    order=red_ban_order,
-                                    timestamp=event_timestamp
-                                ))
-                        elif action_type == 'pick':
-                            if is_ally_action:
-                                blue_pick_order += 1
-                                blue_picks.append(champion_str)
-                                blue_pick_events.append(ChampionEvent(
-                                    champion_id=champion_str,
-                                    order=blue_pick_order,
-                                    timestamp=event_timestamp
-                                ))
-                            else:
-                                red_pick_order += 1
-                                red_picks.append(champion_str)
-                                red_pick_events.append(ChampionEvent(
-                                    champion_id=champion_str,
-                                    order=red_pick_order,
-                                    timestamp=event_timestamp
-                                ))
-
-        except Exception as e:
-            logger.error(f"Error extracting actions data: {e}")
-
-        return (blue_bans, blue_picks, red_bans, red_picks,
-                blue_ban_events, blue_pick_events, red_ban_events, red_pick_events)
-
     def _extract_team_data(self, team_data: List[Dict[str, Any]]) -> TeamData:
         """Extract team data from LCU format (fallback method)"""
         team = TeamData()
@@ -670,9 +639,10 @@ class LCUMonitor:
         pick_data.sort(key=lambda x: x[1])
         team.picks = [pick[0] for pick in pick_data]
 
-        # Create ordered picks
-        team.picks_ordered = [
-            {'championId': pick[0], 'order': i + 1}
+        # Create pick events with order
+        from datetime import datetime
+        team.pick_events = [
+            ChampionEvent(champion_id=pick[0], order=i + 1, timestamp=datetime.now())
             for i, pick in enumerate(pick_data)
         ]
 
@@ -680,9 +650,9 @@ class LCUMonitor:
         ban_data.sort(key=lambda x: x[1])
         team.bans = [ban[0] for ban in ban_data]
 
-        # Create ordered bans
-        team.bans_ordered = [
-            {'championId': ban[0], 'order': i + 1}
+        # Create ban events with order
+        team.ban_events = [
+            ChampionEvent(champion_id=ban[0], order=i + 1, timestamp=datetime.now())
             for i, ban in enumerate(ban_data)
         ]
 

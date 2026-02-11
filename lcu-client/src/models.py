@@ -40,10 +40,8 @@ class TeamData:
     """Champion data for one team (blue or red side)"""
     picks: List[str] = field(default_factory=list)  # Champion names in cell order (0-4)
     bans: List[str] = field(default_factory=list)   # Champion names in ban order
-    picks_ordered: List[Dict[str, Any]] = field(default_factory=list)  # [{"championId": name, "order": num}]
-    bans_ordered: List[Dict[str, Any]] = field(default_factory=list)   # [{"championId": name, "order": num}]
-    pick_events: List[ChampionEvent] = field(default_factory=list)  # NEW: Timestamped pick events
-    ban_events: List[ChampionEvent] = field(default_factory=list)   # NEW: Timestamped ban events
+    pick_events: List[ChampionEvent] = field(default_factory=list)  # Timestamped pick events with championId, order, timestamp
+    ban_events: List[ChampionEvent] = field(default_factory=list)   # Timestamped ban events with championId, order, timestamp
 
 
 @dataclass
@@ -93,16 +91,12 @@ class DraftData:
             "blue_side": {
                 "picks": self.blue_side.picks,
                 "bans": self.blue_side.bans,
-                "picks_ordered": self.blue_side.picks_ordered,
-                "bans_ordered": self.blue_side.bans_ordered,
                 "pick_events": [e.to_dict() for e in self.blue_side.pick_events],
                 "ban_events": [e.to_dict() for e in self.blue_side.ban_events]
             },
             "red_side": {
                 "picks": self.red_side.picks,
                 "bans": self.red_side.bans,
-                "picks_ordered": self.red_side.picks_ordered,
-                "bans_ordered": self.red_side.bans_ordered,
                 "pick_events": [e.to_dict() for e in self.red_side.pick_events],
                 "ban_events": [e.to_dict() for e in self.red_side.ban_events]
             },

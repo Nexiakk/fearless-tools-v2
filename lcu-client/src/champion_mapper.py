@@ -162,24 +162,25 @@ class ChampionMapper:
                 ban_ids = [int(bid) for bid in draft.blue_side.bans if bid and bid != '0']
                 draft.blue_side.bans = self.map_champion_ids_to_names(ban_ids)
 
-                # Update ordered picks/bans with names
-                for item in draft.blue_side.picks_ordered:
-                    if 'championId' in item and item['championId']:
+                # Update pick events with champion names
+                for event in draft.blue_side.pick_events:
+                    if event.champion_id:
                         try:
-                            champ_id = int(item['championId'])
+                            champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
-                                item['championId'] = name
+                                event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 
-                for item in draft.blue_side.bans_ordered:
-                    if 'championId' in item and item['championId']:
+                # Update ban events with champion names
+                for event in draft.blue_side.ban_events:
+                    if event.champion_id:
                         try:
-                            champ_id = int(item['championId'])
+                            champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
-                                item['championId'] = name
+                                event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 
@@ -193,24 +194,25 @@ class ChampionMapper:
                 ban_ids = [int(bid) for bid in draft.red_side.bans if bid and bid != '0']
                 draft.red_side.bans = self.map_champion_ids_to_names(ban_ids)
 
-                # Update ordered picks/bans with names
-                for item in draft.red_side.picks_ordered:
-                    if 'championId' in item and item['championId']:
+                # Update pick events with champion names
+                for event in draft.red_side.pick_events:
+                    if event.champion_id:
                         try:
-                            champ_id = int(item['championId'])
+                            champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
-                                item['championId'] = name
+                                event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 
-                for item in draft.red_side.bans_ordered:
-                    if 'championId' in item and item['championId']:
+                # Update ban events with champion names
+                for event in draft.red_side.ban_events:
+                    if event.champion_id:
                         try:
-                            champ_id = int(item['championId'])
+                            champ_id = int(event.champion_id)
                             name = self.get_champion_name(champ_id)
                             if name:
-                                item['championId'] = name
+                                event.champion_id = name
                         except (ValueError, TypeError):
                             pass
 

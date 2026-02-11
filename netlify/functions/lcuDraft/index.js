@@ -269,18 +269,14 @@ exports.handler = async (event, context) => {
       blueSide: {
         picks: blue_side?.picks || [],
         bans: blue_side?.bans || [],
-        picksOrdered: blue_side?.picks_ordered || [],
-        bansOrdered: blue_side?.bans_ordered || [],
-        // NEW: Timestamped events for accurate event history
+        // Timestamped events containing championId, order, and timestamp
         pickEvents: blue_side?.pick_events || [],
         banEvents: blue_side?.ban_events || []
       },
       redSide: {
         picks: red_side?.picks || [],
         bans: red_side?.bans || [],
-        picksOrdered: red_side?.picks_ordered || [],
-        bansOrdered: red_side?.bans_ordered || [],
-        // NEW: Timestamped events for accurate event history
+        // Timestamped events containing championId, order, and timestamp
         pickEvents: red_side?.pick_events || [],
         banEvents: red_side?.ban_events || []
       },
