@@ -274,9 +274,11 @@ const getTierPreviewStyles = (tier) => {
       border: `2px solid ${tier.color}`
     }
   } else {
+    // Shadow style - same as highlight: border + glow shadow
     return {
       ...baseStyles,
-      boxShadow: `0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 2px ${tier.color}40`
+      border: `2px solid ${tier.color}CC`,
+      boxShadow: `0 0 4px 1px ${tier.color}99`
     }
   }
 }

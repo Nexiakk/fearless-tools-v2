@@ -103,8 +103,9 @@ const tierIconStyle = computed(() => {
       boxShadow: `0 0 4px 1px ${tier.color}99`  // 99 = 0.6 opacity
     }
   } else {
-    // Shadow only style
+    // Shadow style - same as highlight: border + glow shadow
     return {
+      border: `2px solid ${tier.color}CC`,  // CC = 0.8 opacity
       boxShadow: `0 0 4px 1px ${tier.color}99`  // 99 = 0.6 opacity
     }
   }
