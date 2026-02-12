@@ -1,74 +1,103 @@
 <template>
   <Dialog :open="settingsStore.isSettingsOpen" @update:open="handleOpenChange">
-    <DialogContent class="max-w-lg">
-      <DialogHeader>
+    <DialogContent class="w-[28rem] h-[800px] flex flex-col p-0">
+      <DialogHeader class="px-6 pt-6 pb-2 shrink-0">
         <DialogTitle>Settings</DialogTitle>
       </DialogHeader>
 
-      <Tabs :model-value="settingsStore.settingsTab" @update:model-value="settingsStore.settingsTab = $event" class="w-full">
+      <Tabs :model-value="settingsStore.settingsTab" @update:model-value="settingsStore.settingsTab = $event" class="w-full flex-1 flex flex-col min-h-0 px-6">
         <TabsList class="grid w-full grid-cols-2">
           <TabsTrigger value="pool">Fearless Pool</TabsTrigger>
           <TabsTrigger value="admin">Admin</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pool" class="space-y-4 mt-4">
-          <div class="flex items-center justify-between">
-            <label class="font-medium">Tier Cards Frozen</label>
-            <Switch
-              :model-value="settingsStore.settings.pool.frozenChampions"
-              @update:model-value="settingsStore.updatePoolSetting('frozenChampions', $event)"
+        <TabsContent value="pool" class="space-y-4 mt-4 overflow-y-auto pr-2">
+          <!-- NEW: Page Content Scale -->
+          <div class="page-content-scale-section">
+            <div class="flex items-center justify-between mb-2">
+              <label class="font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 3H3v18h18V3zM9 9h6v6H9V9z"/>
+                </svg>
+                Page Content Scale
+              </label>
+              <span class="text-sm text-muted-foreground">{{ pageContentScale[0] }}%</span>
+            </div>
+            <Slider
+              v-model="pageContentScale"
+              :min="50"
+              :max="150"
+              :step="1"
+              class="w-full"
             />
+            <p class="text-xs text-muted-foreground mt-1">
+              Adjust the overall size of all page content
+            </p>
           </div>
 
-          <div class="space-y-4">
-            <label class="font-medium block">Card Size Adjustments</label>
+          <!-- NEW: Card Size Presets -->
+          <div class="space-y-3">
+            <label class="font-medium block">Champions Size Presets</label>
+            <div class="preset-previews-row">
+              <CardSizePresetPreview
+                preset="standard"
+                :is-active="currentPreset === 'standard'"
+                @select="handlePresetSelect"
+              />
+              <CardSizePresetPreview
+                preset="compact"
+                :is-active="currentPreset === 'compact'"
+                @select="handlePresetSelect"
+              />
+              <CardSizePresetPreview
+                preset="custom"
+                :is-active="currentPreset === 'custom'"
+                :is-expanded="isCustomExpanded"
+                @select="handlePresetSelect"
+              />
+            </div>
 
-            <div class="space-y-4">
-              <div>
-                <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm">Normal Cards</label>
-                  <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.normalCardSize }}%</span>
+            <!-- Custom Settings Panel (Expandable) -->
+            <div v-if="isCustomExpanded" class="custom-settings-panel">
+              <div class="space-y-4">
+                <!-- Normal Cards -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-sm">Normal Cards</label>
+                    <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.normalCardSize }}%</span>
+                  </div>
+                  <Slider
+                    v-model="normalCardSize"
+                    :min="50"
+                    :max="200"
+                    :step="1"
+                    class="w-full"
+                  />
                 </div>
-                <Slider
-                  v-model="normalCardSize"
-                  :min="50"
-                  :max="200"
-                  :step="1"
-                  class="w-full"
-                />
-              </div>
 
-              <div>
-                <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm">Tier Cards</label>
-                  <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.highlightCardSize }}%</span>
+                <!-- Unavailable Cards -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-sm">Unavailable Cards</label>
+                    <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.unavailableCardSize }}%</span>
+                  </div>
+                  <Slider
+                    v-model="unavailableCardSize"
+                    :min="50"
+                    :max="200"
+                    :step="1"
+                    class="w-full"
+                  />
                 </div>
-                <Slider
-                  v-model="highlightCardSize"
-                  :min="50"
-                  :max="200"
-                  :step="1"
-                  class="w-full"
-                />
-              </div>
 
-              <div>
-                <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm">Unavailable Cards</label>
-                  <span class="text-sm text-muted-foreground">{{ settingsStore.settings.pool.unavailableCardSize }}%</span>
-                </div>
-                <Slider
-                  v-model="unavailableCardSize"
-                  :min="50"
-                  :max="200"
-                  :step="1"
-                  class="w-full"
-                />
+                <!-- Tier Cards Section (PUBG-like) -->
+                <TierCardSizeSettings />
               </div>
             </div>
           </div>
 
           <div class="flex items-center justify-between">
+
             <label class="font-medium">Disable UI Animations</label>
             <Switch
               :model-value="settingsStore.settings.pool.disableAnimations"
@@ -101,7 +130,7 @@
           </div>
         </TabsContent>
 
-        <TabsContent value="admin" class="space-y-4 mt-4">
+        <TabsContent value="admin" class="space-y-4 mt-4 overflow-y-auto pr-2">
           <div v-if="authStore.isAuthenticated && !authStore.isAnonymous">
             <h4 class="font-semibold mb-2">Authentication</h4>
             <p class="text-sm text-muted-foreground mb-3">
@@ -147,7 +176,7 @@
         </TabsContent>
       </Tabs>
 
-      <DialogFooter>
+      <DialogFooter class="px-6 py-4 shrink-0 border-t border-border">
         <Button @click="handleReset" variant="outline">
           Reset
         </Button>
@@ -160,7 +189,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useSettingsStore } from "@/stores/settings";
 import { useAuthStore } from "@/stores/auth";
 import { useConfirmationStore } from "@/stores/confirmation";
@@ -171,6 +200,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CardSizePresetPreview from "@/components/settings/CardSizePresetPreview.vue";
+import TierCardSizeSettings from "@/components/settings/TierCardSizeSettings.vue";
 
 const settingsStore = useSettingsStore();
 const authStore = useAuthStore();
@@ -183,20 +214,67 @@ const adminPassword = ref('');
 const adminError = ref('');
 const adminLoading = ref(false);
 
+// Custom preset expansion state
+const isCustomExpanded = ref(false);
+
+// Current preset tracking
+const currentPreset = computed({
+  get: () => settingsStore.settings.pool.cardSizePreset,
+  set: (value) => { settingsStore.applyCardSizePreset(value); }
+});
+
+// Watch for preset changes to auto-expand custom
+watch(() => settingsStore.settings.pool.cardSizePreset, (newPreset) => {
+  if (newPreset === 'custom') {
+    isCustomExpanded.value = true;
+  }
+});
+
+// Handle preset selection
+function handlePresetSelect(preset) {
+  if (preset === 'custom') {
+    // Toggle expansion when clicking custom
+    if (currentPreset.value === 'custom') {
+      isCustomExpanded.value = !isCustomExpanded.value;
+    } else {
+      currentPreset.value = 'custom';
+      isCustomExpanded.value = true;
+    }
+  } else {
+    currentPreset.value = preset;
+    isCustomExpanded.value = false;
+  }
+}
+
 // Computed properties for sliders (Slider component expects arrays)
 const normalCardSize = computed({
   get: () => [settingsStore.settings.pool.normalCardSize],
-  set: (value) => { settingsStore.updatePoolSetting('normalCardSize', value[0]) }
-});
-
-const highlightCardSize = computed({
-  get: () => [settingsStore.settings.pool.highlightCardSize],
-  set: (value) => { settingsStore.updatePoolSetting('highlightCardSize', value[0]) }
+  set: (value) => {
+    settingsStore.updatePoolSetting('normalCardSize', value[0]);
+    // If manually adjusting, switch to custom preset
+    if (currentPreset.value !== 'custom') {
+      settingsStore.applyCardSizePreset('custom');
+    }
+  }
 });
 
 const unavailableCardSize = computed({
   get: () => [settingsStore.settings.pool.unavailableCardSize],
-  set: (value) => { settingsStore.updatePoolSetting('unavailableCardSize', value[0]) }
+  set: (value) => {
+    settingsStore.updatePoolSetting('unavailableCardSize', value[0]);
+    // If manually adjusting, switch to custom preset
+    if (currentPreset.value !== 'custom') {
+      settingsStore.applyCardSizePreset('custom');
+    }
+  }
+});
+
+// Page Content Scale slider
+const pageContentScale = computed({
+  get: () => [settingsStore.settings.pool.pageContentScale],
+  set: (value) => {
+    settingsStore.updatePoolSetting('pageContentScale', value[0]);
+  }
 });
 
 const handleOpenChange = (open) => {
@@ -244,5 +322,63 @@ const handleAdminSignIn = async () => {
 </script>
 
 <style scoped>
-/* No custom styles needed - using shadcn components */
+/* Preset Previews Row */
+.preset-previews-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Custom Settings Panel */
+.custom-settings-panel {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 8px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Page Content Scale Section */
+.page-content-scale-section {
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+/* Custom Scrollbar Styles */
+:deep([data-state="active"]) {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a #1a1a1a;
+}
+
+:deep([data-state="active"])::-webkit-scrollbar {
+  width: 8px;
+}
+
+:deep([data-state="active"])::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+:deep([data-state="active"])::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+:deep([data-state="active"])::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}
 </style>

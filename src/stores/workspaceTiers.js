@@ -5,6 +5,7 @@ import { db } from '@/services/firebase/config'
 import { workspaceService } from '@/services/workspace'
 import { useWorkspaceStore } from './workspace'
 import { useChampionsStore } from './champions'
+import { useSettingsStore } from './settings'
 import { authService } from '@/services/firebase/auth'
 import { canWrite } from '@/composables/usePermissions'
 
@@ -330,6 +331,11 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     }
 
     tiers.value.push(newTier)
+
+    // Initialize tier card size in settings
+    const settingsStore = useSettingsStore()
+    settingsStore.initializeTierCardSize(newTier.id)
+
     queueSave()
     return newTier
   }
@@ -370,6 +376,11 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     const index = tiers.value.findIndex(t => t.id === tierId)
     if (index > -1) {
       tiers.value.splice(index, 1)
+
+      // Remove tier card size from settings
+      const settingsStore = useSettingsStore()
+      settingsStore.removeTierCardSize(tierId)
+
       queueSave()
       return true
     }

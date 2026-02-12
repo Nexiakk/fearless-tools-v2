@@ -369,8 +369,8 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     error.value = null
 
     try {
-      // Get champion internal key for Firebase lookup
-      const internalKey = getChampionInternalKey(champion.value.name)
+      // Use imageName as the internal key (Riot API key)
+      const internalKey = champion.value.imageName
 
       if (!internalKey) {
         throw new Error('Could not determine champion internal key')
@@ -402,10 +402,11 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     if (!champion.value) return
 
     try {
-      const internalKey = getChampionInternalKey(champion.value.name)
+      // Use imageName as the Riot API key
+      const internalKey = champion.value.imageName
       if (!internalKey) return
 
-      console.log(`Loading ability descriptions for ${champion.value.name}`)
+      console.log(`Loading ability descriptions for ${champion.value.name} (key: ${internalKey})`)
       abilityDescriptions.value = await riotApiService.getChampionDetails(internalKey, currentPatch.value)
       console.log(`✅ Loaded ability descriptions`, abilityDescriptions.value)
     } catch (err) {
@@ -414,35 +415,12 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     }
   }
 
-  function getChampionInternalKey(championName) {
-    // Convert display name to internal key (e.g., "K'Sante" -> "KSante")
-    const nameMappings = {
-      "K'Sante": 'KSante',
-      "Wukong": 'MonkeyKing',
-      "Jarvan IV": 'JarvanIV',
-      "Miss Fortune": 'MissFortune',
-      "Dr. Mundo": 'DrMundo',
-      "Rek'Sai": 'RekSai',
-      "Kog'Maw": 'KogMaw',
-      "Cho'Gath": 'Chogath',
-      "Vel'Koz": 'Velkoz',
-      "Kai'Sa": 'Kaisa',
-      "Kha'Zix": 'Khazix',
-      "LeBlanc": 'Leblanc'
-    }
-
-    // Check for exact match first
-    if (nameMappings[championName]) {
-      return nameMappings[championName]
-    }
-
-    // Convert to internal format: remove apostrophes, spaces, and special chars
-    return championName.replace(/['\s]/g, '').replace(/[^a-zA-Z0-9]/g, '')
-  }
-
   function getCounterIconUrl(counter) {
-    // Try to get imageName from counter data, fallback to name processing
-    const imageName = counter.champion?.replace(/['\s]/g, '').replace(/[^a-zA-Z0-9]/g, '')
+    // Look up the champion in the champions store to get the correct imageName
+    const champ = championsStore.allChampions.find(
+      c => c.name?.toLowerCase() === counter.champion?.toLowerCase()
+    )
+    const imageName = champ?.imageName || counter.champion?.replace(/['\s]/g, '').replace(/[^a-zA-Z0-9]/g, '')
     return riotApiService.getChampionIconUrl(imageName, currentPatch.value)
   }
 
@@ -479,7 +457,6 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     setSelectedFormIndex,
     loadDetailedData,
     loadAbilityDescriptions,
-    getChampionInternalKey,
     getCounterIconUrl
   }
 })

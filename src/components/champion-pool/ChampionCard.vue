@@ -83,6 +83,8 @@ const cardClasses = computed(() => {
   const tier = workspaceTiersStore.getTierForChampion(props.champion.name, props.role)
   if (tier && !isBanned.value && !draftStore.isUnavailable(props.champion.name)) {
     classes['tier-highlight-size'] = true
+    // Add tier-specific class for per-tier sizing (e.g., tier-op, tier-highlight)
+    classes[`tier-${tier.id}`] = true
   }
 
   return classes

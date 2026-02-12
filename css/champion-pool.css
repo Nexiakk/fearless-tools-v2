@@ -771,10 +771,15 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
   margin-top: 0; /* No top margin - banned container will be at top */
   overflow: visible; /* Allow icons to be visible outside */
   box-sizing: border-box;
-  transition: margin-left 0.2s ease;
+  transition:
+    margin-left 0.2s ease,
+    transform 0.2s ease;
   display: flex;
   flex-direction: row;
   /* Gap removed - EventHistory is now absolutely positioned */
+  /* Page content scale - default is 1 (100%) */
+  transform: scale(var(--page-content-scale, 1));
+  transform-origin: center;
 }
 
 /* Pool Content Area - Contains TierSelector and Role Pillars */
@@ -1262,101 +1267,56 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
 }
 
 /* --- Event History Component Styles --- */
+/* NOTE: EventHistory component now uses scoped styles in the Vue file */
+/* These styles are kept for backward compatibility and layout integration */
+
 .event-history-container {
-  position: fixed;
-  left: 10px;
-  top: 60px;
-  bottom: 0;
-  width: 70px;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  /* No background - transparent */
-  background-color: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 8px 0; /* Remove horizontal padding */
-  overflow: hidden;
-}
-
-.event-history-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  overflow: hidden;
-}
-
-.event-batch {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 3px; /* Slightly smaller gap */
-  position: relative;
-  padding-bottom: 10px; /* Slightly smaller */
-  margin-bottom: 10px;
-}
-
-/* Vertical line separator between batches */
-.event-batch:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 6px; /* Slightly smaller */
-  background-color: #3a3a3a;
-}
-
-.event-item {
-  width: 32px; /* Smaller icons */
-  height: 32px;
-  border-radius: 3px;
-  overflow: hidden;
-  cursor: pointer;
-  position: relative;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.event-item:hover {
-  transform: scale(1.15);
-  z-index: 10;
-}
-
-.event-champion-icon {
-  width: 100%;
+  /* Integrated into layout flow - no fixed positioning */
+  width: 140px;
+  flex-shrink: 0;
   height: 100%;
-  object-fit: cover;
-  border-radius: 3px;
-  border: 1px solid #3a3a3a;
 }
 
-/* Bans are grayscale */
-.event-item.is-ban .event-champion-icon {
-  filter: grayscale(100%);
+/* --- Per-Tier Card Size Support --- */
+/* These rules use tier-specific CSS variables for per-tier sizing */
+/* The variables are set inline by ChampionPoolView.vue based on settings */
+
+/* Tier-specific card sizing using CSS custom properties */
+.compact-champion-card[class*="tier-"].tier-highlight-size {
+  /* Default to highlight-card-scale, but allow per-tier override */
+  width: calc(20% * var(--highlight-card-scale, 1) - 3.2px);
 }
 
-/* Add a subtle ban indicator overlay */
-.event-item.is-ban::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 14px; /* Smaller ban indicator */
-  height: 14px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%23c4c4c4' stroke-width='2' fill='none'/%3E%3Cline x1='4' y1='4' x2='20' y2='20' stroke='%23c4c4c4' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-size: contain;
-  background-repeat: no-repeat;
-  opacity: 0.85;
-  pointer-events: none;
+/* Specific tier sizing rules - these will use the per-tier variables when set */
+.compact-champion-card.tier-op.tier-highlight-size {
+  width: calc(
+    20% * var(--tier-op-scale, var(--highlight-card-scale, 1)) - 3.2px
+  );
 }
 
-/* LCU items are not clickable (can't remove them) */
-.event-item[data-source='lcu'] {
-  cursor: not-allowed;
-  opacity: 0.7;
+.compact-champion-card.tier-highlight.tier-highlight-size {
+  width: calc(
+    20% * var(--tier-highlight-scale, var(--highlight-card-scale, 1)) - 3.2px
+  );
 }
 
-.event-item[data-source='lcu']:hover {
-  transform: none;
+/* Generic rule for any tier ID - uses the tier-{id}-scale variable */
+.compact-champion-card.tier-highlight-size[class*="tier-tier_"] {
+  width: calc(
+    20% * var(--tier-custom-scale, var(--highlight-card-scale, 1)) - 3.2px
+  );
+}
+
+/* Per-tier font sizing */
+.compact-champion-card.tier-op.tier-highlight-size .compact-champion-name {
+  font-size: calc(
+    0.6rem * var(--tier-op-scale, var(--highlight-font-scale, 1))
+  );
+}
+
+.compact-champion-card.tier-highlight.tier-highlight-size
+  .compact-champion-name {
+  font-size: calc(
+    0.6rem * var(--tier-highlight-scale, var(--highlight-font-scale, 1))
+  );
 }

@@ -10,7 +10,7 @@
         <ChampionPoolSkeleton v-if="isLoading" key="skeleton" />
         
         <!-- Actual Content - Show only when workspace exists and all data is loaded -->
-        <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
+        <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area" :style="pageContentScaleStyle">
           <!-- Event History - Left Side -->
           <EventHistory v-if="settingsStore.settings.pool.showEventHistory" />
 
@@ -171,12 +171,20 @@ const viewClasses = computed(() => ({
   'center-cards': settingsStore.settings.pool.centerCards
 }))
 
+// Separate computed property for page content scale to apply to pool-main-area
+const pageContentScaleStyle = computed(() => {
+  const pageContentScale = settingsStore.settings.pool.pageContentScale || 100
+  return {
+    '--page-content-scale': pageContentScale / 100
+  }
+})
+
 const cardSizeStyles = computed(() => {
   const normalSize = settingsStore.settings.pool.normalCardSize || 100
   const highlightSize = settingsStore.settings.pool.highlightCardSize || 100
   const unavailableSize = settingsStore.settings.pool.unavailableCardSize || 83
   
-  return {
+  const styles = {
     '--normal-card-scale': normalSize / 100,
     '--highlight-card-scale': highlightSize / 100,
     '--unavailable-card-scale': unavailableSize / 100,
@@ -184,6 +192,19 @@ const cardSizeStyles = computed(() => {
     '--highlight-font-scale': highlightSize / 100,
     '--unavailable-font-scale': unavailableSize / 100
   }
+  
+  // Add per-tier CSS variables when using per-tier sizing
+  const useGlobal = settingsStore.settings.pool.useGlobalTierSize
+  const tierSizes = settingsStore.settings.pool.tierCardSizes
+  
+  workspaceTiersStore.sortedTiers.forEach(tier => {
+    const tierSize = useGlobal 
+      ? highlightSize 
+      : (tierSizes[tier.id] || highlightSize)
+    styles[`--tier-${tier.id}-scale`] = tierSize / 100
+  })
+  
+  return styles
 })
 
 // Champion Info Modal state
