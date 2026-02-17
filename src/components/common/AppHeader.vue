@@ -102,28 +102,48 @@
           <span v-if="!workspaceStore.isOnline">Offline</span>
         </div>
 
-        <!-- Workspace info -->
-        <div
-          v-if="workspaceStore.currentWorkspaceId"
-          class="flex items-center gap-2"
+        <!-- Workspace selector -->
+        <button
+          v-if="workspaceStore.currentWorkspaceId && !workspaceStore.isLocalWorkspace"
+          @click="openWorkspaceSwitcher"
+          class="flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#252525] hover:bg-[#333333] border border-gray-600/50 hover:border-amber-500/50 transition-all group"
+          title="Click to switch workspace"
         >
-          <span
-            v-if="!workspaceStore.isLocalWorkspace"
-            class="text-sm text-gray-400"
+          <!-- Cloud workspace icon -->
+          <svg
+            class="w-3 h-3 text-gray-500 group-hover:text-amber-400 transition-colors"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            {{
-              workspaceStore.currentWorkspaceName ||
-              workspaceStore.currentWorkspaceId
-            }}
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+            />
+          </svg>
+
+          <!-- Workspace name -->
+          <span class="text-xs text-gray-300 group-hover:text-white truncate max-w-[100px] transition-colors">
+            {{ workspaceStore.currentWorkspaceName || workspaceStore.currentWorkspaceId }}
           </span>
-          <button
-            @click="openWorkspaceSwitcher"
-            class="text-gray-400 hover:text-white transition-colors text-sm"
-            title="Switch Workspace"
+
+          <!-- Dropdown chevron visual cue -->
+          <svg
+            class="w-2.5 h-2.5 text-gray-500 group-hover:text-amber-400 transition-colors"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            Switch
-          </button>
-        </div>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
 
         <!-- Admin button -->
         <button

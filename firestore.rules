@@ -77,17 +77,8 @@ service cloud.firestore {
 
       }
 
-      match /users/{userId} {
-
-        allow read: if isAuthenticated();
-
-        allow create: if isAdmin() || request.auth.uid == userId;
-
-        allow update: if isAuthenticated();
-
-        allow delete: if isAdmin();
-
-      }
+      // Note: Users collection removed - authentication is handled by Firebase Auth
+      // Workspace access is controlled by knowing the workspace password
 
       match /drafts/{document=**} {
 

@@ -98,11 +98,10 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
   // Get counters for current role
   const currentRoleCounters = computed(() => {
     const counters = currentRoleData.value?.counters || []
-    // Sort by win rate (highest first - champions this champion beats)
+    // Sort by win rate (lowest first - champions that beat this champion)
     return counters
       .slice()
-      .sort((a, b) => (b.win_rate || 0) - (a.win_rate || 0))
-      .slice(0, 15) // Limit to top 15
+      .sort((a, b) => (a.win_rate || 0) - (b.win_rate || 0))
   })
 
   // Format stats for display

@@ -76,6 +76,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // Set up real-time sync for Firestore workspaces
       if (!isLocalWorkspace.value) {
         setupRealtimeSync(workspaceId)
+        // Add to recent workspaces history
+        addToRecentWorkspaces(workspaceId, currentWorkspaceName.value)
       }
     } catch (error) {
       console.error('Error loading workspace:', error)
@@ -151,46 +153,69 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  // Add workspace to recent history
+  function addToRecentWorkspaces(workspaceId, workspaceName = null) {
+    if (!workspaceId || workspaceId.startsWith('local_')) return
+    
+    try {
+      const stored = localStorage.getItem('recentWorkspaces')
+      let recent = stored ? JSON.parse(stored) : []
+      
+      // Remove if already exists
+      recent = recent.filter(w => w.id !== workspaceId)
+      
+      // Add to beginning with timestamp
+      recent.unshift({
+        id: workspaceId,
+        name: workspaceName || workspaceId,
+        lastVisited: new Date().toISOString()
+      })
+      
+      // Keep only last 10
+      recent = recent.slice(0, 10)
+      
+      localStorage.setItem('recentWorkspaces', JSON.stringify(recent))
+    } catch (error) {
+      console.error('Error saving recent workspace:', error)
+    }
+  }
+  
   async function loadRecentWorkspaces() {
     try {
       const recent = []
       const currentId = currentWorkspaceId.value
       
       // Get current workspace
-      if (currentId) {
-        if (currentId.startsWith('local_')) {
-          const localData = workspaceService.getLocalWorkspaceData(currentId)
-          if (localData) {
-            recent.push({ 
-              id: currentId, 
-              name: localData.name || currentId, 
-              isCurrent: true,
-              isLocal: true
-            })
-          }
-        } else {
-          const metadata = await workspaceService.getWorkspaceMetadata(currentId)
+      if (currentId && !currentId.startsWith('local_')) {
+        const metadata = await workspaceService.getWorkspaceMetadata(currentId)
+        if (metadata) {
+          recent.push({ 
+            id: currentId, 
+            name: metadata.name || currentId, 
+            isCurrent: true 
+          })
+        }
+      }
+      
+      // Get recent workspaces from localStorage
+      const stored = localStorage.getItem('recentWorkspaces')
+      if (stored) {
+        const history = JSON.parse(stored)
+        for (const item of history) {
+          // Skip if it's the current workspace (already added above)
+          if (item.id === currentId) continue
+          
+          // Verify workspace still exists
+          const metadata = await workspaceService.getWorkspaceMetadata(item.id)
           if (metadata) {
-            recent.push({ 
-              id: currentId, 
-              name: metadata.name || currentId, 
-              isCurrent: true 
+            recent.push({
+              id: item.id,
+              name: metadata.name || item.id,
+              isCurrent: false
             })
           }
         }
       }
-      
-      // Get local workspaces
-      const localWorkspaces = workspaceService.getLocalWorkspaces()
-      Object.keys(localWorkspaces).forEach(id => {
-        if (id !== currentId) {
-          recent.push({ 
-            id, 
-            name: localWorkspaces[id].name || id, 
-            isLocal: true 
-          })
-        }
-      })
       
       recentWorkspaces.value = recent
     } catch (error) {
@@ -252,6 +277,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setSyncing,
     openWorkspaceSettings,
     loadRecentWorkspaces,
+    addToRecentWorkspaces,
     loadWorkspace,
     setInitializing: (value) => { isInitializing.value = value }
   }

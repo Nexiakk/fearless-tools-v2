@@ -3,13 +3,8 @@ import {
   doc,
   getDoc,
   setDoc,
-  deleteDoc,
   collection,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  Timestamp
+  serverTimestamp
 } from 'firebase/firestore'
 import { db } from './firebase/config'
 import { authService } from './firebase/auth'
@@ -46,12 +41,40 @@ export const workspaceService = {
     return localStorage.getItem('currentWorkspacePasswordHash')
   },
 
+  // Get password hash for a specific workspace
+  getWorkspacePasswordHash(workspaceId) {
+    if (!workspaceId) return null
+    try {
+      const stored = localStorage.getItem('workspacePasswordHashes')
+      const hashes = stored ? JSON.parse(stored) : {}
+      return hashes[workspaceId] || null
+    } catch (error) {
+      console.error('Error reading workspace password hash:', error)
+      return null
+    }
+  },
+
+  // Save password hash for a specific workspace
+  saveWorkspacePasswordHash(workspaceId, passwordHash) {
+    if (!workspaceId) return
+    try {
+      const stored = localStorage.getItem('workspacePasswordHashes')
+      const hashes = stored ? JSON.parse(stored) : {}
+      hashes[workspaceId] = passwordHash
+      localStorage.setItem('workspacePasswordHashes', JSON.stringify(hashes))
+    } catch (error) {
+      console.error('Error saving workspace password hash:', error)
+    }
+  },
+
   // Set current workspace ID and password hash
   setCurrentWorkspaceId(workspaceId, passwordHash = null) {
     if (workspaceId) {
       localStorage.setItem('currentWorkspaceId', workspaceId)
       if (passwordHash) {
         localStorage.setItem('currentWorkspacePasswordHash', passwordHash)
+        // Also save in per-workspace store for easy switching
+        workspaceService.saveWorkspacePasswordHash(workspaceId, passwordHash)
       }
     } else {
       localStorage.removeItem('currentWorkspaceId')
@@ -99,13 +122,6 @@ export const workspaceService = {
         createdBy: userId
       })
 
-      // Add user to workspace
-      const usersRef = collection(workspaceRef, 'users')
-      await setDoc(doc(usersRef, userId), {
-        joinedAt: serverTimestamp(),
-        lastActive: serverTimestamp()
-      })
-
       // Initialize default draft data
       const draftsRef = collection(workspaceRef, 'drafts')
       await setDoc(doc(draftsRef, 'current_draft'), {
@@ -133,17 +149,11 @@ export const workspaceService = {
 
   // Join an existing workspace
   async joinWorkspace(workspaceId, password) {
-    let userId
-
     // Ensure user is authenticated (anonymous is fine)
-    if (authService.isAuthenticated()) {
-      userId = authService.getUserId()
-    } else {
+    if (!authService.isAuthenticated()) {
       // Sign in anonymously to enable Firestore writes
       const result = await authService.signInAnonymously()
-      if (result.user) {
-        userId = result.user.uid
-      } else {
+      if (!result.user) {
         throw new Error('Failed to authenticate anonymously: ' + (result.error || 'Unknown error'))
       }
     }
@@ -163,15 +173,6 @@ export const workspaceService = {
       if (metadata.passwordHash !== passwordHash) {
         return { success: false, error: 'Incorrect password.' }
       }
-
-      // Add user to workspace
-      const usersRef = collection(workspaceRef, 'users')
-      const currentUser = authService.getCurrentUser()
-      await setDoc(doc(usersRef, userId), {
-        joinedAt: serverTimestamp(),
-        lastActive: serverTimestamp(),
-        isAnonymous: currentUser?.isAnonymous || false
-      }, { merge: true })
 
       // Set as current workspace and save password hash for auto-join
       this.setCurrentWorkspaceId(workspaceId, passwordHash)
@@ -202,46 +203,25 @@ export const workspaceService = {
     }
   },
 
-  // Check if user is member of workspace
+  // Check if user has access to workspace (simplified - just checks localStorage)
+  // Workspace access is controlled by knowing the workspace password
   async isWorkspaceMember(workspaceId) {
-    if (!workspaceId || !authService.isAuthenticated()) {
-      return false
-    }
-
-    const userId = authService.getUserId()
-    try {
-      const workspaceRef = doc(db, 'workspaces', workspaceId)
-      const usersRef = collection(workspaceRef, 'users')
-      const userDoc = await getDoc(doc(usersRef, userId))
-      return userDoc.exists()
-    } catch (error) {
-      console.error('Error checking workspace membership:', error)
-      return false
-    }
+    // Access is determined by having the workspace password saved
+    return this.getCurrentWorkspaceId() === workspaceId
   },
 
   // Leave workspace
   async leaveWorkspace(workspaceId) {
-    if (!workspaceId || !authService.isAuthenticated()) {
-      return { success: false, error: 'Not authenticated or invalid workspace.' }
+    if (!workspaceId) {
+      return { success: false, error: 'Invalid workspace.' }
     }
 
-    const userId = authService.getUserId()
-    try {
-      const workspaceRef = doc(db, 'workspaces', workspaceId)
-      const usersRef = collection(workspaceRef, 'users')
-      await deleteDoc(doc(usersRef, userId))
-
-      // If leaving current workspace, clear it
-      if (this.getCurrentWorkspaceId() === workspaceId) {
-        this.setCurrentWorkspaceId(null)
-      }
-
-      return { success: true, error: null }
-    } catch (error) {
-      console.error('Error leaving workspace:', error)
-      return { success: false, error: error.message }
+    // If leaving current workspace, clear it
+    if (this.getCurrentWorkspaceId() === workspaceId) {
+      this.setCurrentWorkspaceId(null)
     }
+
+    return { success: true, error: null }
   },
 
   // Create a local storage workspace (only one local workspace allowed)
@@ -373,28 +353,13 @@ export const workspaceService = {
         return { success: false, error: 'Workspace password has changed' }
       }
 
-      // Password matches, ensure user is authenticated
-      let userId
-      if (authService.isAuthenticated()) {
-        userId = authService.getUserId()
-      } else {
+      // Ensure user is authenticated for Firestore access
+      if (!authService.isAuthenticated()) {
         const result = await authService.signInAnonymously()
-        if (result.user) {
-          userId = result.user.uid
-        } else {
+        if (!result.user) {
           return { success: false, error: 'Failed to authenticate: ' + (result.error || 'Unknown error') }
         }
       }
-
-      // Add user to workspace (or update if already exists)
-      const workspaceRef = doc(db, 'workspaces', savedWorkspaceId)
-      const usersRef = collection(workspaceRef, 'users')
-      const currentUser = authService.getCurrentUser()
-      await setDoc(doc(usersRef, userId), {
-        joinedAt: serverTimestamp(),
-        lastActive: serverTimestamp(),
-        isAnonymous: currentUser?.isAnonymous || false
-      }, { merge: true })
 
       return { success: true, error: null }
     } catch (error) {

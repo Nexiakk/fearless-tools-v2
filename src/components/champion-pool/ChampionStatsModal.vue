@@ -51,16 +51,6 @@
                     {{ modalStore.selectedRole }} Lane
                   </p>
                 </div>
-
-                <!-- Close Button -->
-                <button
-                  @click="closeModal"
-                  class="text-gray-400 hover:text-white transition-colors p-2 rounded hover:bg-gray-700"
-                >
-                  <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                  </svg>
-                </button>
               </div>
 
               <!-- Form Tabs (only for multi-form champions) -->
@@ -197,10 +187,16 @@
                   :key="role"
                   @click="setSelectedRole(role)"
                   :disabled="!availableRoles.includes(role)"
-                  class="px-3 py-1 rounded text-xs font-medium transition-all capitalize"
+                  class="w-8 h-8 rounded flex items-center justify-center transition-all"
                   :class="getRoleTabClass(role)"
+                  :title="role"
                 >
-                  {{ role }}
+                  <img
+                    :src="championsStore.getRoleIconUrl(role)"
+                    :alt="role"
+                    class="w-5 h-5"
+                    :class="!availableRoles.includes(role) ? 'opacity-30' : ''"
+                  />
                 </button>
               </div>
             </div>
@@ -209,10 +205,10 @@
             <div class="flex-1 px-6 py-3 overflow-hidden min-h-0">
               <div class="h-full flex flex-col min-h-0">
                 <h4 class="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-2 flex-shrink-0">
-                  <svg class="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg class="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
-                  GOOD AGAINST ({{ currentRoleCounters.length }} matchups)
+                  BAD AGAINST ({{ currentRoleCounters.length }} matchups)
                 </h4>
 
                 <!-- Matchups Grid - Horizontal Scroll -->
@@ -231,7 +227,7 @@
                           @error="handleImageError"
                         />
                         <div class="text-[10px] font-medium text-white truncate w-full">{{ counter.champion }}</div>
-                        <div class="text-xs font-bold text-green-400">{{ formatWinRate(counter.win_rate) }}</div>
+                        <div class="text-xs font-bold text-red-400">{{ formatWinRate(counter.win_rate) }}</div>
                         <div v-if="counter.games" class="text-[10px] text-gray-500">{{ counter.games }}g</div>
                       </div>
                     </div>
@@ -259,6 +255,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useChampionStatsModalStore } from '@/stores/championStatsModal'
+import { useChampionsStore } from '@/stores/champions'
 import { riotApiService } from '@/services/riotApi'
 import {
   Tooltip,
@@ -268,6 +265,7 @@ import {
 } from '@/components/ui/tooltip'
 
 const modalStore = useChampionStatsModalStore()
+const championsStore = useChampionsStore()
 
 // Use computed to safely access store data
 const abilityIcons = computed(() => modalStore.abilityIcons || [])
@@ -291,14 +289,14 @@ function getRoleTabClass(role) {
   const isSelected = selectedRole.value === role
 
   if (!isAvailable) {
-    return 'bg-gray-800 text-gray-600 cursor-not-allowed'
+    return 'bg-gray-800 cursor-not-allowed opacity-50'
   }
 
   if (isSelected) {
-    return 'bg-amber-600 text-white hover:bg-amber-500'
+    return 'bg-amber-600 hover:bg-amber-500'
   }
 
-  return 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+  return 'bg-gray-700 hover:bg-gray-600'
 }
 
 function getTierColorClass(tier) {
