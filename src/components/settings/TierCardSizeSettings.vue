@@ -9,15 +9,15 @@
         <span>Tier Cards</span>
       </div>
       <div class="global-toggle">
-        <span class="toggle-label">{{ useGlobal ? 'Global' : 'Per-Tier' }}</span>
+        <span class="toggle-label">Per-Tier</span>
         <Switch
-          :model-value="useGlobal"
-          @update:model-value="toggleGlobal"
+          :model-value="!useGlobal"
+          @update:model-value="(value) => toggleGlobal(!value)"
         />
       </div>
     </div>
 
-    <!-- Global Slider (when useGlobal is true) -->
+    <!-- Global Slider (when useGlobal is true / Per-Tier is OFF) -->
     <div v-if="useGlobal" class="tier-slider-section">
       <div class="slider-header">
         <span class="slider-label">All Tiers</span>
@@ -32,8 +32,8 @@
       />
     </div>
 
-    <!-- Per-Tier Sliders (when useGlobal is false) -->
-    <div v-else class="tier-sliders-list">
+    <!-- Per-Tier Sliders (when useGlobal is false / Per-Tier is ON) -->
+    <div v-if="!useGlobal" class="tier-sliders-list">
       <div
         v-for="tier in sortedTiers"
         :key="tier.id"
@@ -116,8 +116,8 @@ function toggleGlobal(value) {
 
 <style scoped>
 .tier-card-settings {
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background: #1a1a1a;
+  border: 1px solid #374151;
   border-radius: 8px;
   padding: 12px;
   margin-top: 12px;
@@ -129,7 +129,7 @@ function toggleGlobal(value) {
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid #374151;
 }
 
 .tier-settings-title {
@@ -202,7 +202,7 @@ function toggleGlobal(value) {
 }
 
 .tier-sliders-list {
-  max-height: 200px;
+  max-height: 350px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -212,7 +212,7 @@ function toggleGlobal(value) {
 }
 
 .tier-sliders-list::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: #1a1a1a;
 }
 
 .tier-sliders-list::-webkit-scrollbar-thumb {

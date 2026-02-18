@@ -1271,8 +1271,7 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
 /* These styles are kept for backward compatibility and layout integration */
 
 .event-history-container {
-  /* Integrated into layout flow - no fixed positioning */
-  width: 140px;
+  /* Integrated into layout flow - width handled by component style */
   flex-shrink: 0;
   height: 100%;
 }

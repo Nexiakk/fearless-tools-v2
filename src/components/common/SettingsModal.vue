@@ -349,8 +349,8 @@ function handleUnavailableGroupingChange(event) {
 
 /* Custom Settings Panel */
 .custom-settings-panel {
-  background: #252525;
-  border: 1px solid #3a3a3a;
+  background: #1a1a1a;
+  border: 1px solid #374151;
   border-radius: 8px;
   padding: 16px;
   margin-top: 8px;
@@ -370,8 +370,8 @@ function handleUnavailableGroupingChange(event) {
 
 /* Page Content Scale Section */
 .page-content-scale-section {
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background: #1a1a1a;
+  border: 1px solid #374151;
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
@@ -381,31 +381,31 @@ function handleUnavailableGroupingChange(event) {
   width: auto;
   min-width: 140px;
   padding: 6px 28px 6px 12px;
-  background: #252525;
-  border: 1px solid #3a3a3a;
+  background: #1a1a1a;
+  border: 1px solid #374151;
   border-radius: 6px;
-  color: #e0e0e0;
+  color: #e5e7eb;
   font-size: 14px;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
 }
 
 .unavailable-grouping-select:hover {
-  border-color: #4a4a4a;
+  border-color: #4b5563;
 }
 
 .unavailable-grouping-select:focus {
   outline: none;
-  border-color: #0e639c;
+  border-color: #f59e0b;
 }
 
 .unavailable-grouping-select option {
-  background: #252525;
-  color: #e0e0e0;
+  background: #1a1a1a;
+  color: #e5e7eb;
 }
 
 /* Custom Scrollbar Styles */
