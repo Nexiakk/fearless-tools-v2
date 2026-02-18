@@ -131,7 +131,7 @@
 
           <!-- Picked Champions Grouping -->
           <div class="flex items-center justify-between">
-            <label class="font-medium">Picked Champions Positioning</label>
+            <label class="font-medium">Picked Champions Display</label>
             <select
               :value="settingsStore.settings.pool.unavailableChampionsGrouping"
               @change="handleUnavailableGroupingChange"
