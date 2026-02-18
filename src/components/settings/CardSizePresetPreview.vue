@@ -10,38 +10,29 @@
         <!-- Champion Grid Preview -->
         <div class="preset-skeleton-grid" :class="preset">
           <!-- Row 1: Normal champions at normal size -->
-          <div
-            v-for="i in 3"
-            :key="`row1-${i}`"
-            class="preset-skeleton-card"
-          >
+          <div v-for="i in 3" :key="`row1-${i}`" class="preset-skeleton-card">
             <div class="preset-skeleton-icon"></div>
           </div>
 
           <!-- Row 2: Normal champions at normal size -->
-          <div
-            v-for="i in 3"
-            :key="`row2-${i}`"
-            class="preset-skeleton-card"
-          >
+          <div v-for="i in 3" :key="`row2-${i}`" class="preset-skeleton-card">
             <div class="preset-skeleton-icon"></div>
           </div>
 
           <!-- Row 3: Mix based on preset -->
           <template v-if="preset === 'standard'">
             <!-- Standard: All same size including unavailable -->
-            <div
-              v-for="i in 3"
-              :key="`row3-${i}`"
-              class="preset-skeleton-card"
-            >
-              <div class="preset-skeleton-icon" :class="{ 'unavailable': i > 1 }"></div>
+            <div v-for="i in 3" :key="`row3-${i}`" class="preset-skeleton-card">
+              <div
+                class="preset-skeleton-icon"
+                :class="{ unavailable: i > 1 }"
+              ></div>
             </div>
           </template>
           <template v-else>
             <!-- Compact: 4 smaller squares showing unavailable size -->
             <div
-              v-for="i in 4"
+              v-for="i in 6"
               :key="`row3-${i}`"
               class="preset-skeleton-card compact-unavailable"
             >
@@ -62,15 +53,27 @@
     <template v-else>
       <div class="preset-custom-wrapper">
         <div class="preset-custom-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+            />
           </svg>
         </div>
         <span class="preset-custom-text">CUSTOM</span>
         <div class="preset-expand-icon" :class="{ expanded: isExpanded }">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"/>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
       </div>
@@ -79,52 +82,52 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from "vue";
 
 const props = defineProps({
   preset: {
     type: String,
     required: true,
-    validator: (value) => ['standard', 'compact', 'custom'].includes(value)
+    validator: (value) => ["standard", "compact", "custom"].includes(value),
   },
   isActive: {
     type: Boolean,
-    default: false
+    default: false,
   },
   isExpanded: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 });
 
-const emit = defineEmits(['select']);
+const emit = defineEmits(["select"]);
 
 const presetName = computed(() => {
   const names = {
-    standard: 'Standard',
-    compact: 'Compact',
-    custom: 'Custom'
+    standard: "Standard",
+    compact: "Compact",
+    custom: "Custom",
   };
   return names[props.preset];
 });
 
 const presetValue = computed(() => {
   const values = {
-    standard: '100%',
-    compact: '83%'
+    standard: "100%",
+    compact: "83%",
   };
-  return values[props.preset] || '';
+  return values[props.preset] || "";
 });
 
 const skeletonStyles = computed(() => {
   return {
-    '--preview-card-scale': 1,
-    '--preview-unavailable-scale': 0.83
+    "--preview-card-scale": 1,
+    "--preview-unavailable-scale": 0.83,
   };
 });
 
 function handleClick() {
-  emit('select', props.preset);
+  emit("select", props.preset);
 }
 </script>
 
@@ -276,7 +279,8 @@ function handleClick() {
 
 /* Animation for skeleton cards */
 @keyframes preset-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.8;
   }
   50% {
@@ -288,14 +292,34 @@ function handleClick() {
   animation: preset-pulse 2s ease-in-out infinite;
 }
 
-.preset-skeleton-card:nth-child(1) { animation-delay: 0s; }
-.preset-skeleton-card:nth-child(2) { animation-delay: 0.1s; }
-.preset-skeleton-card:nth-child(3) { animation-delay: 0.2s; }
-.preset-skeleton-card:nth-child(4) { animation-delay: 0.3s; }
-.preset-skeleton-card:nth-child(5) { animation-delay: 0.4s; }
-.preset-skeleton-card:nth-child(6) { animation-delay: 0.5s; }
-.preset-skeleton-card:nth-child(7) { animation-delay: 0.6s; }
-.preset-skeleton-card:nth-child(8) { animation-delay: 0.7s; }
-.preset-skeleton-card:nth-child(9) { animation-delay: 0.8s; }
-.preset-skeleton-card:nth-child(10) { animation-delay: 0.9s; }
+.preset-skeleton-card:nth-child(1) {
+  animation-delay: 0s;
+}
+.preset-skeleton-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.preset-skeleton-card:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.preset-skeleton-card:nth-child(4) {
+  animation-delay: 0.3s;
+}
+.preset-skeleton-card:nth-child(5) {
+  animation-delay: 0.4s;
+}
+.preset-skeleton-card:nth-child(6) {
+  animation-delay: 0.5s;
+}
+.preset-skeleton-card:nth-child(7) {
+  animation-delay: 0.6s;
+}
+.preset-skeleton-card:nth-child(8) {
+  animation-delay: 0.7s;
+}
+.preset-skeleton-card:nth-child(9) {
+  animation-delay: 0.8s;
+}
+.preset-skeleton-card:nth-child(10) {
+  animation-delay: 0.9s;
+}
 </style>
