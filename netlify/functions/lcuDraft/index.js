@@ -196,6 +196,68 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // CRITICAL FIX: Handle delete request BEFORE ghost document check
+    // Delete requests don't have picks/bans data, so they would fail the ghost check
+    if (draftData.action === 'delete') {
+      const { lobbyId, workspaceId } = draftData
+      
+      if (!workspaceId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'workspaceId is required for delete' })
+        }
+      }
+      
+      if (db) {
+        const lcuDraftsRef = db.collection('workspaces')
+          .doc(String(workspaceId))
+          .collection('lcuDrafts')
+        
+        // Find document by lobbyId field (since doc ID might be lobbyId_{number})
+        const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
+        
+        if (!existingDocs.empty) {
+          const docId = existingDocs.docs[0].id
+          await lcuDraftsRef.doc(docId).delete()
+          console.log(`[LCU Draft] Deleted draft for lobby ${lobbyId} (doc: ${docId}, champion select cancelled)`)
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              lobbyId: String(lobbyId),
+              docId: docId,
+              message: 'Draft deleted (champion select cancelled)'
+            })
+          }
+        } else {
+          console.log(`[LCU Draft] No document found for lobby ${lobbyId} to delete`)
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              lobbyId: String(lobbyId),
+              message: 'Draft not found'
+            })
+          }
+        }
+      } else {
+        console.log(`[LCU Draft] Test mode - would delete draft for lobby ${lobbyId}`)
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            lobbyId: String(lobbyId),
+            message: 'Delete request received (test mode)'
+          })
+        }
+      }
+    }
+
     // CRITICAL FIX: Reject ghost documents (empty drafts with no meaningful data)
     const blueSide = draftData.blue_side || {}
     const redSide = draftData.red_side || {}
@@ -262,67 +324,6 @@ exports.handler = async (event, context) => {
         // For backwards compatibility, allow requests without password hash
         // but log a warning
         console.warn(`[LCU Draft] Warning: Request for workspace ${draftData.workspaceId} received without password authentication`)
-      }
-    }
-
-    // Handle delete request (champion select cancelled)
-    if (draftData.action === 'delete') {
-      const { lobbyId, workspaceId } = draftData
-      
-      if (!workspaceId) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ error: 'workspaceId is required for delete' })
-        }
-      }
-      
-      if (db) {
-        const lcuDraftsRef = db.collection('workspaces')
-          .doc(String(workspaceId))
-          .collection('lcuDrafts')
-        
-        // Find document by lobbyId field (since doc ID might be lobbyId_{number})
-        const existingDocs = await lcuDraftsRef.where('lobbyId', '==', String(lobbyId)).limit(1).get()
-        
-        if (!existingDocs.empty) {
-          const docId = existingDocs.docs[0].id
-          await lcuDraftsRef.doc(docId).delete()
-          console.log(`[LCU Draft] Deleted draft for lobby ${lobbyId} (doc: ${docId}, champion select cancelled)`)
-          
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              success: true,
-              lobbyId: String(lobbyId),
-              docId: docId,
-              message: 'Draft deleted (champion select cancelled)'
-            })
-          }
-        } else {
-          console.log(`[LCU Draft] No document found for lobby ${lobbyId} to delete`)
-          return {
-            statusCode: 404,
-            headers,
-            body: JSON.stringify({
-              success: false,
-              lobbyId: String(lobbyId),
-              message: 'Draft not found'
-            })
-          }
-        }
-      } else {
-        console.log(`[LCU Draft] Test mode - would delete draft for lobby ${lobbyId}`)
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: true,
-            lobbyId: String(lobbyId),
-            message: 'Delete request received (test mode)'
-          })
-        }
       }
     }
 
