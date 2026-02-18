@@ -128,6 +128,20 @@
               @update:model-value="settingsStore.updatePoolSetting('showEventHistory', $event)"
             />
           </div>
+
+          <!-- Picked Champions Grouping -->
+          <div class="flex items-center justify-between">
+            <label class="font-medium">Picked Champions Positioning</label>
+            <select
+              :value="settingsStore.settings.pool.unavailableChampionsGrouping"
+              @change="handleUnavailableGroupingChange"
+              class="unavailable-grouping-select"
+            >
+              <option value="top">Top (default)</option>
+              <option value="bottom">Bottom</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </div>
         </TabsContent>
 
         <TabsContent value="admin" class="space-y-4 mt-4 overflow-y-auto pr-2">
@@ -319,6 +333,11 @@ const handleAdminSignIn = async () => {
 
   adminLoading.value = false;
 };
+
+// Handle unavailable champions grouping change
+function handleUnavailableGroupingChange(event) {
+  settingsStore.updatePoolSetting('unavailableChampionsGrouping', event.target.value);
+}
 </script>
 
 <style scoped>
@@ -356,6 +375,37 @@ const handleAdminSignIn = async () => {
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
+}
+
+.unavailable-grouping-select {
+  width: auto;
+  min-width: 140px;
+  padding: 6px 28px 6px 12px;
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.unavailable-grouping-select:hover {
+  border-color: #4a4a4a;
+}
+
+.unavailable-grouping-select:focus {
+  outline: none;
+  border-color: #0e639c;
+}
+
+.unavailable-grouping-select option {
+  background: #252525;
+  color: #e0e0e0;
 }
 
 /* Custom Scrollbar Styles */

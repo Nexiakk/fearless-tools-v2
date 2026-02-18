@@ -23,6 +23,8 @@ export const useSettingsStore = defineStore("settings", () => {
       globalTierCardSize: 100,   // Global tier card size (when useGlobalTierSize is true)
       // NEW: Global page content scale
       pageContentScale: 100,     // Global page content scale (50-150), default 100
+      // NEW: Unavailable/Banned champions grouping
+      unavailableChampionsGrouping: 'top', // 'top' | 'bottom' | 'hidden', default: 'top'
     },
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
@@ -98,6 +100,10 @@ export const useSettingsStore = defineStore("settings", () => {
           // Handle new page content scale setting
           if (parsed.pool.pageContentScale === undefined) {
             mergedPool.pageContentScale = 100;
+          }
+          // Handle new unavailable champions grouping setting
+          if (parsed.pool.unavailableChampionsGrouping === undefined) {
+            mergedPool.unavailableChampionsGrouping = 'top';
           }
 
           settings.value.pool = mergedPool;
@@ -213,6 +219,7 @@ export const useSettingsStore = defineStore("settings", () => {
         tierCardSizes: { 'op': 100, 'highlight': 100 },
         globalTierCardSize: 100,
         pageContentScale: 100, // Reset page content scale to default
+        unavailableChampionsGrouping: 'top', // Reset unavailable champions grouping to default
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled

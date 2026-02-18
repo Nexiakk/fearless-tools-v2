@@ -112,6 +112,11 @@ if (typeof window !== 'undefined') {
 }
 const hasSavedWorkspace = ref(initialSavedWorkspace)
 
+// Get the unavailable champions grouping setting
+const unavailableGrouping = computed(() => {
+  return settingsStore.settings.pool.unavailableChampionsGrouping || 'top'
+})
+
 const championsByRole = computed(() => {
   const baseChampionsByRole = draftStore.championsByRoleForCompactView
 
@@ -122,13 +127,13 @@ const championsByRole = computed(() => {
     const roleChampions = baseChampionsByRole[role]
 
     if (Array.isArray(roleChampions)) {
-      // Non-frozen view: sort champions by tier priority
-      sortedChampionsByRole[role] = sortChampionsByTier(roleChampions, role)
+      // Non-frozen view: sort and filter champions based on grouping setting
+      sortedChampionsByRole[role] = sortAndFilterChampions(roleChampions, role)
     } else if (roleChampions && typeof roleChampions === 'object') {
-      // Frozen view: sort both sticky and scrollable arrays
+      // Frozen view: sort and filter both sticky and scrollable arrays
       sortedChampionsByRole[role] = {
-        sticky: sortChampionsByTier(roleChampions.sticky || [], role),
-        scrollable: sortChampionsByTier(roleChampions.scrollable || [], role)
+        sticky: sortAndFilterChampions(roleChampions.sticky || [], role),
+        scrollable: sortAndFilterChampions(roleChampions.scrollable || [], role)
       }
     } else {
       sortedChampionsByRole[role] = roleChampions || []
@@ -138,13 +143,37 @@ const championsByRole = computed(() => {
   return sortedChampionsByRole
 })
 
+// Helper function to sort and filter champions based on grouping setting
+function sortAndFilterChampions(champions, role) {
+  const grouping = unavailableGrouping.value
+
+  // If hidden, filter out unavailable/banned champions
+  if (grouping === 'hidden') {
+    const filtered = champions.filter(champ => 
+      !draftStore.isBannedChampion(champ.name) && !draftStore.isUnavailable(champ.name)
+    )
+    return sortChampionsByTier(filtered, role)
+  }
+
+  // Otherwise sort normally
+  return sortChampionsByTier(champions, role)
+}
+
 // Helper function to sort champions by priority (banned/unavailable > tier > alphabetical)
 function sortChampionsByTier(champions, role) {
+  const grouping = unavailableGrouping.value
+
   return [...champions].sort((a, b) => {
     // Helper function to get priority for a champion
     const getPriority = (champ) => {
-      // Banned and unavailable have highest priority (4)
-      if (draftStore.isBannedChampion(champ.name) || draftStore.isUnavailable(champ.name)) return 4
+      const isUnavailable = draftStore.isBannedChampion(champ.name) || draftStore.isUnavailable(champ.name)
+
+      // Banned and unavailable have highest priority (4) when grouping is 'top'
+      // or lowest priority (-1) when grouping is 'bottom'
+      if (isUnavailable) {
+        return grouping === 'bottom' ? -1 : 4
+      }
+
       // Check for tier assignment per role (3)
       const tier = workspaceTiersStore.getTierForChampion(champ.name, role)
       if (tier) return 3 - (tier.order * 0.1) // Higher tiers get higher priority
