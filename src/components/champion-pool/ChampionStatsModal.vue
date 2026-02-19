@@ -10,240 +10,189 @@
     <Transition name="drawer">
       <div
         v-if="modalStore.isOpen"
-        class="fixed bottom-0 left-0 right-0 z-50 bg-[#1a1a1a] shadow-2xl border-t border-gray-700 flex flex-col"
-        style="height: 420px;"
+        class="fixed bottom-0 left-0 right-0 z-50 bg-[#161616] shadow-2xl border-t border-gray-800 flex flex-col font-sans"
+        style="height: 340px;"
         @click.stop
       >
         <!-- Loading State -->
         <div v-if="modalStore.isLoading" class="flex-1 flex items-center justify-center">
           <div class="text-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-            <p class="text-gray-400">Loading champion data...</p>
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto mb-3"></div>
+            <p class="text-xs text-gray-400">Loading...</p>
           </div>
         </div>
 
         <!-- Error State -->
         <div v-else-if="modalStore.error" class="flex-1 flex items-center justify-center p-6">
-          <div class="text-center">
-            <svg class="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="text-center text-red-400">
+            <svg class="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            <h3 class="text-lg font-medium text-white mb-2">Error loading data</h3>
-            <p class="text-sm text-gray-400">{{ modalStore.error }}</p>
+            <p class="text-xs">{{ modalStore.error }}</p>
           </div>
         </div>
 
         <!-- Content -->
-        <div v-else-if="modalStore.champion" class="flex-1 flex flex-col overflow-hidden">
-          <!-- ZONE 1: Upper Section - Centered, Narrower -->
-          <div class="flex-shrink-0 bg-[#1a1a1a]">
-            <div class="max-w-2xl mx-auto px-6 py-3">
-              <!-- Champion Header Row -->
-              <div class="flex items-center gap-4">
+        <div v-else-if="modalStore.champion" class="flex-1 flex flex-col min-h-0 bg-[#161616] relative overflow-hidden">
+          
+          <!-- Background Effect -->
+          <div class="absolute top-0 right-0 w-[400px] h-full bg-gradient-to-l from-amber-900/10 via-transparent to-transparent pointer-events-none"></div>
+
+          <!-- Top Row: Identity & Primary Stats -->
+          <div class="flex-shrink-0 px-5 pt-4 pb-1 flex items-start gap-4 z-10">
+            <!-- Champion Identity -->
+            <div class="flex items-start gap-3 flex-shrink-0">
+              <div class="relative group">
                 <img
                   :src="modalStore.championIconUrl"
                   :alt="modalStore.champion.name"
-                  class="w-14 h-14 rounded-lg border-2 border-gray-600"
+                  class="w-16 h-16 rounded-lg shadow-lg border-2 border-gray-700 group-hover:border-amber-500/50 transition-colors"
                 />
-                <div class="flex-1">
-                  <h3 class="text-xl font-bold text-white">{{ modalStore.champion.name }}</h3>
-                  <p v-if="modalStore.selectedRole" class="text-sm text-gray-400 capitalize">
-                    {{ modalStore.selectedRole }} Lane
-                  </p>
-                </div>
-              </div>
-
-              <!-- Form Tabs (only for multi-form champions) -->
-              <div v-if="modalStore.hasMultipleForms" class="mt-3">
-                <div class="flex items-center gap-1 bg-gray-800/50 rounded-lg p-1 w-fit">
-                  <button
+                <!-- Form Tabs Overlay -->
+                <div v-if="modalStore.hasMultipleForms" class="absolute -bottom-2 left-1/2 -translate-x-1/2 flex gap-0.5 bg-black/80 rounded px-1 py-0.5 shadow-sm">
+                   <button
                     v-for="(formName, index) in modalStore.formNames"
                     :key="index"
                     @click="modalStore.setSelectedFormIndex(index)"
-                    class="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
-                    :class="modalStore.selectedFormIndex === index
-                      ? 'bg-amber-600 text-white shadow-sm'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'"
-                  >
-                    {{ formName }}
-                  </button>
+                    class="w-2 h-2 rounded-full transition-all border border-gray-600"
+                    :class="modalStore.selectedFormIndex === index ? 'bg-amber-500 scale-125 border-amber-300' : 'bg-gray-600 hover:bg-gray-400'"
+                    :title="formName"
+                  ></button>
                 </div>
               </div>
-
-              <!-- Abilities Row with Tooltips -->
-              <TooltipProvider :delay-duration="200">
-                <div class="flex items-start gap-2 mt-3">
-                  <div
-                    v-for="ability in abilityIcons"
-                    :key="ability.key"
-                    class="relative flex flex-col items-center"
-                  >
-                    <Tooltip>
+              
+              <div class="flex flex-col pt-0.5">
+                <h3 class="text-2xl font-bold text-white tracking-tight leading-none mb-1">{{ modalStore.champion.name }}</h3>
+                <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                  <span class="capitalize text-amber-500/90">{{ modalStore.selectedRole }}</span>
+                  <span class="w-1 h-1 rounded-full bg-gray-600"></span>
+                  <span :class="getTierColorClass(formattedStats?.tier)">Tier {{ formattedStats?.tier || '-' }}</span>
+                  <span class="w-1 h-1 rounded-full bg-gray-600"></span>
+                  <span class="text-gray-500">Rank {{ formattedStats?.rank || '-' }}</span>
+                </div>
+                
+                <!-- Abilities Row (moved here for compactness) -->
+                 <TooltipProvider :delay-duration="100">
+                  <div class="flex items-center gap-1.5 mt-2.5">
+                    <Tooltip v-for="ability in abilityIcons" :key="ability.key">
                       <TooltipTrigger as-child>
                         <div
-                          class="w-11 h-11 rounded-lg border-2 overflow-hidden cursor-help transition-all hover:border-amber-500 hover:scale-105 relative"
-                          :class="ability.key === 'P' ? 'border-purple-600 bg-purple-900/30' : 'border-amber-600 bg-amber-900/30'"
+                          class="w-6 h-6 rounded border border-gray-700 overflow-hidden cursor-help transition-all hover:border-amber-500/70 hover:scale-110 relative group/ability"
+                          :class="ability.key === 'P' ? 'bg-purple-900/10' : 'bg-gray-800'"
                         >
                           <img
                             v-if="ability.iconUrl"
                             :src="ability.iconUrl"
                             :alt="ability.name"
-                            class="w-full h-full object-cover"
+                            class="w-full h-full object-cover opacity-80 group-hover/ability:opacity-100"
                             @error="handleAbilityImageError"
                           />
-                          <div v-else class="w-full h-full flex items-center justify-center text-white font-bold text-sm">
-                            {{ ability.key }}
-                          </div>
-                          <!-- Key Label -->
-                          <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-gray-900 rounded text-xs flex items-center justify-center text-white font-bold border border-gray-600 text-[10px]">
-                            {{ ability.key }}
-                          </div>
+                          <span v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{{ ability.key }}</span>
                         </div>
                       </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        :side-offset="8"
-                        class="max-w-sm bg-gray-900 border-gray-600 text-white p-3 z-[100]"
-                      >
-                        <div class="space-y-2">
-                          <p class="font-semibold text-amber-400">{{ ability.name }}</p>
-                          <p class="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{{ ability.description }}</p>
-                          <div v-if="ability.cooldown || ability.cost" class="flex gap-3 text-xs text-gray-400 pt-2 border-t border-gray-700">
-                            <span v-if="ability.cooldown">Cooldown: {{ ability.cooldown }}</span>
-                            <span v-if="ability.cost">Cost: {{ ability.cost.value }} {{ ability.cost.resource }}</span>
-                          </div>
+                       <TooltipContent side="top" :side-offset="5" class="bg-gray-900 border-gray-700 text-xs p-2 max-w-xs z-[60]">
+                        <p class="font-bold text-amber-400 mb-1">{{ ability.name }} <span class="text-gray-500 font-normal">({{ ability.key }})</span></p>
+                        <p class="text-gray-300 leading-snug">{{ ability.description }}</p>
+                        <div v-if="ability.cooldown" class="mt-1 pt-1 border-t border-gray-700 text-gray-500 flex justify-between">
+                            <span>CD: {{ ability.cooldown }}</span>
+                            <span v-if="ability.cost">{{ ability.cost.value }} {{ ability.cost.resource }}</span>
                         </div>
                       </TooltipContent>
                     </Tooltip>
-                    <!-- Cooldown Display (under icon) -->
-                    <div
-                      v-if="ability.cooldown"
-                      class="mt-1 text-[10px] text-gray-400 text-center leading-tight max-w-[50px]"
-                    >
-                      {{ ability.cooldown }}
-                    </div>
                   </div>
-                </div>
-              </TooltipProvider>
+                </TooltipProvider>
+              </div>
             </div>
-          </div>
 
-          <!-- Stats Bar - Centered, Narrower -->
-          <div v-if="formattedStats" class="flex-shrink-0 border-y border-gray-700 bg-[#1f1f1f]">
-            <div class="max-w-2xl mx-auto px-6 py-2">
-              <div class="flex items-center justify-center gap-6">
-                <!-- Tier -->
-                <div class="text-center">
-                  <div
-                    class="text-xl font-bold"
-                    :class="getTierColorClass(formattedStats.tier)"
-                  >
-                    {{ formattedStats.tier }}
-                  </div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Tier</div>
-                </div>
-
-                <!-- Rank -->
-                <div class="text-center">
-                  <div class="text-lg font-bold text-white">{{ formattedStats.rank }}</div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Rank</div>
-                </div>
-
-                <!-- Win Rate -->
-                <div class="text-center">
-                  <div class="text-lg font-bold text-green-400">{{ formattedStats.winRate }}</div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Win</div>
-                </div>
-
-                <!-- Pick Rate -->
-                <div class="text-center">
-                  <div class="text-lg font-bold text-blue-400">{{ formattedStats.pickRate }}</div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Pick</div>
-                </div>
-
-                <!-- Ban Rate -->
-                <div class="text-center">
-                  <div class="text-lg font-bold text-red-400">{{ formattedStats.banRate }}</div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Ban</div>
-                </div>
-
-                <!-- Games -->
-                <div class="text-center">
-                  <div class="text-lg font-bold text-white">{{ formattedStats.games }}</div>
-                  <div class="text-[10px] text-gray-500 uppercase tracking-wider">Games</div>
-                </div>
+            <!-- Stats Grid (Compact) -->
+            <div v-if="formattedStats" class="ml-auto flex items-center gap-6 pr-2 self-center">
+              <div class="flex flex-col items-end">
+                <span class="text-lg font-bold text-green-400 leading-none">{{ formattedStats.winRate }}</span>
+                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Win</span>
+              </div>
+              <div class="w-px h-8 bg-gray-800"></div>
+              <div class="flex flex-col items-end">
+                <span class="text-lg font-bold text-blue-400 leading-none">{{ formattedStats.pickRate }}</span>
+                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Pick</span>
+              </div>
+               <div class="w-px h-8 bg-gray-800"></div>
+              <div class="flex flex-col items-end">
+                <span class="text-lg font-bold text-red-400 leading-none">{{ formattedStats.banRate }}</span>
+                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Ban</span>
+              </div>
+               <div class="w-px h-8 bg-gray-800"></div>
+              <div class="flex flex-col items-end">
+                <span class="text-lg font-bold text-gray-300 leading-none">{{ formattedStats.games }}</span>
+                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Games</span>
               </div>
             </div>
           </div>
 
-          <!-- ZONE 2: Lower Section - Full Width -->
-          <div class="flex-1 flex flex-col min-h-0 bg-[#1a1a1a]">
-            <!-- Role Selector Tabs -->
-            <div class="flex-shrink-0 px-6 py-2 border-b border-gray-700">
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400 mr-2">Role:</span>
-                <button
-                  v-for="role in allRoles"
-                  :key="role"
-                  @click="setSelectedRole(role)"
-                  :disabled="!availableRoles.includes(role)"
-                  class="w-8 h-8 rounded flex items-center justify-center transition-all"
-                  :class="getRoleTabClass(role)"
-                  :title="role"
-                >
-                  <img
-                    :src="championsStore.getRoleIconUrl(role)"
-                    :alt="role"
-                    class="w-5 h-5"
-                    :class="!availableRoles.includes(role) ? 'opacity-30' : ''"
-                  />
-                </button>
-              </div>
-            </div>
+          <!-- Divider -->
+          <div class="h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent my-2 opacity-50"></div>
 
-            <!-- Matchups Section -->
-            <div class="flex-1 px-6 py-3 overflow-hidden min-h-0">
-              <div class="h-full flex flex-col min-h-0">
-                <h4 class="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-2 flex-shrink-0">
-                  <svg class="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <!-- Bottom Section: Counters & Role Select -->
+          <div class="flex-1 flex flex-col min-h-0 px-5 pb-3">
+             <!-- Sub-Header Row -->
+            <div class="flex items-center justify-between mb-2 flex-shrink-0">
+               <h4 class="text-xs font-bold text-gray-400 flex items-center gap-1.5 uppercase tracking-wide">
+                  <svg class="w-3 h-3 text-red-500/80" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.707 7.293a1 1 0 0 0-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 1 0 1.414 1.414L10 11.414l1.293 1.293a1 1 0 0 0 1.414-1.414L11.414 10l1.293-1.293a1 1 0 0 0-1.414-1.414L10 8.586 8.707 7.293Z" clip-rule="evenodd" />
                   </svg>
-                  BAD AGAINST ({{ currentRoleCounters.length }} matchups)
-                </h4>
+                  Counters
+                  <span class="text-gray-600 font-normal ml-1">({{ currentRoleCounters.length }})</span>
+               </h4>
 
-                <!-- Matchups Grid - Horizontal Scroll -->
-                <div v-if="currentRoleCounters.length > 0" class="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
-                  <div class="flex gap-2 pb-2 h-full items-center" style="min-width: min-content;">
-                    <div
-                      v-for="counter in currentRoleCounters"
-                      :key="counter.champion"
-                      class="flex-shrink-0 w-20 p-2 bg-[#252525] rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
-                    >
-                      <div class="flex flex-col items-center text-center">
-                        <img
-                          :src="getCounterIconUrl(counter)"
-                          :alt="counter.champion"
-                          class="w-10 h-10 rounded-lg mb-1"
-                          @error="handleImageError"
-                        />
-                        <div class="text-[10px] font-medium text-white truncate w-full">{{ counter.champion }}</div>
-                        <div class="text-xs font-bold text-red-400">{{ formatWinRate(counter.win_rate) }}</div>
-                        <div v-if="counter.games" class="text-[10px] text-gray-500">{{ counter.games }}g</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+               <!-- Role Selector (Compact) -->
+               <div class="flex bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
+                  <button
+                    v-for="role in allRoles"
+                    :key="role"
+                    @click="setSelectedRole(role)"
+                    :disabled="!availableRoles.includes(role)"
+                    class="w-6 h-6 rounded flex items-center justify-center transition-all relative group"
+                    :class="getRoleTabClass(role)"
+                  >
+                    <img
+                      :src="championsStore.getRoleIconUrl(role)"
+                      :alt="role"
+                      class="w-3.5 h-3.5 transition-opacity"
+                      :class="!availableRoles.includes(role) ? 'opacity-20 grayscale' : 'opacity-80 group-hover:opacity-100'"
+                    />
+                  </button>
+               </div>
+            </div>
 
-                <!-- No Matchups State -->
-                <div v-else class="flex-1 flex items-center justify-center min-h-0">
-                  <div class="text-center text-gray-500">
-                    <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p class="text-xs">No matchup data available</p>
+            <!-- Matchups Horizontal List -->
+            <div v-if="currentRoleCounters.length > 0" class="flex-1 overflow-x-auto overflow-y-hidden min-h-0 py-1 scrollbar-thin">
+              <div class="flex gap-2 h-full items-center pl-1">
+                <div
+                  v-for="counter in currentRoleCounters"
+                  :key="counter.champion"
+                  class="flex-shrink-0 w-[4.5rem] h-full bg-[#1e1e1e] rounded border border-gray-800 hover:border-gray-600 transition-all group flex flex-col relative overflow-hidden"
+                >
+                  <!-- Background Image (blurred) -->
+                   <div class="absolute inset-0 overflow-hidden opacity-20 group-hover:opacity-30 transition-opacity">
+                      <img :src="getCounterIconUrl(counter)" class="w-full h-full object-cover blur-[2px] scale-150" />
+                   </div>
+
+                  <div class="relative z-10 flex flex-col items-center justify-center h-full p-1.5 gap-1">
+                      <img
+                        :src="getCounterIconUrl(counter)"
+                        :alt="counter.champion"
+                        class="w-8 h-8 rounded shadow-sm border border-gray-700/50 group-hover:border-gray-500 transition-colors"
+                        @error="handleImageError"
+                      />
+                      <div class="text-[10px] font-medium text-gray-300 truncate w-full text-center leading-tight">{{ counter.champion }}</div>
+                      <div class="text-[11px] font-bold text-red-400/90 leading-none">{{ formatWinRate(counter.win_rate) }}</div>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else class="flex-1 flex items-center justify-center text-gray-600 text-xs italic border border-dashed border-gray-800 rounded-lg bg-gray-900/20">
+               No matchup data for this role
             </div>
           </div>
         </div>
@@ -267,7 +216,6 @@ import {
 const modalStore = useChampionStatsModalStore()
 const championsStore = useChampionsStore()
 
-// Use computed to safely access store data
 const abilityIcons = computed(() => modalStore.abilityIcons || [])
 const formattedStats = computed(() => modalStore.formattedStats)
 const currentRoleCounters = computed(() => modalStore.currentRoleCounters || [])
@@ -289,23 +237,23 @@ function getRoleTabClass(role) {
   const isSelected = selectedRole.value === role
 
   if (!isAvailable) {
-    return 'bg-gray-800 cursor-not-allowed opacity-50'
+    return 'cursor-not-allowed bg-transparent'
   }
 
   if (isSelected) {
-    return 'bg-amber-600 hover:bg-amber-500'
+    return 'bg-amber-600/20 ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]'
   }
 
-  return 'bg-gray-700 hover:bg-gray-600'
+  return 'hover:bg-gray-700/50'
 }
 
 function getTierColorClass(tier) {
   const colors = {
-    'S': 'text-yellow-400',
-    'S-': 'text-yellow-400',
-    'A+': 'text-green-400',
-    'A': 'text-green-400',
-    'A-': 'text-green-400',
+    'S': 'text-amber-400 font-bold',
+    'S-': 'text-amber-400 font-bold',
+    'A+': 'text-emerald-400 font-semibold',
+    'A': 'text-emerald-400 font-semibold',
+    'A-': 'text-emerald-400 font-semibold',
     'B+': 'text-blue-400',
     'B': 'text-blue-400',
     'B-': 'text-blue-400',
@@ -314,7 +262,7 @@ function getTierColorClass(tier) {
     'C-': 'text-gray-400',
     'D': 'text-red-400',
   }
-  return colors[tier] || 'text-gray-400'
+  return colors[tier] || 'text-gray-500'
 }
 
 function formatWinRate(winRate) {
@@ -332,13 +280,12 @@ function handleImageError(event) {
 }
 
 function handleAbilityImageError(event) {
-  // Fallback for ability icons - show the key letter instead
   event.target.style.display = 'none'
+  // Ideally, show text fallback if image fails, but logic is handled in template v-if/else
 }
 </script>
 
 <style scoped>
-/* Drawer slide-up animation */
 .drawer-enter-active,
 .drawer-leave-active {
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -354,22 +301,18 @@ function handleAbilityImageError(event) {
   transform: translateY(0);
 }
 
-/* Custom scrollbar for matchups */
-.overflow-x-auto::-webkit-scrollbar {
-  height: 6px;
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
 }
-
-.overflow-x-auto::-webkit-scrollbar-track {
-  background: #1a1a1a;
-  border-radius: 3px;
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-.overflow-x-auto::-webkit-scrollbar-thumb {
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #444;
-  border-radius: 3px;
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: #555;
 }
 </style>
