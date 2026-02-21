@@ -283,10 +283,7 @@
                         draggable="false"
                       />
                     </div>
-                    <!-- Role badges -->
-                    <div class="draft-role-badges" v-if="champion.roles">
-                       <img v-for="r in champion.roles" :key="r" :src="championsStore.getRoleIconUrl(r)" class="mini-role-icon"/>
-                    </div>
+
                     <!-- Tier badge -->
                     <div class="draft-tier-badge" v-if="getTierHighlightClass(champion)" :style="{ backgroundColor: getTierColor(champion), color: '#ffffff' }">
                        {{ getTierBadgeText(champion) }}
@@ -876,28 +873,7 @@ onMounted(async () => {
   justify-content: center;
 }
 
-.draft-role-badges {
-  position: absolute;
-  top: -4px;
-  right: -3px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  justify-content: flex-start;
-  align-items: flex-end;
-  z-index: 4;
-  pointer-events: none;
-}
 
-.mini-role-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  overflow: hidden;
-  background-color: rgba(28, 28, 28, 0.95);
-  border: 1px solid rgba(58, 58, 58, 0.8);
-  display: block;
-}
 
 /* Tier borders are now handled dynamically via inline styles */
 
@@ -925,9 +901,7 @@ onMounted(async () => {
   opacity: 0.3;
 }
 .draft-creator-champion-card.unavailable .draft-tier-badge,
-.draft-creator-champion-card.unavailable .draft-role-badges,
-.draft-creator-champion-card.already-placed .draft-tier-badge,
-.draft-creator-champion-card.already-placed .draft-role-badges {
+.draft-creator-champion-card.already-placed .draft-tier-badge {
   display: none;
 }
 </style>

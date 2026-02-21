@@ -45,6 +45,7 @@
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
+  margin-top: 1rem;
 }
 .indicator-rect {
   flex: 1;
@@ -549,11 +550,12 @@
   padding-top: 0.0625rem;
 }
 .draft-creator-champion-card .champion-name-text {
-  font-size: calc(0.67rem * var(--card-scale, 1));
-  font-weight: 500;
-  line-height: 0.8rem;
+  font-size: calc(0.8rem * var(--card-scale, 1));
+  font-weight: 600;
+  line-height: calc(1rem * var(--card-scale, 1));
   text-align: center;
   width: 100%;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
