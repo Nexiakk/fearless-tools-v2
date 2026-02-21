@@ -1,7 +1,7 @@
 <template>
   <div class="series-navigator">
     <div class="game-draft-group">
-      <div class="current-game-section">
+      <div class="current-game-section" v-if="!isFearlessSync">
         <button
           class="current-game-button"
           :class="{ expanded: showAllGames }"
@@ -47,21 +47,25 @@
       </div>
     </div>
     <div class="mode-toggle-section">
-      <div class="compact-mode-toggle">
-        <button
-          @click="setMode('sandbox')"
-          :class="['mode-button', { active: currentMode === 'sandbox' }]"
-          title="Sandbox Mode - Full editing freedom"
-        >
-          Sandbox
-        </button>
-        <button
-          @click="setMode('fearless-sync')"
-          :class="['mode-button', { active: currentMode === 'fearless-sync' }]"
-          title="Fearless Sync Mode - LCU integration active"
-        >
-          Fearless Sync
-        </button>
+      <div class="compact-mode-toggle relative-toggle-wrapper">
+        <div class="button-wrapper">
+          <button
+            @click="toggleFearlessSync"
+            :class="['mode-button', { active: isFearlessSync }]"
+          >
+            Fearless Sync: {{ isFearlessSync ? 'ON' : 'OFF' }}
+          </button>
+          <TooltipProvider>
+            <Tooltip :delayDuration="100">
+              <TooltipTrigger asChild>
+                <div class="info-badge">?</div>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-[300px] text-center" side="top">
+                <p>When enabled, previously picked champions from the Fearless Pool are being transferred here in real time. The current game selector is locked so you only test different drafting iterations for the same game.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
     </div>
     <div class="series-actions">
@@ -88,6 +92,12 @@ import { useConfirmationStore } from "@/stores/confirmation";
 import { useSettingsStore } from "@/stores/settings";
 import DraftDeletionModal from "@/components/common/DraftDeletionModal.vue";
 import ModeToggle from "./ModeToggle.vue";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const seriesStore = useSeriesStore();
 const confirmationStore = useConfirmationStore();
@@ -110,12 +120,15 @@ const currentGameHasChanges = computed(() => {
   return gameHasChanges(currentGameNumber.value);
 });
 
-const currentMode = computed(
-  () => settingsStore.settings.drafting?.mode || "sandbox"
+const isFearlessSync = computed(
+  () => settingsStore.settings.drafting?.integrateUnavailableChampions
 );
 
-function setMode(mode) {
-  settingsStore.settings.drafting.mode = mode;
+function toggleFearlessSync() {
+  settingsStore.updateDraftingSetting(
+    'integrateUnavailableChampions',
+    !isFearlessSync.value
+  );
 }
 
 function toggleGameExpansion() {
@@ -213,20 +226,17 @@ function handleReset() {
 <style scoped>
 .series-navigator {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0.5rem 0.75rem;
-  background-color: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
   border-radius: 6px;
   width: 100%;
   height: auto;
   min-height: 40px;
-  position: fixed;
-  top: var(--navbar-height, 40px);
-  left: 0;
-  right: 0;
-  z-index: 9;
+  position: relative;
+  z-index: 10;
   gap: 1rem;
 }
 
@@ -235,12 +245,14 @@ function handleReset() {
   align-items: center;
   gap: 0.75rem;
   flex-shrink: 0;
+  justify-self: start;
 }
 
 .mode-toggle-section {
   display: flex;
   justify-content: center;
   align-items: center;
+  justify-self: center;
 }
 
 .series-actions {
@@ -248,6 +260,7 @@ function handleReset() {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .current-game-section {
@@ -278,9 +291,9 @@ function handleReset() {
 }
 
 .current-game-button.expanded {
-  background-color: #3b82f6;
+  background-color: #b45309;
   color: white;
-  border-color: #2563eb;
+  border-color: #92400e;
 }
 
 .expanded-games-list {
@@ -329,9 +342,9 @@ function handleReset() {
 }
 
 .expanded-game-button.active {
-  background-color: #3b82f6;
+  background-color: #b45309;
   color: white;
-  border-color: #2563eb;
+  border-color: #92400e;
 }
 
 .expanded-game-button.has-changes {
@@ -382,8 +395,38 @@ function handleReset() {
 }
 
 .mode-button.active {
-  background: #3b82f6;
+  background: #b45309;
   color: white;
+}
+
+.button-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.info-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background-color: #3f3f46;
+  color: #a1a1aa;
+  font-size: 0.6rem;
+  font-weight: bold;
+  cursor: help;
+  transition: all 0.2s ease;
+  z-index: 10;
+  border: 1px solid #1a1a1a;
+}
+
+.info-badge:hover {
+  background-color: #52525b;
+  color: #e4e4e7;
 }
 
 .game-button {
@@ -409,16 +452,16 @@ function handleReset() {
 }
 
 .game-button.active {
-  background-color: #3b82f6;
+  background-color: #b45309;
   color: white;
-  border-color: #2563eb;
+  border-color: #92400e;
   border-width: 2px;
   font-weight: 600;
 }
 
 .game-button.active:hover {
-  background-color: #2563eb;
-  border-color: #1d4ed8;
+  background-color: #92400e;
+  border-color: #78350f;
 }
 
 .changes-indicator {
@@ -470,16 +513,16 @@ function handleReset() {
 }
 
 .draft-iteration-button.active {
-  background-color: #3b82f6;
+  background-color: #b45309;
   color: white;
-  border-color: #2563eb;
+  border-color: #92400e;
   border-width: 2px;
   font-weight: 600;
 }
 
 .draft-iteration-button.active:hover {
-  background-color: #2563eb;
-  border-color: #1d4ed8;
+  background-color: #92400e;
+  border-color: #78350f;
 }
 
 .draft-iteration-button.add-draft-button {
@@ -506,14 +549,14 @@ function handleReset() {
 }
 
 .save-button {
-  background-color: #3b82f6;
+  background-color: #b45309;
   color: white;
-  border-color: #2563eb;
+  border-color: #92400e;
 }
 
 .save-button:hover:not(:disabled) {
-  background-color: #2563eb;
-  border-color: #1d4ed8;
+  background-color: #92400e;
+  border-color: #78350f;
 }
 
 .save-button:disabled {

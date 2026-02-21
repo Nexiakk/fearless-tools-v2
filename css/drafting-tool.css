@@ -31,6 +31,8 @@
   flex-direction: column;
   flex-grow: 1;
   min-width: 0;
+  max-width: 1250px; /* Reduced from 1600px */
+  margin: 0 auto;
   height: 100%;
   gap: 0.5rem;
 }
@@ -43,8 +45,6 @@
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
 }
 .indicator-rect {
   flex: 1;
@@ -60,12 +60,12 @@
 /* Bans Header Container */
 .draft-creator-bans-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: space-between; /* Changed from center to push to edges */
+  gap: 2rem; /* Reduced gap since they are spaced between */
   align-items: center;
-  padding: 0.5rem 1rem;
-  background-color: #1e1e1e; /* Component background */
-  border-radius: 6px;
-  border: 1px solid #3a3a3a;
+  padding: 0.5rem 2rem; /* Increased horizontal padding */
+  background-color: transparent;
+  border: none;
   flex-shrink: 0;
   width: 100%;
 }
@@ -74,7 +74,7 @@
 .draft-creator-bans {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px; /* Reverted gap */
 }
 /* Ban Group Separator */
 .ban-group-separator.horizontal {
@@ -100,12 +100,9 @@
 /* Main 3-Column Grid Layout (Picks/Pool/Picks) */
 .draft-creator-layout {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(300px, 3fr) minmax(
-      150px,
-      1fr
-    );
+  grid-template-columns: minmax(140px, 1fr) minmax(300px, 4fr) minmax(140px, 1fr);
   gap: 1rem;
-  height: 100%;
+  height: 624px; /* Perfectly bounds to 5 pick slots (110x5 + gaps + margins) */
   overflow: hidden;
 }
 
@@ -136,9 +133,8 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.75rem;
-  background-color: #1e1e1e; /* Component background */
-  border-radius: 6px;
-  border: 1px solid #3a3a3a;
+  background-color: transparent;
+  border: none;
   overflow: hidden;
   height: 100%;
 }
@@ -162,31 +158,28 @@
   padding-top: 0.5rem;
 }
 .pick-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
   width: 100%;
-  max-width: 180px;
-}
-.pick-row.blue {
-  justify-content: flex-start;
-}
-.pick-row.red {
-  justify-content: flex-end;
 }
 .pick-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 0.85rem;
   font-weight: 600;
   color: #aaaaaa;
   width: 25px;
-  text-align: center;
   flex-shrink: 0;
 }
 .pick-row.blue .pick-label {
+  right: calc(50% + 55px + 0.75rem);
   text-align: right;
 }
 .pick-row.red .pick-label {
+  left: calc(50% + 55px + 0.75rem);
   text-align: left;
 }
 /* Pick label color change when slot is selected */
@@ -265,7 +258,7 @@
 
 /* Ban Slot Specifics */
 .draft-creator-slot.ban-slot {
-  width: 70px;
+  width: 70px; /* Reverted down from 64px */
   height: 70px;
   background-color: #000000; /* Darker ban background */
   border-color: #3a3a3a; /* Darker default border */
@@ -277,7 +270,24 @@
 .draft-creator-slot.ban-slot.filled {
   border-color: #3a3a3a !important; /* Dull Gray border */
   box-shadow: none !important;
-  filter: grayscale(50%);
+}
+.draft-creator-slot.ban-slot.filled::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 15%;
+  right: 15%;
+  bottom: 15%;
+  background: linear-gradient(
+    to bottom left,
+    transparent calc(50% - 1.5px),
+    rgba(220, 220, 220, 0.8) calc(50% - 1.5px),
+    rgba(220, 220, 220, 0.8) calc(50% + 1.5px),
+    transparent calc(50% + 1.5px)
+  );
+  z-index: 20;
+  pointer-events: none;
+  border-radius: 2px;
 }
 .draft-creator-slot.ban-slot.filled.selected-for-move {
   box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.6) !important; /* Add selection effect for filled ban slots */
@@ -292,7 +302,7 @@
 
 /* Pick Slot Specifics */
 .draft-creator-slot.pick-slot {
-  width: 110px;
+  width: 110px; /* Reverted from 125px */
   height: 110px;
   background-image: url("../assets/icons/no_champion.png");
   background-color: #000000; /* Darker empty pick background */
@@ -351,9 +361,17 @@
 .draft-creator-pool-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem; /* Reduced row gap from 0.75 to 0.5, maintained column */
   padding: 0.25rem;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.series-navigator-wrapper {
+  position: relative;
+  z-index: 50; /* Ensure dropdowns float over champion pool cards */
+  width: 100%;
+  margin-bottom: 0px; /* Reduced gap space beneath SeriesNavigator */
 }
 .draft-creator-search-container {
   position: relative;
@@ -411,6 +429,45 @@
   justify-content: flex-start;
 }
 
+/* Grid Zoom Controls */
+.grid-zoom-controls {
+  display: flex;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+  height: auto;
+  min-height: 36px;
+  align-items: stretch;
+}
+.zoom-button {
+  background: none;
+  border: none;
+  color: #888;
+  padding: 0 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+  border-right: 1px solid #333;
+}
+.zoom-button:last-child {
+  border-right: none;
+}
+.zoom-button:hover:not(:disabled) {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+.zoom-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.zoom-icon {
+  width: 18px;
+  height: 18px;
+}
+
 /* Center Column: Champion Pool Grid */
 .draft-creator-champion-grid {
   flex-grow: 1;
@@ -443,10 +500,17 @@
   background-color: #555555;
 }
 
+/* Scale Modifiers for grid zoom */
+.draft-creator-champion-grid.zoom-0 { --card-scale: 0.7; }
+.draft-creator-champion-grid.zoom-1 { --card-scale: 0.85; }
+.draft-creator-champion-grid.zoom-2 { --card-scale: 1; }
+.draft-creator-champion-grid.zoom-3 { --card-scale: 1.15; }
+.draft-creator-champion-grid.zoom-4 { --card-scale: 1.3; }
+
 /* Champion Card in Draft Creator Pool */
 .draft-creator-champion-card {
-  width: 79px; /* 4.5rem = 72px */
-  height: 94px; /* h-min equivalent */
+  width: calc(79px * var(--card-scale, 1));
+  height: calc(94px * var(--card-scale, 1));
   border: 1px solid #3a3a3a;
   border-radius: 4px;
   background-color: #1e1e1e;
@@ -461,8 +525,8 @@
 .draft-creator-champion-card .champion-image-container {
   position: relative;
   z-index: 10;
-  width: 79px;
-  height: 78px;
+  width: calc(79px * var(--card-scale, 1));
+  height: calc(78px * var(--card-scale, 1));
 }
 .draft-creator-champion-card img.champion-icon {
   width: 100%;
@@ -485,7 +549,7 @@
   padding-top: 0.0625rem;
 }
 .draft-creator-champion-card .champion-name-text {
-  font-size: 0.67rem; /* <-- REDUCED */
+  font-size: calc(0.67rem * var(--card-scale, 1));
   font-weight: 500;
   line-height: 0.8rem;
   text-align: center;
@@ -519,32 +583,57 @@
   color: #e27b05;
 }
 .draft-creator-champion-card.already-placed {
-  opacity: 0.4;
   cursor: default;
-  border-color: #282828;
-  background-color: #121212;
+  border-color: #3a3a3a; /* Default border instead of dark */
+  background-color: #1e1e1e; /* Default background instead of dark */
   transform: none;
   box-shadow: none;
 }
+.draft-creator-champion-card.already-placed.is-picked {
+  opacity: 1.0; /* Picked champions shouldn't be too dark */
+}
+.draft-creator-champion-card.already-placed.is-banned {
+  opacity: 1.0; /* Banned champions stay darker */
+}
+.draft-creator-champion-card.already-placed.is-banned .champion-image-container::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 15%;
+  right: 15%;
+  bottom: 15%;
+  background: linear-gradient(
+    to bottom left,
+    transparent calc(50% - 1.5px),
+    rgba(220, 220, 220, 0.8) calc(50% - 1.5px),
+    rgba(220, 220, 220, 0.8) calc(50% + 1.5px),
+    transparent calc(50% + 1.5px)
+  );
+  z-index: 30;
+  pointer-events: none;
+  border-radius: 2px;
+}
 .draft-creator-champion-card.already-placed .champion-label {
-  background-color: #121212;
+  background-color: #1a1a1a; /* Default label background */
 }
 .draft-creator-champion-card.already-placed .champion-name-text {
-  color: #868686;
+  color: #cccccc; /* Default text color */
 }
 .draft-creator-champion-card.already-placed:hover {
   transform: none;
   z-index: auto;
 }
-.draft-creator-champion-card.already-placed img.champion-icon {
-  filter: grayscale(100%);
+.draft-creator-champion-card.already-placed.is-picked img.champion-icon {
+  filter: grayscale(0%); /* No grayscale on picked champions */
+}
+.draft-creator-champion-card.already-placed.is-banned img.champion-icon {
+  filter: grayscale(50%); /* Ligher grayscale for banned */
 }
 /* Ensure already-placed takes precedence over selected-as-source */
 .draft-creator-champion-card.already-placed.selected-as-source {
   border-color: #282828 !important;
   background-color: #121212 !important;
   box-shadow: none !important;
-  opacity: 0.4 !important;
 }
 .draft-creator-champion-card.selected-as-source:not(.already-placed) {
   border-color: #d97706; /* Amber border */
@@ -568,28 +657,11 @@
   .champion-label {
   background-color: rgba(217, 119, 6, 0.15);
 }
-
 .draft-creator-champion-card.unavailable {
-  opacity: 0.4;
+  opacity: 1.0;
   cursor: not-allowed;
   filter: grayscale(100%);
   position: relative;
-}
-
-.draft-creator-champion-card.unavailable::after {
-  content: "Unavailable";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #ef4444;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  pointer-events: none;
-  z-index: 10;
 }
 
 .draft-creator-champion-card.unavailable:hover {
@@ -598,7 +670,7 @@
 }
 
 .draft-creator-champion-card.unavailable img.champion-icon {
-  opacity: 0.3;
+  opacity: 1.0;
 }
 
 .champion-notes-indicator {

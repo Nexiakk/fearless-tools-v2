@@ -1,8 +1,7 @@
 <template>
   <div class="drafting-view-wrapper">
-    <!-- Series Navigator - Top Bar -->
-    <SeriesNavigator v-if="workspaceStore.hasWorkspace" />
-
+    <!-- Series Navigator removed from top bar -->
+    
     <div v-if="workspaceStore.hasWorkspace" class="draft-creator-container">
       <!-- Main Drafting Content -->
       <div class="draft-creator-view">
@@ -151,10 +150,14 @@
                 </div>
               </div>
 
-              <!-- Center Column -->
               <div class="draft-creator-center">
                 <!-- Pool Controls -->
                 <div class="draft-creator-pool-controls">
+                  <!-- Series Navigator moved here -->
+                  <div class="series-navigator-wrapper">
+                    <SeriesNavigator />
+                  </div>
+                  
                   <div class="draft-creator-search-container">
                     <svg class="search-icon">
                       <use href="#icon-search"></use>
@@ -174,6 +177,27 @@
                       &times;
                     </button>
                   </div>
+                  
+                  <!-- Zoom Controls -->
+                  <div class="grid-zoom-controls">
+                    <button 
+                      class="zoom-button" 
+                      @click="draftingStore.zoomOutGrid()" 
+                      :disabled="draftingStore.championGridZoomIndex === 0"
+                      title="Decrease Grid Size"
+                    >
+                      <svg viewBox="0 0 24 24" class="zoom-icon"><path fill="currentColor" d="M19 13H5v-2h14v2z"/></svg>
+                    </button>
+                    <button 
+                      class="zoom-button" 
+                      @click="draftingStore.zoomInGrid()" 
+                      :disabled="draftingStore.championGridZoomIndex === draftingStore.maxGridZoomIndex"
+                      title="Increase Grid Size"
+                    >
+                      <svg viewBox="0 0 24 24" class="zoom-icon"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                  </div>
+                  
                   <div class="role-filters-container pool-filters">
                     <button
                       v-for="role in roles"
@@ -193,10 +217,35 @@
                       />
                     </button>
                   </div>
+                  
+                  <!-- Sorting Toggle -->
+                  <div class="draft-sort-container">
+                    <button
+                      class="sort-toggle-button"
+                      :class="{ active: draftingStore.draftCreatorSortMode === 'alphabetical' }"
+                      @click="draftingStore.draftCreatorSortMode = 'alphabetical'"
+                      title="Sort Alphabetical"
+                    >
+                      A-Z
+                    </button>
+                    <button
+                      class="sort-toggle-button"
+                      :class="{ active: draftingStore.draftCreatorSortMode === 'tier' }"
+                      @click="draftingStore.draftCreatorSortMode = 'tier'"
+                      title="Sort by Tier"
+                    >
+                      Tier
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Champion Grid -->
-                <div class="draft-creator-champion-grid">
+                <transition-group 
+                  name="grid-anim" 
+                  tag="div" 
+                  class="draft-creator-champion-grid" 
+                  :style="{ '--card-scale': currentZoomScale }"
+                >
                   <div
                     v-for="champion in filteredChampions"
                     :key="champion.id"
@@ -207,12 +256,16 @@
                         champion.name,
                       'already-placed':
                         isChampionPlacedInCurrentDraft(champion.name),
+                      'is-picked': draftingStore.isChampionPickedInCurrentDraft(champion.name),
+                      'is-banned': draftingStore.isChampionBannedInCurrentDraft(champion.name),
                       'selected-as-source':
                         draftingStore.selectedChampionSource &&
                         draftingStore.selectedChampionSource.championName ===
                           champion.name,
                       unavailable: !isChampionAvailable(champion.name),
+                      'has-tier': getTierHighlightClass(champion) !== ''
                     }"
+                    :style="getChampionCardStyle(champion)"
                     @click="handleChampionClick(champion.name)"
                     :title="champion.name"
                   >
@@ -230,17 +283,26 @@
                         draggable="false"
                       />
                     </div>
+                    <!-- Role badges -->
+                    <div class="draft-role-badges" v-if="champion.roles">
+                       <img v-for="r in champion.roles" :key="r" :src="championsStore.getRoleIconUrl(r)" class="mini-role-icon"/>
+                    </div>
+                    <!-- Tier badge -->
+                    <div class="draft-tier-badge" v-if="getTierHighlightClass(champion)" :style="{ backgroundColor: getTierColor(champion), color: '#ffffff' }">
+                       {{ getTierBadgeText(champion) }}
+                    </div>
                     <div class="champion-label">
                       <span class="champion-name-text">{{ champion.name }}</span>
                     </div>
                   </div>
                   <p
                     v-if="filteredChampions.length === 0"
+                    key="empty-state"
                     class="text-gray-400 col-span-full text-center py-4"
                   >
                     No champions match filter/search.
                   </p>
-                </div>
+                </transition-group>
               </div>
 
               <!-- Red Side -->
@@ -290,9 +352,10 @@
 </template>
 
 <script setup>
-import { onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useDraftingStore } from "@/stores/drafting";
+import { useDraftStore } from "@/stores/draft";
 import { useSeriesStore } from "@/stores/series";
 import { useChampionsStore } from "@/stores/champions";
 import { useConfirmationStore } from "@/stores/confirmation";
@@ -300,15 +363,36 @@ import { useSettingsStore } from "@/stores/settings";
 import SeriesNavigator from "@/components/drafting/SeriesNavigator.vue";
 import SeriesManager from "@/components/drafting/SeriesManager.vue";
 import DraftSlot from "@/components/drafting/DraftSlot.vue";
+import { useWorkspaceTiersStore } from "@/stores/workspaceTiers";
 
 const workspaceStore = useWorkspaceStore();
 const draftingStore = useDraftingStore();
+const draftStore = useDraftStore();
 const seriesStore = useSeriesStore();
 const championsStore = useChampionsStore();
 const confirmationStore = useConfirmationStore();
 const settingsStore = useSettingsStore();
+const workspaceTiersStore = useWorkspaceTiersStore();
+
+const zoomScales = [0.57, 0.62, 0.67, 0.73, 0.81, 0.9, 1.0, 1.14];
+const currentZoomScale = computed(() => zoomScales[draftingStore.championGridZoomIndex]);
 
 const roles = ["Top", "Jungle", "Mid", "Bot", "Support"];
+
+const roleMap = {
+  'Top': 'top',
+  'Jungle': 'jungle',
+  'Mid': 'middle',
+  'Bot': 'bottom',
+  'Support': 'support'
+};
+
+function getCurrentRoleFilter() {
+  if (draftingStore.draftCreatorRoleFilter !== "all" && roleMap[draftingStore.draftCreatorRoleFilter]) {
+    return roleMap[draftingStore.draftCreatorRoleFilter];
+  }
+  return null;
+}
 
 // Get current draft from series store
 const currentDraft = computed(() => {
@@ -334,14 +418,30 @@ const currentDraft = computed(() => {
 // Get unavailable champions for current game
 const unavailableChampions = computed(() => {
   if (
-    !seriesStore.currentGame ||
     !settingsStore.settings.drafting?.integrateUnavailableChampions
   ) {
     return new Set();
   }
-  return seriesStore.getUnavailableChampionsForGame(
-    seriesStore.currentGame.gameNumber
-  );
+  
+  const unavailable = new Set();
+  
+  // Add champions from previous games in the series
+  if (seriesStore.currentGame) {
+    const gameUnavailable = seriesStore.getUnavailableChampionsForGame(
+      seriesStore.currentGame.gameNumber
+    );
+    gameUnavailable.forEach(champ => unavailable.add(champ));
+  }
+  
+  // Add champions from the Fearless Pool
+  if (draftStore.unavailableChampions) {
+    draftStore.unavailableChampions.forEach(champ => unavailable.add(champ));
+  }
+  if (draftStore.bannedChampions) {
+    draftStore.bannedChampions.forEach(champ => unavailable.add(champ));
+  }
+  
+  return unavailable;
 });
 
 // Filter champions with unavailable check
@@ -353,11 +453,12 @@ const filteredChampions = computed(() => {
   let champs = [...championsStore.allChampions];
 
   // Filter by role
-  if (draftingStore.draftCreatorRoleFilter !== "all") {
+  const filterRole = getCurrentRoleFilter();
+  if (filterRole) {
     champs = champs.filter(
       (c) =>
         Array.isArray(c.roles) &&
-        c.roles.includes(draftingStore.draftCreatorRoleFilter)
+        c.roles.includes(filterRole)
     );
   }
 
@@ -371,15 +472,120 @@ const filteredChampions = computed(() => {
     );
   }
 
-  return champs.sort((a, b) => a.name.localeCompare(b.name));
+  // Add tier and availability states to objects
+  champs = champs.map(c => {
+    const isAvail = isChampionAvailable(c.name);
+    // Is it placed in the *current* draft specifically?
+    const isPlaced = isChampionPlacedInCurrentDraft(c.name);
+    return {
+      ...c,
+      isAvailable: isAvail,
+      isPlaced: isPlaced,
+      isHidden: (!isAvail && settingsStore.settings.drafting?.pickedMode === 'hidden') || (isPlaced && settingsStore.settings.drafting?.pickedMode === 'hidden'),
+      sortTierScore: getChampionTierScore(c.name),
+      isUnavailableOrPlaced: !isAvail || isPlaced
+    }
+  });
+
+  // Sort logic
+  champs.sort((a, b) => {
+    // 1. Picked mode sorting grouping
+    const pickedMode = settingsStore.settings.drafting?.pickedMode || 'default';
+    if (pickedMode === 'bottom') {
+      if (!a.isAvailable && b.isAvailable) return 1;
+      if (a.isAvailable && !b.isAvailable) return -1;
+    }
+
+    // 2. Main sort selection
+    if (draftingStore.draftCreatorSortMode === 'tier') {
+      // Primary: Tier score (higher is better so sort descending)
+      if (a.sortTierScore !== b.sortTierScore) return b.sortTierScore - a.sortTierScore;
+    }
+    
+    // Fallback: Alphabetical
+    return a.name.localeCompare(b.name);
+  });
+
+  return champs.filter(c => !c.isHidden);
 });
 
-// Check if champion is available
+function getChampionTierScore(championName) {
+  const filterRole = getCurrentRoleFilter();
+  const tier = workspaceTiersStore.getTierForChampion(championName, filterRole);
+  if (!tier) return 0;
+  
+  // Highest ID weight based on `workspaceTiersStore.sortedTiers`
+  const reversedTiers = [...workspaceTiersStore.sortedTiers].reverse();
+  const idx = reversedTiers.findIndex(rt => rt.id === tier.id);
+  
+  return idx + 1; // +1 to ensure untiered is 0
+}
+
+function getTierHighlightClass(champion) {
+   const mode = settingsStore.settings.drafting?.tierHighlightMode || 'sort';
+   if (mode === 'none') return '';
+   if (mode === 'sort' && draftingStore.draftCreatorSortMode !== 'tier') return '';
+   
+   const filterRole = getCurrentRoleFilter();
+   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
+   if (!tier) return '';
+   
+   return tier.id.toLowerCase();
+}
+
+function getTierBadgeText(champion) {
+   const filterRole = getCurrentRoleFilter();
+   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
+   if (!tier) return '';
+   
+   return tier.name.charAt(0).toUpperCase();
+}
+
+function getTierColor(champion) {
+   const mode = settingsStore.settings.drafting?.tierHighlightMode || 'sort';
+   if (mode === 'none') return '';
+   if (mode === 'sort' && draftingStore.draftCreatorSortMode !== 'tier') return '';
+   
+   const filterRole = getCurrentRoleFilter();
+   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
+   return tier ? tier.color : '';
+}
+
+function getChampionCardStyle(champion) {
+  const color = getTierColor(champion);
+  if (!color) return {};
+  
+  const filterRole = getCurrentRoleFilter();
+  const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
+  if (!tier) return {};
+
+  if (tier.style === 'border') {
+    return { border: `1px solid ${color}` };
+  } else if (tier.style === 'highlight') {
+    return {
+      border: `1px solid ${color}CC`,
+      boxShadow: `0 0 4px 1px ${color}99`
+    };
+  } else {
+    // Default to shadow style
+    return {
+      border: `1px solid ${color}CC`,
+      boxShadow: `0 0 4px 1px ${color}99`
+    };
+  }
+}
+
+// Check if champion is available. Now just returns actual boolean since logic is extracted
 const isChampionAvailable = (championName) => {
   if (!settingsStore.settings.drafting?.integrateUnavailableChampions) {
     return true;
   }
   return !unavailableChampions.value.has(championName);
+};
+
+// Returns false if placed OR unavailable to prevent selection
+const isChampionAvailableForPlacement = (championName) => {
+  return isChampionAvailable(championName) && !isChampionPlacedInCurrentDraft(championName);
 };
 
 const handleImageError = (e) => {
@@ -420,7 +626,8 @@ function handleSlotClick(slotData) {
     // Place champion from grid
     if (
       slot &&
-      isChampionAvailable(draftingStore.selectedChampionForPlacement)
+      !slot.champion && 
+      isChampionAvailableForPlacement(draftingStore.selectedChampionForPlacement)
     ) {
       seriesStore.updateCurrentDraftSlot(
         side,
@@ -453,6 +660,8 @@ function handleSlotClick(slotData) {
     }
   } else if (draftingStore.selectedTargetSlot && slot?.champion) {
     // Move champion directly to targeted empty slot
+    // We already moved it to target slot, clear source
+    // Ensure we don't accidentally duplicate
     const targetKey = `${draftingStore.selectedTargetSlot.side}${draftingStore.selectedTargetSlot.type.charAt(0).toUpperCase() + draftingStore.selectedTargetSlot.type.slice(1)}`;
     const targetSlot =
       currentDraft.value[targetKey]?.[
@@ -508,7 +717,7 @@ function handleClearSlot(slotData) {
 
 // Champion click handler
 function handleChampionClick(championName) {
-  if (!isChampionAvailable(championName)) {
+  if (!isChampionAvailableForPlacement(championName)) {
     return; // Don't allow interaction with unavailable champions
   }
 
@@ -578,12 +787,8 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   max-height: 100%;
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden so the toggle button can be seen */
   gap: 1rem;
-  margin-top: var(
-    --navbar-height,
-    50px
-  ); /* Account for navbar - SeriesNavigator is now fixed */
 }
 
 .no-series-container,
@@ -600,5 +805,129 @@ onMounted(async () => {
   color: #9ca3af;
   font-size: 1.125rem;
   text-align: center;
+}
+
+.draft-sort-container {
+  display: flex;
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  padding: 3px;
+  border: 1px solid #333;
+}
+
+.sort-toggle-button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #a0a0a0;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.sort-toggle-button:hover {
+  color: #fff;
+}
+
+.sort-toggle-button.active {
+  background-color: #3b3b3b;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Animations for grid filtering/sorting */
+.grid-anim-move,
+.grid-anim-enter-active {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease !important;
+}
+
+.grid-anim-enter-from {
+  opacity: 0 !important;
+  transform: scale(0.6) !important;
+}
+
+/* Ensure leaving elements disappear instantly so moving elements can slide seamlessly without jumping to the top container */
+.grid-anim-leave-active,
+.grid-anim-leave-to {
+  display: none !important;
+}
+
+.draft-creator-champion-card {
+  position: relative;
+}
+
+.draft-tier-badge {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  font-size: 0.55rem;
+  line-height: 0.75rem;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.draft-role-badges {
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: flex-start;
+  align-items: flex-end;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.mini-role-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: rgba(28, 28, 28, 0.95);
+  border: 1px solid rgba(58, 58, 58, 0.8);
+  display: block;
+}
+
+/* Tier borders are now handled dynamically via inline styles */
+
+.draft-creator-champion-card.tier-S .champion-icon { border: 1px solid #f87171 !important; }
+.draft-creator-champion-card.tier-S .draft-tier-badge { background-color: #f87171; color: #4c0519; }
+
+.draft-creator-champion-card.tier-A .champion-icon { border: 1px solid #facc15 !important; }
+.draft-creator-champion-card.tier-A .draft-tier-badge { background-color: #facc15; color: #5a4503; }
+
+.draft-creator-champion-card.tier-B .champion-icon { border: 1px solid #4ade80 !important; }
+.draft-creator-champion-card.tier-B .draft-tier-badge { background-color: #4ade80; color: #064e3b; }
+
+.draft-creator-champion-card.tier-C .champion-icon { border: 1px solid #60a5fa !important; }
+.draft-creator-champion-card.tier-C .draft-tier-badge { background-color: #60a5fa; color: #1e3a8a; }
+
+/* In drafting, we make the unavailable completely grey and hidden */
+.draft-creator-champion-card.unavailable .champion-icon,
+.draft-creator-champion-card.already-placed .champion-icon {
+  filter: grayscale(100%);
+  border-color: transparent !important;
+  opacity: 0.4;
+}
+.draft-creator-champion-card.unavailable .champion-name-text,
+.draft-creator-champion-card.already-placed .champion-name-text {
+  opacity: 0.3;
+}
+.draft-creator-champion-card.unavailable .draft-tier-badge,
+.draft-creator-champion-card.unavailable .draft-role-badges,
+.draft-creator-champion-card.already-placed .draft-tier-badge,
+.draft-creator-champion-card.already-placed .draft-role-badges {
+  display: none;
 }
 </style>

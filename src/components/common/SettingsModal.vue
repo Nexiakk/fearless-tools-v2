@@ -6,8 +6,9 @@
       </DialogHeader>
 
       <Tabs :model-value="settingsStore.settingsTab" @update:model-value="settingsStore.settingsTab = $event" class="w-full flex-1 flex flex-col min-h-0 px-6">
-        <TabsList class="grid w-full grid-cols-2">
+        <TabsList class="grid w-full grid-cols-3">
           <TabsTrigger value="pool">Fearless Pool</TabsTrigger>
+          <TabsTrigger value="drafting">Drafting</TabsTrigger>
           <TabsTrigger value="admin">Admin</TabsTrigger>
         </TabsList>
 
@@ -137,7 +138,52 @@
               @change="handleUnavailableGroupingChange"
               class="unavailable-grouping-select"
             >
-              <option value="top">Top (default)</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="drafting" class="space-y-4 mt-4 overflow-y-auto pr-2">
+          <!-- Grid Size Setting -->
+          <div class="flex items-center justify-between mt-2">
+            <label class="font-medium whitespace-nowrap">Grid Size</label>
+            <div class="flex flex-col items-end gap-1 flex-1 ml-4" style="max-width: 140px;">
+              <Slider
+                v-model="gridSizeIndex"
+                :min="0"
+                :max="7"
+                :step="1"
+                class="w-full mt-1"
+              />
+              <span class="text-xs text-muted-foreground">{{ GRID_SIZE_LABELS[settingsStore.settings.drafting.championGridZoomIndex] }}</span>
+            </div>
+          </div>
+
+          <!-- Tier Highlighting Setting -->
+          <div class="flex items-center justify-between">
+            <label class="font-medium">Tier Highlighting</label>
+            <select
+              :value="settingsStore.settings.drafting.tierHighlightMode"
+              @change="handleDraftingSettingChange('tierHighlightMode', $event)"
+              class="unavailable-grouping-select"
+            >
+              <option value="none">None</option>
+              <option value="sort">Only when Tier sorting</option>
+              <option value="always">Always</option>
+            </select>
+          </div>
+
+          <!-- Picked Champions Display Setting -->
+          <div class="flex items-center justify-between">
+            <label class="font-medium">Picked Champions Display</label>
+            <select
+              :value="settingsStore.settings.drafting.pickedMode"
+              @change="handleDraftingSettingChange('pickedMode', $event)"
+              class="unavailable-grouping-select"
+            >
+              <option value="default">Default</option>
               <option value="bottom">Bottom</option>
               <option value="hidden">Hidden</option>
             </select>
@@ -284,6 +330,25 @@ const unavailableCardSize = computed({
 });
 
 // Page Content Scale slider
+// Grid Size setup
+const GRID_SIZE_LABELS = [
+  'Extremely Small (57%)',
+  'Tiny (62%)',
+  'Very Small (67%)',
+  'Small (73%)',
+  'Normal (81%)',
+  'Large (90%)',
+  'Very Large (100%)',
+  'Huge (114%)'
+];
+
+const gridSizeIndex = computed({
+  get: () => [settingsStore.settings.drafting.championGridZoomIndex],
+  set: (value) => {
+    settingsStore.updateDraftingSetting('championGridZoomIndex', value[0]);
+  }
+});
+
 const pageContentScale = computed({
   get: () => [settingsStore.settings.pool.pageContentScale],
   set: (value) => {
@@ -337,6 +402,11 @@ const handleAdminSignIn = async () => {
 // Handle unavailable champions grouping change
 function handleUnavailableGroupingChange(event) {
   settingsStore.updatePoolSetting('unavailableChampionsGrouping', event.target.value);
+}
+
+// Handle drafting settings changes
+function handleDraftingSettingChange(settingKey, event) {
+  settingsStore.updateDraftingSetting(settingKey, event.target.value);
 }
 </script>
 

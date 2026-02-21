@@ -1,6 +1,7 @@
 import { useDraftStore } from '@/stores/draft'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useDraftingStore } from '@/stores/drafting'
 import { fetchLcuDraftsFromFirestore, setupLcuDraftsRealtimeSync } from './firebase/firestore'
 
 let seriesStore = null
@@ -20,6 +21,10 @@ class LcuSyncService {
     return useSettingsStore()
   }
 
+  get draftingStore() {
+    return useDraftingStore()
+  }
+
   get workspaceStore() {
     return useWorkspaceStore()
   }
@@ -37,8 +42,8 @@ class LcuSyncService {
     })
 
     // Watch for mode changes
-    this.settingsStore.$subscribe(async (mutation, state) => {
-      const draftingMode = state.settings?.drafting?.mode
+    this.draftingStore.$subscribe(async (mutation, state) => {
+      const draftingMode = state.draftingMode
       if (draftingMode === 'fearless-sync') {
         await this.startSync()
       } else {
@@ -51,14 +56,14 @@ class LcuSyncService {
     // Initial sync if conditions are met
     if (this.workspaceStore.hasWorkspace &&
         !this.workspaceStore.isLocalWorkspace &&
-        this.settingsStore.settings?.drafting?.mode === 'fearless-sync') {
+        this.draftingStore.draftingMode === 'fearless-sync') {
       await this.startSync()
     }
   }
 
   async startSync() {
     if (!this.workspaceStore.hasWorkspace || this.workspaceStore.isLocalWorkspace) return
-    if (this.settingsStore.settings?.drafting?.mode !== 'fearless-sync') return
+    if (this.draftingStore.draftingMode !== 'fearless-sync') return
 
     try {
       console.log('[LCU Sync] Starting Fearless Sync mode')
@@ -352,7 +357,7 @@ class LcuSyncService {
 
   // Utility method to check if we're in sync mode
   isInSyncMode() {
-    return this.settingsStore.settings?.drafting?.mode === 'fearless-sync'
+    return this.draftingStore.draftingMode === 'fearless-sync'
   }
 
   // Cleanup method

@@ -29,6 +29,9 @@ export const useSettingsStore = defineStore("settings", () => {
     drafting: {
       integrateUnavailableChampions: true, // default: enabled
       disableDraftDeletionWarning: false, // default: show warning
+      tierHighlightMode: 'sort', // 'sort' | 'always' | 'none', default: 'sort'
+      pickedMode: 'default', // 'default' | 'bottom' | 'hidden', default: 'default'
+      championGridZoomIndex: 4, // default: index 4 (1.0 scale)
     },
   });
 
@@ -109,6 +112,16 @@ export const useSettingsStore = defineStore("settings", () => {
           settings.value.pool = mergedPool;
         }
         if (parsed.drafting) {
+          // Backward compatibility for new drafting settings
+          if (parsed.drafting.tierHighlightMode === undefined) {
+             parsed.drafting.tierHighlightMode = 'sort';
+          }
+          if (parsed.drafting.pickedMode === undefined) {
+             parsed.drafting.pickedMode = 'default';
+          }
+          if (parsed.drafting.championGridZoomIndex === undefined) {
+             parsed.drafting.championGridZoomIndex = 4;
+          }
           settings.value.drafting = {
             ...settings.value.drafting,
             ...parsed.drafting,
@@ -224,6 +237,9 @@ export const useSettingsStore = defineStore("settings", () => {
       drafting: {
         integrateUnavailableChampions: true, // default: enabled
         disableDraftDeletionWarning: false, // default: show warning
+        tierHighlightMode: 'sort', 
+        pickedMode: 'default',
+        championGridZoomIndex: 4, 
       },
     };
     // Save the reset settings

@@ -5,6 +5,7 @@ import { useNotesStore } from './notes'
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/services/firebase/config'
 import { useWorkspaceStore } from './workspace'
+import { useSettingsStore } from './settings'
 
 export const useDraftingStore = defineStore('drafting', () => {
   // State
@@ -26,6 +27,21 @@ export const useDraftingStore = defineStore('drafting', () => {
   const selectedTargetSlot = ref(null)
   const draftCreatorSearchTerm = ref('')
   const draftCreatorRoleFilter = ref('all')
+  const draftCreatorSortMode = ref('alphabetical')
+  const draftingMode = ref('sandbox')
+  
+  // Custom Zoom Level State (Indices 0 to 7)
+  const championGridZoomIndex = computed({
+    get: () => {
+      const settingsStore = useSettingsStore()
+      return settingsStore.settings.drafting.championGridZoomIndex
+    },
+    set: (val) => {
+      const settingsStore = useSettingsStore()
+      settingsStore.updateDraftingSetting('championGridZoomIndex', val)
+    }
+  })
+  const maxGridZoomIndex = 7
   
   // Actions
   function resetCurrentDraft() {
@@ -202,7 +218,6 @@ export const useDraftingStore = defineStore('drafting', () => {
         selectedChampionForPlacement.value = null
         selectedChampionSource.value = null
         selectedTargetSlot.value = null
-        draftCreatorSearchTerm.value = ''
         draftCreatorRoleFilter.value = 'all'
       }
     } catch (error) {
@@ -279,6 +294,18 @@ export const useDraftingStore = defineStore('drafting', () => {
     return allSlots.some(slot => slot.champion === championName)
   }
   
+  function isChampionPickedInCurrentDraft(championName) {
+    if (!championName) return false
+    const picks = [...currentDraft.value.bluePicks, ...currentDraft.value.redPicks]
+    return picks.some(slot => slot.champion === championName)
+  }
+  
+  function isChampionBannedInCurrentDraft(championName) {
+    if (!championName) return false
+    const bans = [...currentDraft.value.blueBans, ...currentDraft.value.redBans]
+    return bans.some(slot => slot.champion === championName)
+  }
+  
   function selectChampionForPlacement(championName) {
     if (selectedChampionForPlacement.value === championName) {
       selectedChampionForPlacement.value = null
@@ -326,6 +353,18 @@ export const useDraftingStore = defineStore('drafting', () => {
     })
   }
 
+  function zoomInGrid() {
+    if (championGridZoomIndex.value < maxGridZoomIndex) {
+      championGridZoomIndex.value++
+    }
+  }
+
+  function zoomOutGrid() {
+    if (championGridZoomIndex.value > 0) {
+      championGridZoomIndex.value--
+    }
+  }
+
   return {
     // State
     currentDraft,
@@ -336,6 +375,10 @@ export const useDraftingStore = defineStore('drafting', () => {
     selectedTargetSlot,
     draftCreatorSearchTerm,
     draftCreatorRoleFilter,
+    draftCreatorSortMode,
+    draftingMode,
+    championGridZoomIndex,
+    maxGridZoomIndex,
     // Computed
     filteredChampions,
     // Actions
@@ -349,9 +392,13 @@ export const useDraftingStore = defineStore('drafting', () => {
     loadSavedDraft,
     deleteSavedDraft,
     isChampionPlacedInCurrentDraft,
+    isChampionPickedInCurrentDraft,
+    isChampionBannedInCurrentDraft,
     selectChampionForPlacement,
     setDraftCreatorRoleFilter,
-    toggleNotesVisibility
+    toggleNotesVisibility,
+    zoomInGrid,
+    zoomOutGrid
   }
 })
 

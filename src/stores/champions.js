@@ -156,7 +156,9 @@ export const useChampionsStore = defineStore("champions", () => {
       top: 'icon-position-top-blue-hover.png',
       jungle: 'icon-position-jungle-blue-hover.png',
       middle: 'icon-position-middle-blue-hover.png',
+      mid: 'icon-position-middle-blue-hover.png',
       bottom: 'icon-position-bottom-blue-hover.png',
+      bot: 'icon-position-bottom-blue-hover.png',
       support: 'icon-position-utility-blue-hover.png',
       unknown: 'icon-position-middle-blue-hover.png', // fallback
     };

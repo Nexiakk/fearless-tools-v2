@@ -1,5 +1,5 @@
 <template>
-  <div class="series-manager">
+  <div class="series-manager" :class="{ 'is-expanded': isExpanded }">
     <div class="series-manager-content">
       <!-- Skeleton Loading -->
       <div v-if="seriesStore.isLoadingSeries" class="skeleton-loading">
@@ -90,15 +90,30 @@
         </div>
       </div>
     </div>
+    
+    <!-- Toggle Button -->
+    <button 
+      class="series-manager-toggle" 
+      @click="isExpanded = !isExpanded"
+      :class="{ 'is-expanded': isExpanded }"
+      title="Toggle Saved Series"
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path v-if="isExpanded" d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path v-else d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useSeriesStore } from "@/stores/series";
 import { useConfirmationStore } from "@/stores/confirmation";
 
 const seriesStore = useSeriesStore();
 const confirmationStore = useConfirmationStore();
+const isExpanded = ref(false);
 
 function formatDate(date) {
   if (!date) return "Unknown";
@@ -192,11 +207,39 @@ function handleDeleteSeries(seriesId, seriesName) {
 
 <style scoped>
 .series-manager {
-  @apply bg-card border-l border-border w-[200px] min-w-[200px] flex flex-col h-full;
+  @apply bg-card border-l border-border h-full flex relative transition-all duration-300;
+  width: 0;
+  min-width: 0;
+  overflow: visible; /* Need this to show the toggle button outside */
+}
+
+.series-manager.is-expanded {
+  width: 200px;
+  min-width: 200px;
+}
+
+.series-manager-toggle {
+  @apply absolute top-1/2 -left-6 w-6 h-12 bg-card border border-r-0 border-border rounded-l flex items-center justify-center cursor-pointer hover:bg-accent text-muted-foreground hover:text-foreground transition-colors;
+  transform: translateY(-50%);
+  z-index: 50; /* Ensure it's above other elements */
+}
+
+.series-manager-toggle.is-expanded svg {
+  transform: rotate(180deg);
 }
 
 .series-manager-content {
-  @apply flex-1 overflow-y-auto p-2;
+  @apply flex-1 overflow-y-auto p-2 w-full h-full;
+  /* Prevent content showing when collapsing */
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s, visibility 0s linear 0.3s;
+}
+
+.series-manager.is-expanded .series-manager-content {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s 0.1s;
 }
 
 .loading-text,

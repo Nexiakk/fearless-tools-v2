@@ -37,11 +37,11 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useSettingsStore } from '@/stores/settings'
+import { useDraftingStore } from '@/stores/drafting'
 
-const settingsStore = useSettingsStore()
+const draftingStore = useDraftingStore()
 
-const currentMode = computed(() => settingsStore.settings.drafting?.mode || 'sandbox')
+const currentMode = computed(() => draftingStore.draftingMode)
 
 const isConnected = computed(() => {
   // Check if LCU sync service is active via global reference
@@ -49,7 +49,7 @@ const isConnected = computed(() => {
 })
 
 function setMode(mode) {
-  settingsStore.settings.drafting.mode = mode
+  draftingStore.draftingMode = mode
 }
 </script>
 
