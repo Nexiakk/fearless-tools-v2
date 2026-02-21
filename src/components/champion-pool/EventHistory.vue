@@ -73,6 +73,7 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import { useStorage } from "@vueuse/core";
 import { useChampionsStore } from "@/stores/champions";
 import { useDraftStore } from "@/stores/draft";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,8 +84,8 @@ const championsStore = useChampionsStore();
 const draftStore = useDraftStore();
 
 // View mode state
-const viewMode = ref("history"); // 'history' | 'drafts'
-const isCollapsed = ref(true); // Default to collapsed
+const viewMode = useStorage("fearless-event-history-viewMode", "history"); // 'history' | 'drafts'
+const isCollapsed = useStorage("fearless-event-history-isCollapsed", true); // Default to collapsed
 const isExpandedHover = ref(false);
 
 // Effective compact state: true if collapsed AND not currently hovering

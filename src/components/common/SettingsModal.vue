@@ -170,7 +170,7 @@
               class="unavailable-grouping-select"
             >
               <option value="none">None</option>
-              <option value="sort">Only when Tier sorting</option>
+              <option value="sort">Only while sorting</option>
               <option value="always">Always</option>
             </select>
           </div>
