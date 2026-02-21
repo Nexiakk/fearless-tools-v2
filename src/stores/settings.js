@@ -11,7 +11,7 @@ export const useSettingsStore = defineStore("settings", () => {
       unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
       disableAnimations: false,
       centerCards: true,
-      enableSearch: true, // Enable search bar feature, default: enabled
+      enableSearch: false, // Enable search bar feature, default: enabled
       showEventHistory: false, // Show EventHistory sidebar, default: enabled
       // NEW: Card size presets
       cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
@@ -242,7 +242,7 @@ export const useSettingsStore = defineStore("settings", () => {
         unavailableChampionsGrouping: "top", // Reset unavailable champions grouping to default
       },
       drafting: {
-        integrateUnavailableChampions: true, // default: enabled
+        integrateUnavailableChampions: false, // default: enabled
         disableDraftDeletionWarning: false, // default: show warning
         tierHighlightMode: "sort",
         pickedMode: "default",

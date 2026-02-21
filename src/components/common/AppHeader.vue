@@ -44,7 +44,6 @@
           Fearless Pool
         </router-link>
         <router-link
-          v-if="authStore.isAdmin"
           to="/drafting"
           class="nav-link"
           :class="{ active: $route.name === 'drafting' }"
@@ -70,7 +69,11 @@
         >
           <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+            <path
+              fill-rule="evenodd"
+              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+              clip-rule="evenodd"
+            />
           </svg>
           <span>View Only</span>
         </div>
@@ -104,7 +107,10 @@
 
         <!-- Workspace selector -->
         <button
-          v-if="workspaceStore.currentWorkspaceId && !workspaceStore.isLocalWorkspace"
+          v-if="
+            workspaceStore.currentWorkspaceId &&
+            !workspaceStore.isLocalWorkspace
+          "
           @click="openWorkspaceSwitcher"
           class="flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#252525] hover:bg-[#333333] border border-gray-600/50 hover:border-amber-500/50 transition-all group"
           title="Click to switch workspace"
@@ -125,8 +131,13 @@
           </svg>
 
           <!-- Workspace name -->
-          <span class="text-xs text-gray-300 group-hover:text-white truncate max-w-[100px] transition-colors">
-            {{ workspaceStore.currentWorkspaceName || workspaceStore.currentWorkspaceId }}
+          <span
+            class="text-xs text-gray-300 group-hover:text-white truncate max-w-[100px] transition-colors"
+          >
+            {{
+              workspaceStore.currentWorkspaceName ||
+              workspaceStore.currentWorkspaceId
+            }}
           </span>
 
           <!-- Dropdown chevron visual cue -->
@@ -271,9 +282,11 @@ const isAnyModalOpen = () => {
   ) {
     return true;
   }
-  
+
   // Check for any open dialog/modal in the DOM (data-state="open" is used by reka-ui dialogs)
-  const openDialogs = document.querySelectorAll('[role="dialog"][data-state="open"], [data-radix-dialog-content]');
+  const openDialogs = document.querySelectorAll(
+    '[role="dialog"][data-state="open"], [data-radix-dialog-content]',
+  );
   return openDialogs.length > 0;
 };
 
