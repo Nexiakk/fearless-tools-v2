@@ -14,23 +14,24 @@ export const useSettingsStore = defineStore("settings", () => {
       enableSearch: true, // Enable search bar feature, default: enabled
       showEventHistory: false, // Show EventHistory sidebar, default: enabled
       // NEW: Card size presets
-      cardSizePreset: 'compact', // 'standard' | 'compact' | 'custom'
-      useGlobalTierSize: true,   // Use single value for all tier cards
-      tierCardSizes: {           // Per-tier sizes (when useGlobalTierSize is false)
-        'op': 100,
-        'highlight': 100,
+      cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
+      useGlobalTierSize: true, // Use single value for all tier cards
+      tierCardSizes: {
+        // Per-tier sizes (when useGlobalTierSize is false)
+        op: 100,
+        highlight: 100,
       },
-      globalTierCardSize: 100,   // Global tier card size (when useGlobalTierSize is true)
+      globalTierCardSize: 100, // Global tier card size (when useGlobalTierSize is true)
       // NEW: Global page content scale
-      pageContentScale: 100,     // Global page content scale (50-150), default 100
+      pageContentScale: 100, // Global page content scale (50-150), default 100
       // NEW: Unavailable/Banned champions grouping
-      unavailableChampionsGrouping: 'top', // 'top' | 'bottom' | 'hidden', default: 'top'
+      unavailableChampionsGrouping: "top", // 'top' | 'bottom' | 'hidden', default: 'top'
     },
     drafting: {
-      integrateUnavailableChampions: true, // default: enabled
+      integrateUnavailableChampions: false, // default: enabled
       disableDraftDeletionWarning: false, // default: show warning
-      tierHighlightMode: 'sort', // 'sort' | 'always' | 'none', default: 'sort'
-      pickedMode: 'default', // 'default' | 'bottom' | 'hidden', default: 'default'
+      tierHighlightMode: "sort", // 'sort' | 'always' | 'none', default: 'sort'
+      pickedMode: "default", // 'default' | 'bottom' | 'hidden', default: 'default'
       championGridZoomIndex: 4, // default: index 4 (1.0 scale)
     },
   });
@@ -52,7 +53,7 @@ export const useSettingsStore = defineStore("settings", () => {
     },
     custom: {
       // Uses current values, doesn't override
-    }
+    },
   };
 
   // Actions
@@ -84,21 +85,22 @@ export const useSettingsStore = defineStore("settings", () => {
           if (parsed.pool.cardSizePreset === undefined) {
             // Determine preset based on current settings
             if (mergedPool.normalCardSize === 100) {
-              mergedPool.cardSizePreset = 'standard';
+              mergedPool.cardSizePreset = "standard";
             } else if (mergedPool.normalCardSize === 83) {
-              mergedPool.cardSizePreset = 'compact';
+              mergedPool.cardSizePreset = "compact";
             } else {
-              mergedPool.cardSizePreset = 'custom';
+              mergedPool.cardSizePreset = "custom";
             }
           }
           if (parsed.pool.useGlobalTierSize === undefined) {
             mergedPool.useGlobalTierSize = true;
           }
           if (parsed.pool.tierCardSizes === undefined) {
-            mergedPool.tierCardSizes = { 'op': 100, 'highlight': 100 };
+            mergedPool.tierCardSizes = { op: 100, highlight: 100 };
           }
           if (parsed.pool.globalTierCardSize === undefined) {
-            mergedPool.globalTierCardSize = parsed.pool.highlightCardSize || 100;
+            mergedPool.globalTierCardSize =
+              parsed.pool.highlightCardSize || 100;
           }
           // Handle new page content scale setting
           if (parsed.pool.pageContentScale === undefined) {
@@ -106,7 +108,7 @@ export const useSettingsStore = defineStore("settings", () => {
           }
           // Handle new unavailable champions grouping setting
           if (parsed.pool.unavailableChampionsGrouping === undefined) {
-            mergedPool.unavailableChampionsGrouping = 'top';
+            mergedPool.unavailableChampionsGrouping = "top";
           }
 
           settings.value.pool = mergedPool;
@@ -114,13 +116,13 @@ export const useSettingsStore = defineStore("settings", () => {
         if (parsed.drafting) {
           // Backward compatibility for new drafting settings
           if (parsed.drafting.tierHighlightMode === undefined) {
-             parsed.drafting.tierHighlightMode = 'sort';
+            parsed.drafting.tierHighlightMode = "sort";
           }
           if (parsed.drafting.pickedMode === undefined) {
-             parsed.drafting.pickedMode = 'default';
+            parsed.drafting.pickedMode = "default";
           }
           if (parsed.drafting.championGridZoomIndex === undefined) {
-             parsed.drafting.championGridZoomIndex = 4;
+            parsed.drafting.championGridZoomIndex = 4;
           }
           settings.value.drafting = {
             ...settings.value.drafting,
@@ -162,10 +164,11 @@ export const useSettingsStore = defineStore("settings", () => {
 
     settings.value.pool.cardSizePreset = preset;
 
-    if (preset !== 'custom') {
+    if (preset !== "custom") {
       // Apply preset values
       settings.value.pool.normalCardSize = presetConfig.normalCardSize;
-      settings.value.pool.unavailableCardSize = presetConfig.unavailableCardSize;
+      settings.value.pool.unavailableCardSize =
+        presetConfig.unavailableCardSize;
       settings.value.pool.highlightCardSize = presetConfig.highlightCardSize;
       settings.value.pool.globalTierCardSize = presetConfig.highlightCardSize;
     }
@@ -195,13 +198,17 @@ export const useSettingsStore = defineStore("settings", () => {
     if (settings.value.pool.useGlobalTierSize) {
       return settings.value.pool.globalTierCardSize;
     }
-    return settings.value.pool.tierCardSizes[tierId] || settings.value.pool.globalTierCardSize;
+    return (
+      settings.value.pool.tierCardSizes[tierId] ||
+      settings.value.pool.globalTierCardSize
+    );
   }
 
   // NEW: Initialize tier card sizes for new tiers
   function initializeTierCardSize(tierId) {
     if (!settings.value.pool.tierCardSizes[tierId]) {
-      settings.value.pool.tierCardSizes[tierId] = settings.value.pool.globalTierCardSize;
+      settings.value.pool.tierCardSizes[tierId] =
+        settings.value.pool.globalTierCardSize;
       saveSettings();
     }
   }
@@ -227,19 +234,19 @@ export const useSettingsStore = defineStore("settings", () => {
         enableSearch: false, // Enable search bar feature, default: enabled
         showEventHistory: true, // Show EventHistory sidebar, default: enabled
         // NEW: Reset new settings to defaults
-        cardSizePreset: 'compact',
+        cardSizePreset: "compact",
         useGlobalTierSize: true,
-        tierCardSizes: { 'op': 100, 'highlight': 100 },
+        tierCardSizes: { op: 100, highlight: 100 },
         globalTierCardSize: 100,
         pageContentScale: 100, // Reset page content scale to default
-        unavailableChampionsGrouping: 'top', // Reset unavailable champions grouping to default
+        unavailableChampionsGrouping: "top", // Reset unavailable champions grouping to default
       },
       drafting: {
         integrateUnavailableChampions: true, // default: enabled
         disableDraftDeletionWarning: false, // default: show warning
-        tierHighlightMode: 'sort', 
-        pickedMode: 'default',
-        championGridZoomIndex: 4, 
+        tierHighlightMode: "sort",
+        pickedMode: "default",
+        championGridZoomIndex: 4,
       },
     };
     // Save the reset settings
