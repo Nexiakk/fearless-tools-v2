@@ -132,13 +132,13 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
         const tiersRef = doc(workspaceRef, 'tiers', 'current')
         const docSnap = await getDoc(tiersRef)
 
-        if (docSnap.exists()) {
+        if (docSnap.exists() && docSnap.data().tiers && docSnap.data().tiers.length > 0) {
           const data = docSnap.data()
-          tiers.value = data.tiers || []
+          tiers.value = data.tiers
           console.log(`Loaded ${tiers.value.length} workspace tiers`)
           loadedWorkspaceTiers = true
         } else {
-          // No workspace tiers, will fall back to global defaults
+          // No workspace tiers or empty tiers, will use default tiers
           tiers.value = []
         }
       } else {
@@ -147,17 +147,15 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
         selectedTierId.value = null
       }
 
-      // Only load global defaults if no workspace tiers exist
-      if (!loadedWorkspaceTiers) {
-        const globalDefaults = await loadGlobalDefaults()
-        if (globalDefaults && globalDefaults.length > 0) {
-          // Merge global defaults with champion data
-          defaultTiers.value = globalDefaults.map(tier => ({
-            ...tier,
-            champions: tier.champions || {}
-          }))
-          console.log(`Loaded ${globalDefaults.length} global default tiers`)
-        }
+      // Always load global defaults so `defaultTiers` represents true user-defined global defaults
+      const globalDefaults = await loadGlobalDefaults()
+      if (globalDefaults && globalDefaults.length > 0) {
+        // Merge global defaults with champion data
+        defaultTiers.value = globalDefaults.map(tier => ({
+          ...tier,
+          champions: tier.champions || {}
+        }))
+        console.log(`Loaded ${globalDefaults.length} global default tiers`)
       }
     } catch (error) {
       console.error('Error loading tiers:', error)
