@@ -10,7 +10,7 @@
     <Transition name="drawer">
       <div
         v-if="modalStore.isOpen"
-        class="fixed bottom-0 left-0 right-0 z-50 bg-[#161616] shadow-2xl border-t border-gray-800 flex flex-col font-sans"
+        class="fixed bottom-0 left-[15%] right-[15%] w-[70%] rounded-t-xl z-50 bg-[#161616] shadow-2xl border-t border-x border-gray-800 flex flex-col font-sans"
         style="height: 340px;"
         @click.stop
       >
@@ -73,21 +73,26 @@
                 
                 <!-- Abilities Row (moved here for compactness) -->
                  <TooltipProvider :delay-duration="100">
-                  <div class="flex items-center gap-1.5 mt-2.5">
+                  <div class="flex flex-wrap items-start gap-3 mt-3">
                     <Tooltip v-for="ability in abilityIcons" :key="ability.key">
                       <TooltipTrigger as-child>
-                        <div
-                          class="w-6 h-6 rounded border border-gray-700 overflow-hidden cursor-help transition-all hover:border-amber-500/70 hover:scale-110 relative group/ability"
-                          :class="ability.key === 'P' ? 'bg-purple-900/10' : 'bg-gray-800'"
-                        >
-                          <img
-                            v-if="ability.iconUrl"
-                            :src="ability.iconUrl"
-                            :alt="ability.name"
-                            class="w-full h-full object-cover opacity-80 group-hover/ability:opacity-100"
-                            @error="handleAbilityImageError"
-                          />
-                          <span v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{{ ability.key }}</span>
+                        <div class="flex flex-col items-center gap-1 group/ability cursor-help">
+                          <div
+                            class="w-8 h-8 rounded border border-gray-700 overflow-hidden transition-all group-hover/ability:border-amber-500/70 group-hover/ability:scale-110 relative"
+                            :class="ability.key === 'P' ? 'bg-purple-900/10' : 'bg-gray-800'"
+                          >
+                            <img
+                              v-if="ability.iconUrl"
+                              :src="ability.iconUrl"
+                              :alt="ability.name"
+                              class="w-full h-full object-cover opacity-80 group-hover/ability:opacity-100"
+                              @error="handleAbilityImageError"
+                            />
+                            <span v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{{ ability.key }}</span>
+                          </div>
+                          <div v-if="ability.cooldown" class="text-[10px] text-gray-400 font-medium whitespace-nowrap leading-none mt-[2px]" style="max-width: none;">
+                            {{ ability.cooldown }}
+                          </div>
                         </div>
                       </TooltipTrigger>
                        <TooltipContent side="top" :side-offset="5" class="bg-gray-900 border-gray-700 text-xs p-2 max-w-xs z-[60]">
@@ -104,8 +109,28 @@
               </div>
             </div>
 
-            <!-- Stats Grid (Compact) -->
-            <div v-if="formattedStats" class="ml-auto flex items-center gap-6 pr-2 self-center">
+            <!-- Stats Grid & Role Select -->
+            <div class="ml-auto flex flex-col items-end gap-3 pr-2 self-start pt-1">
+               <!-- Role Selector (Repositioned here) -->
+               <div class="flex bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
+                  <button
+                    v-for="role in allRoles"
+                    :key="role"
+                    @click="setSelectedRole(role)"
+                    :disabled="!availableRoles.includes(role)"
+                    class="w-7 h-7 rounded flex items-center justify-center transition-all relative group"
+                    :class="getRoleTabClass(role)"
+                  >
+                    <img
+                      :src="championsStore.getRoleIconUrl(role)"
+                      :alt="role"
+                      class="w-4 h-4 transition-opacity"
+                      :class="!availableRoles.includes(role) ? 'opacity-20 grayscale' : 'opacity-80 group-hover:opacity-100'"
+                    />
+                  </button>
+               </div>
+
+              <div v-if="formattedStats" class="flex items-center gap-6">
               <div class="flex flex-col items-end">
                 <span class="text-lg font-bold text-green-400 leading-none">{{ formattedStats.winRate }}</span>
                 <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Win</span>
@@ -126,9 +151,10 @@
                 <span class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Games</span>
               </div>
             </div>
+            </div>
           </div>
 
-          <!-- Divider -->
+            <!-- Divider -->
           <div class="h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent my-2 opacity-50"></div>
 
           <!-- Bottom Section: Counters & Role Select -->
@@ -139,53 +165,51 @@
                   <svg class="w-3 h-3 text-red-500/80" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.707 7.293a1 1 0 0 0-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 1 0 1.414 1.414L10 11.414l1.293 1.293a1 1 0 0 0 1.414-1.414L11.414 10l1.293-1.293a1 1 0 0 0-1.414-1.414L10 8.586 8.707 7.293Z" clip-rule="evenodd" />
                   </svg>
-                  Counters
+                  Matchups
                   <span class="text-gray-600 font-normal ml-1">({{ currentRoleCounters.length }})</span>
                </h4>
-
-               <!-- Role Selector (Compact) -->
-               <div class="flex bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
-                  <button
-                    v-for="role in allRoles"
-                    :key="role"
-                    @click="setSelectedRole(role)"
-                    :disabled="!availableRoles.includes(role)"
-                    class="w-6 h-6 rounded flex items-center justify-center transition-all relative group"
-                    :class="getRoleTabClass(role)"
-                  >
-                    <img
-                      :src="championsStore.getRoleIconUrl(role)"
-                      :alt="role"
-                      class="w-3.5 h-3.5 transition-opacity"
-                      :class="!availableRoles.includes(role) ? 'opacity-20 grayscale' : 'opacity-80 group-hover:opacity-100'"
-                    />
-                  </button>
-               </div>
             </div>
 
             <!-- Matchups Horizontal List -->
             <div v-if="currentRoleCounters.length > 0" class="flex-1 overflow-x-auto overflow-y-hidden min-h-0 py-1 scrollbar-thin">
-              <div class="flex gap-2 h-full items-center pl-1">
-                <div
-                  v-for="counter in currentRoleCounters"
-                  :key="counter.champion"
-                  class="flex-shrink-0 w-[4.5rem] h-full bg-[#1e1e1e] rounded border border-gray-800 hover:border-gray-600 transition-all group flex flex-col relative overflow-hidden"
-                >
-                  <!-- Background Image (blurred) -->
-                   <div class="absolute inset-0 overflow-hidden opacity-20 group-hover:opacity-30 transition-opacity">
-                      <img :src="getCounterIconUrl(counter)" class="w-full h-full object-cover blur-[2px] scale-150" />
-                   </div>
+              <div class="flex gap-2 h-full items-center pl-1 w-max px-2 pb-1">
+                
+                <div class="flex-shrink-0 px-3 flex flex-col items-center justify-center opacity-70">
+                   <span class="text-[11px] font-bold text-red-400 uppercase tracking-widest whitespace-nowrap">Bad Against</span>
+                </div>
 
-                  <div class="relative z-10 flex flex-col items-center justify-center h-full p-1.5 gap-1">
-                      <img
-                        :src="getCounterIconUrl(counter)"
-                        :alt="counter.champion"
-                        class="w-8 h-8 rounded shadow-sm border border-gray-700/50 group-hover:border-gray-500 transition-colors"
-                        @error="handleImageError"
-                      />
-                      <div class="text-[10px] font-medium text-gray-300 truncate w-full text-center leading-tight">{{ counter.champion }}</div>
-                      <div class="text-[11px] font-bold text-red-400/90 leading-none">{{ formatWinRate(counter.win_rate) }}</div>
+                <template v-for="(counter, idx) in currentRoleCounters" :key="counter.champion">
+                  <!-- Separator when switching from <50% to >=50% -->
+                  <div
+                    v-if="idx > 0 && currentRoleCounters[idx-1].win_rate < 50 && counter.win_rate >= 50"
+                    class="h-[70%] w-px bg-gray-700/50 mx-2"
+                  ></div>
+                  
+                  <div
+                    class="flex-shrink-0 w-[4.5rem] h-full bg-[#1e1e1e] rounded border border-gray-800 hover:border-gray-600 transition-all group flex flex-col relative overflow-hidden"
+                  >
+                    <!-- Background Image (blurred) -->
+                     <div class="absolute inset-0 overflow-hidden opacity-20 group-hover:opacity-30 transition-opacity">
+                        <img :src="getCounterIconUrl(counter)" class="w-full h-full object-cover blur-[2px] scale-150" />
+                     </div>
+
+                    <div class="relative z-10 flex flex-col items-center justify-center h-full p-1.5 gap-1">
+                        <img
+                          :src="getCounterIconUrl(counter)"
+                          :alt="counter.champion"
+                          class="w-8 h-8 rounded shadow-sm border border-gray-700/50 group-hover:border-gray-500 transition-colors"
+                          @error="handleImageError"
+                        />
+                        <div class="text-[10px] font-medium text-gray-300 truncate w-full text-center leading-tight">{{ counter.champion }}</div>
+                        <div class="text-[11px] font-bold leading-none" :class="counter.win_rate >= 50 ? 'text-green-400/90' : 'text-red-400/90'">
+                          {{ formatWinRate(counter.win_rate) }}
+                        </div>
+                    </div>
                   </div>
+                </template>
+
+                <div class="flex-shrink-0 px-3 flex flex-col items-center justify-center opacity-70 ml-2">
+                   <span class="text-[11px] font-bold text-green-400 uppercase tracking-widest whitespace-nowrap">Good Against</span>
                 </div>
               </div>
             </div>

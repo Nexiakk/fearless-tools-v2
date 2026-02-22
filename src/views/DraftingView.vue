@@ -430,12 +430,9 @@ const unavailableChampions = computed(() => {
     gameUnavailable.forEach(champ => unavailable.add(champ));
   }
   
-  // Add champions from the Fearless Pool
+  // Add champions from the Fearless Pool (only unavailable/picked champions, not banned)
   if (draftStore.unavailableChampions) {
     draftStore.unavailableChampions.forEach(champ => unavailable.add(champ));
-  }
-  if (draftStore.bannedChampions) {
-    draftStore.bannedChampions.forEach(champ => unavailable.add(champ));
   }
   
   return unavailable;
