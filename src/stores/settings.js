@@ -12,7 +12,7 @@ export const useSettingsStore = defineStore("settings", () => {
       disableAnimations: false,
       centerCards: true,
       enableSearch: false, // Enable search bar feature, default: enabled
-      showEventHistory: false, // Show EventHistory sidebar, default: enabled
+      showEventHistory: true, // Show EventHistory sidebar, default: enabled
       // NEW: Card size presets
       cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
       useGlobalTierSize: true, // Use single value for all tier cards
