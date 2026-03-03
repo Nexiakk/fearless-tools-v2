@@ -98,7 +98,7 @@ const formattedTime = computed(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
+  padding: 4px 8px;
   border-radius: 6px;
   background-color: #252525;
   border: 1px solid #3a3a3a;

@@ -176,6 +176,7 @@ const handleImageError = (e) => {
   height: 100%;
   object-fit: cover;
   filter: grayscale(90%);
+  transform: scale(1.1);
 }
 
 /* Pick Slot Specifics */
@@ -196,5 +197,6 @@ const handleImageError = (e) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scale(1.1);
 }
 </style>
