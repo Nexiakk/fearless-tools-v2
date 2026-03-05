@@ -1,189 +1,84 @@
-// Champion Data Service (v9+ modular API)
-import {
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  getDocs,
-  serverTimestamp
-} from 'firebase/firestore'
-import { db } from './config'
-import { authService } from './auth'
+// Champion Data Service using Turso (replaces Firebase version)
+import { createClient } from '@libsql/client'
+
+// Use readonly token from env, or connect directly if allowed
+const dbUrl = import.meta.env.VITE_TURSO_DB_URL || 'https://lol-champion-data-mietek.aws-eu-west-1.turso.io'
+const authToken = import.meta.env.VITE_TURSO_AUTH_TOKEN_RO || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicm8iLCJpYXQiOjE3NzI3MzcwMzksImlkIjoiMDE5Y2JmNWItNmIwMS03YWVmLWJlOTktM2ZjZmVmNjg1NTA4IiwicmlkIjoiM2M5MTMyMGEtZWU2YS00ZGNlLWFiYjItMDU1NWRiOTdmYzBiIn0.3WEZhuu5mn9TYMvDnvBpN2Uef8tfRp_Yz7uIiDUtPQ0Z6KbvAgwdAsOlY68GRyOo8wA9yCf9K7U_QXtqOH5VAg'
+
+const turso = createClient({
+  url: dbUrl,
+  authToken: authToken,
+})
 
 /**
- * Fetch champion data from Firestore (GLOBAL - ignores workspaceId)
+ * Fetch champion data from Turso
  */
 export async function fetchChampionDataFromFirestore(workspaceId) {
   try {
-    // Champion data is GLOBAL - always fetch from champions/global
-    const championsRef = doc(db, 'champions', 'global')
-    const docSnap = await getDoc(championsRef)
-
-    if (docSnap.exists()) {
-      const data = docSnap.data()
-      let champions = Array.isArray(data.allChampions) ? data.allChampions : []
-
-      console.log(`Fetched ${champions.length} champions from GLOBAL Firestore document`)
-
-      // Normalize champions - ensure mainRole is set if missing
-      champions = champions.map(champion => {
-        const normalized = { ...champion }
-
-        // If mainRole is missing but roles array exists, set mainRole to first role
-        if (!normalized.mainRole && Array.isArray(normalized.roles) && normalized.roles.length > 0) {
-          normalized.mainRole = normalized.roles[0]
-        }
-
-        // Ensure roles array exists
-        if (!Array.isArray(normalized.roles)) {
-          normalized.roles = []
-        }
-
-        return normalized
-      })
-
-      return {
-        allChampions: champions,
-        opTierChampions: typeof data.opTierChampions === 'object' && 
-          data.opTierChampions !== null 
-          ? data.opTierChampions 
-          : {},
-        version: data.version || (data.lastUpdated && data.lastUpdated.toMillis ? data.lastUpdated.toMillis() : Date.now()),
-        lastUpdated: data.lastUpdated
+    console.log(`Fetching all champions from Turso`)
+    
+    // We only need basic champion info here, not full json payloads 
+    // depending on where this is used. For now, fetch all.
+    const rs = await turso.execute('SELECT * FROM champions')
+    
+    const champions = rs.rows.map(row => {
+      const roles = row.roles_json ? JSON.parse(row.roles_json) : {}
+      const roleKeys = Object.keys(roles)
+      
+      const normalized = {
+        id: row.id,
+        name: row.name,
+        imageName: row.image_name,
+        patch: row.patch,
+        roles: roleKeys, // map object keys to array for basic display
+        mainRole: roleKeys.length > 0 ? roleKeys[0] : null,
       }
-    } else {
-      console.warn('No GLOBAL champion data document found at champions/global')
-      return null
+      return normalized
+    })
+
+    console.log(`Fetched ${champions.length} champions from Turso database`)
+
+    // Get current version/info
+    const infoRs = await turso.execute("SELECT abilities_last_updated FROM global_info WHERE id = 'data'")
+    let lastUpdated = Date.now()
+    if (infoRs.rows.length > 0 && infoRs.rows[0].abilities_last_updated) {
+       lastUpdated = new Date(infoRs.rows[0].abilities_last_updated).getTime()
+    }
+
+    return {
+      allChampions: champions,
+      opTierChampions: {},
+      version: lastUpdated,
+      lastUpdated: new Date(lastUpdated)
     }
   } catch (error) {
-    console.error('Error fetching GLOBAL champion data from Firestore:', error)
+    console.error('Error fetching champion data from Turso:', error)
     return null
   }
 }
 
 /**
- * Save champion data to Firestore (GLOBAL - Admin only)
+ * Dummy function since frontend shouldn't save globally anymore directly
  */
 export async function saveChampionDataToFirestore(workspaceId, allChampions, opTierChampions) {
-  if (!authService.isAuthenticated()) {
-    return { success: false, error: 'Authentication required' }
-  }
-
-  // Check admin status (global)
-  const isAdmin = await authService.isAdmin()
-  if (!isAdmin) {
-    return { success: false, error: 'Admin access required' }
-  }
-
-  try {
-    // Champion data is GLOBAL - always save to champions/global
-    const championsRef = doc(db, 'champions', 'global')
-
-    const version = Date.now()
-
-    // Normalize champions array
-    const normalizedChampions = Array.isArray(allChampions) ? allChampions.map(champion => {
-      const normalized = { ...champion }
-
-      // Convert roles array to plain array
-      if (normalized.roles) {
-        normalized.roles = Array.isArray(normalized.roles) ? [...normalized.roles] : []
-      } else {
-        normalized.roles = []
-      }
-
-      // Ensure mainRole is set
-      if (!normalized.mainRole && normalized.roles.length > 0) {
-        normalized.mainRole = normalized.roles[0]
-      }
-
-      // Ensure imageName is set
-      if (!normalized.imageName || normalized.imageName.trim() === '') {
-        const imageName = normalized.name
-          .replace(/[^a-zA-Z0-9]/g, '')
-          .replace(/\s+/g, '')
-        normalized.imageName = imageName
-      }
-
-      return normalized
-    }) : []
-
-    const dataToSave = {
-      allChampions: normalizedChampions,
-      opTierChampions: typeof opTierChampions === 'object' && opTierChampions !== null 
-        ? opTierChampions 
-        : {},
-      version: version,
-      lastUpdated: serverTimestamp()
-    }
-
-    console.log(`Saving ${dataToSave.allChampions.length} champions to GLOBAL Firestore`)
-
-    await setDoc(championsRef, dataToSave)
-    console.log('Champion data successfully written to Firestore')
-
-    return { success: true, error: null, version: version }
-  } catch (error) {
-    console.error('Error saving champion data to Firestore:', error)
-    return { success: false, error: error.message }
-  }
+  console.warn("Saving champion data from frontend is disabled. Use Python scraper.")
+  return { success: false, error: 'Disabled in Turso migration' }
 }
 
 /**
- * Migrate champion data from champions.js to Firestore (GLOBAL)
+ * Dummy function for migration
  */
 export async function migrateChampionDataToFirestore(workspaceId, allChampions, opTierChampions) {
-  if (!authService.isAuthenticated()) {
-    return { success: false, error: 'Authentication required for migration' }
-  }
-
-  // Check admin status
-  const isAdmin = await authService.isAdmin()
-  if (!isAdmin) {
-    return { success: false, error: 'Admin access required for migration' }
-  }
-
-  try {
-    // Normalize champions
-    const normalizedChampions = allChampions.map(champion => {
-      const normalized = { ...champion }
-
-      if (!normalized.mainRole && Array.isArray(normalized.roles) && normalized.roles.length > 0) {
-        normalized.mainRole = normalized.roles[0]
-      }
-
-      if (!Array.isArray(normalized.roles)) {
-        normalized.roles = []
-      }
-
-      if (!normalized.imageName || normalized.imageName.trim() === '') {
-        const imageName = normalized.name
-          .replace(/[^a-zA-Z0-9]/g, '')
-          .replace(/\s+/g, '')
-        normalized.imageName = imageName
-      }
-
-      return normalized
-    })
-
-    console.log(`Migrating ${normalizedChampions.length} champions to GLOBAL Firestore`)
-
-    // Save to GLOBAL location
-    const result = await saveChampionDataToFirestore('global', normalizedChampions, opTierChampions)
-
-    return result
-  } catch (error) {
-    console.error('Error migrating champion data:', error)
-    return { success: false, error: error.message }
-  }
+  console.warn("Migration from frontend is disabled.")
+  return { success: false, error: 'Disabled in Turso migration' }
 }
 
 /**
- * EFFICIENT SYSTEM: Fetch champions using role containers only (no individual document fetching)
+ * EFFICIENT SYSTEM: Fetch champions using role containers only
  */
 export async function fetchChampionsFromIndividualDocs() {
   try {
-    console.log('🔄 Fetching champions from role containers...')
+    console.log('🔄 Fetching champions from role containers (Turso)...')
 
     // Import Riot API service dynamically to avoid circular dependency
     const { riotApiService } = await import('@/services/riotApi')
@@ -259,37 +154,36 @@ export async function fetchChampionsFromIndividualDocs() {
 
     return {
       allChampions: normalizedChampions,
-      opTierChampions: {}, // TODO: Implement OP tier detection from new data
+      opTierChampions: {}, // OP tier detection not implemented yet mapping
       version: Date.now(), // Use current timestamp as version
       lastUpdated: new Date()
     }
 
   } catch (error) {
     console.error('❌ Error fetching champions from role containers:', error)
-    throw error // Re-throw the error instead of falling back to non-existent data
+    throw error 
   }
 }
 
 /**
- * Fetch role data from single document containing all role arrays
+ * Fetch role data from Turso role_containers table
  */
 export async function fetchChampionRolesFromContainers() {
   try {
-    const dataRef = doc(db, 'champions', 'data')
-    const dataSnap = await getDoc(dataRef)
-
-    if (dataSnap.exists()) {
-      const data = dataSnap.data()
-      const rolesData = data.roles || {}
-
-      // Extract role data and normalize role names
+    const rs = await turso.execute("SELECT role, champion_ids_json FROM role_containers")
+    
+    if (rs.rows.length > 0) {
       const roleData = {
-        top: rolesData.top || [],
-        jungle: rolesData.jungle || [],
-        middle: rolesData.middle || [],
-        bottom: rolesData.bottom || [],
-        support: rolesData.support || []
+        top: [], jungle: [], middle: [], bottom: [], support: []
       }
+      
+      rs.rows.forEach(row => {
+        const role = row.role
+        const championIds = row.champion_ids_json ? JSON.parse(row.champion_ids_json) : []
+        if (roleData[role] !== undefined) {
+           roleData[role] = championIds
+        }
+      })
 
       console.log('📊 Role containers fetched:', Object.keys(roleData).map(role =>
         `${role}: ${roleData[role].length} champions`
@@ -297,82 +191,39 @@ export async function fetchChampionRolesFromContainers() {
 
       return roleData
     } else {
-      console.warn('⚠️ No data found at champions/data')
+      console.warn('⚠️ No data found in role_containers')
       return {
-        top: [],
-        jungle: [],
-        middle: [],
-        bottom: [],
-        support: []
+        top: [], jungle: [], middle: [], bottom: [], support: []
       }
     }
   } catch (error) {
     console.warn('⚠️ Error fetching role containers:', error)
     return {
-      top: [],
-      jungle: [],
-      middle: [],
-      bottom: [],
-      support: []
+      top: [], jungle: [], middle: [], bottom: [], support: []
     }
   }
 }
 
 /**
- * Fetch champion documents in batches to avoid overwhelming Firestore
+ * Wait for batching logic. In Turso, we can just fetch all in one query.
  */
 async function fetchChampionsInBatches(championIds, batchSize = 10) {
-  const batches = []
-  for (let i = 0; i < championIds.length; i += batchSize) {
-    batches.push(championIds.slice(i, i + batchSize))
-  }
-
-  const results = []
-  for (const batch of batches) {
-    const batchPromises = batch.map(async (championId) => {
-      try {
-        const docRef = doc(db, 'champions', 'data', 'champions', championId)
-        const docSnap = await getDoc(docRef)
-
-        if (docSnap.exists()) {
-          return { id: championId, ...docSnap.data() }
-        } else {
-          console.warn(`⚠️ Champion document ${championId} not found`)
-          return null
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error fetching champion ${championId}:`, error)
-        return null
-      }
-    })
-
-    const batchResults = await Promise.all(batchPromises)
-    results.push(...batchResults.filter(Boolean))
-  }
-
-  return results
+    console.warn("fetchChampionsInBatches is deprecated with Turso. Use direct query.")
+    return []
 }
 
 /**
- * Check for data updates by monitoring role containers
+ * Check for data updates by monitoring global_info
  */
 export async function checkForDataUpdates() {
   try {
-    // Check if any role container has been updated recently
     const roleData = await fetchChampionRolesFromContainers()
 
-    // Get the latest update timestamp from the single data document
     let latestUpdate = 0
     try {
-      const dataRef = doc(db, 'champions', 'data')
-      const dataSnap = await getDoc(dataRef)
-
-      if (dataSnap.exists()) {
-        const data = dataSnap.data()
-        if (data.lastUpdated) {
-          const timestamp = data.lastUpdated.toMillis ? data.lastUpdated.toMillis() : data.lastUpdated
-          latestUpdate = timestamp
-        }
+      const infoRs = await turso.execute("SELECT abilities_last_updated FROM global_info WHERE id = 'data'")
+      if (infoRs.rows.length > 0 && infoRs.rows[0].abilities_last_updated) {
+         latestUpdate = new Date(infoRs.rows[0].abilities_last_updated).getTime()
       }
     } catch (error) {
       console.warn('Error checking data update time:', error)

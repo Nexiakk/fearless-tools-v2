@@ -17,7 +17,7 @@ from scraper.utils import (
     get_display_name, get_champion_id, get_champion_image_name,
     get_champion_list, normalize_patch_for_lolalytics
 )
-from scraper.firebase_utils import FirebaseManager, FirebaseConfig
+from scraper.turso_utils import TursoManager, TursoConfig
 from scraper.logging_utils import get_logger, log_scraping_start, log_scraping_success, log_scraping_error
 from scraper.config import get_config
 from scraper.models import ChampionData, ScrapingResult, RoleContainer
@@ -29,7 +29,7 @@ from scraper.services import ScrapingOrchestrator
 from scraper.main_legacy import check_patch_viability
 
 # Global instances
-_firebase_manager: Optional[FirebaseManager] = None
+_turso_manager: Optional[TursoManager] = None
 _logger = get_logger(__name__)
 
 def lambda_handler(event, context):
@@ -76,9 +76,9 @@ def scrape_and_store_data():
 
     # Check global patch info to see if wiki abilities are already up to date
     skip_wiki = False
-    if orchestrator.firebase_available:
+    if orchestrator.turso_available:
         try:
-            global_patch_info = orchestrator.firebase_manager.get_global_patch_info()
+            global_patch_info = orchestrator.turso_manager.get_global_patch_info()
             if global_patch_info and global_patch_info.get('abilitiesPatch') == current_patch:
                 skip_wiki = True
                 _logger.info(f"⏭️ Global abilities patch already up to date ({current_patch}) - skipping wiki scraping for all champions")
@@ -88,7 +88,7 @@ def scrape_and_store_data():
         except Exception as e:
             _logger.warning(f"Could not check global patch info: {e}")
     else:
-        _logger.warning("Firebase not available - cannot check global patch info, will scrape wiki for all champions")
+        _logger.warning("Turso not available - cannot check global patch info, will scrape wiki for all champions")
 
     # Get champions to process
     champions = get_champion_list()
@@ -118,17 +118,17 @@ def scrape_and_store_data():
             # Continue to next champion instead of crashing
 
     # Update global patch info if we scraped wiki abilities (i.e., didn't skip)
-    if orchestrator.firebase_available and not skip_wiki:
+    if orchestrator.turso_available and not skip_wiki:
         try:
-            orchestrator.firebase_manager.update_global_patch_info(current_patch)
+            orchestrator.turso_manager.update_global_patch_info(current_patch)
             _logger.info(f"✅ Updated global abilities patch to {current_patch}")
         except Exception as e:
             _logger.error(f"❌ Failed to update global patch info: {e}")
     elif skip_wiki:
         _logger.info("⏭️ Skipped wiki scraping - global patch info unchanged")
 
-    # Update role containers for optimized queries (only if Firebase is available)
-    if orchestrator.firebase_available:
+    # Update role containers for optimized queries (only if Turso is available)
+    if orchestrator.turso_available:
         _logger.info("Updating role containers...")
         orchestrator.update_role_containers()
 
@@ -139,7 +139,7 @@ def scrape_and_store_data():
         else:
             _logger.info("Same patch - skipping cleanup")
     else:
-        _logger.warning("Skipping role container updates - Firebase not available")
+        _logger.warning("Skipping role container updates - Turso not available")
 
     _logger.info(f"🎉 Data scraping completed! {success_count} successes, {error_count} errors")
 
@@ -149,7 +149,7 @@ def scrape_and_store_data():
         "total_champions": len(champions),
         "success_count": success_count,
         "error_count": error_count,
-        "firebase_available": orchestrator.firebase_available,
+        "turso_available": orchestrator.turso_available,
         "current_patch": current_patch,
         "target_patch": target_patch
     }
@@ -216,23 +216,24 @@ class SmartUpdateEngine:
 
         return list(viable_roles)
 
-def get_firebase_manager() -> FirebaseManager:
-    """Get or create Firebase manager instance"""
-    global _firebase_manager
-    if _firebase_manager is None:
+def get_turso_manager() -> TursoManager:
+    """Get or create Turso manager instance"""
+    global _turso_manager
+    if _turso_manager is None:
         config = get_config()
-        _firebase_manager = FirebaseManager(config.firebase)
-        _firebase_manager.initialize()
-    return _firebase_manager
+        from scraper.turso_utils import TursoConfig
+        _turso_manager = TursoManager(TursoConfig())
+        _turso_manager.initialize()
+    return _turso_manager
 
 def get_current_champion_data(champion_key: str) -> Dict:
-    """Get current champion data from Firebase"""
-    firebase_mgr = get_firebase_manager()
-    return firebase_mgr.get_champion_data(champion_key) or {}
+    """Get current champion data from Turso"""
+    turso_mgr = get_turso_manager()
+    return turso_mgr.get_champion_data(champion_key) or {}
 
 def store_combined_champion_data_smart(champion: str, current_data: Dict, new_data: Dict, update_decision: Dict):
     """Store combined champion data using smart update decisions"""
-    firebase_mgr = get_firebase_manager()
+    turso_mgr = get_turso_manager()
 
     # Start with current data or empty dict
     final_data = current_data.copy() if current_data else {}
@@ -259,13 +260,13 @@ def store_combined_champion_data_smart(champion: str, current_data: Dict, new_da
             }
 
     # Store the updated data
-    success = firebase_mgr.store_champion_data(champion, final_data)
+    success = turso_mgr.store_champion_data(champion, final_data)
     if not success:
         raise Exception(f"Failed to store data for {champion}")
 
 def update_role_containers():
     """Update role containers for optimized queries"""
-    firebase_mgr = get_firebase_manager()
+    turso_mgr = get_turso_manager()
 
     _logger.info("Updating role containers for new structure...")
 
@@ -275,14 +276,14 @@ def update_role_containers():
         # TODO: Refactor this to use proper data structures and models
 
         # For backward compatibility, we'll implement a simplified version
-        # that uses the FirebaseManager methods
+        # that uses the TursoManager methods
 
         # Get all champion data (this is inefficient but works for now)
         all_champions = {}
         champions_list = get_champion_list()
 
         for champion_key in champions_list:
-            data = firebase_mgr.get_champion_data(champion_key)
+            data = turso_mgr.get_champion_data(champion_key)
             if data:
                 all_champions[champion_key] = data
 
@@ -324,7 +325,7 @@ def update_role_containers():
                 role_data['patch'] = current_patch
 
         # Store role data
-        firebase_mgr.update_role_containers(role_data)
+        turso_mgr.update_role_containers(role_data)
         total_champions = sum(len(champs) for champs in role_champions.values())
         _logger.info(f"✅ Updated role data: {total_champions} total champions")
 
@@ -333,16 +334,16 @@ def update_role_containers():
 
 def cleanup_old_patch_data():
     """Clean up old patch data, keeping only recent patches"""
-    firebase_mgr = get_firebase_manager()
+    turso_mgr = get_turso_manager()
 
     _logger.info("🧹 Cleaning up old patch data...")
 
     try:
         # Get current patch from a sample champion
         current_patch = None
-        # This is complex to implement efficiently with FirebaseManager
+        # This is complex to implement efficiently with TursoManager
         # For now, skip this cleanup in the refactored version
-        # TODO: Implement proper cleanup using FirebaseManager
+        # TODO: Implement proper cleanup using TursoManager
         _logger.info("⚠️ Cleanup skipped in refactored version - needs implementation")
 
     except Exception as e:

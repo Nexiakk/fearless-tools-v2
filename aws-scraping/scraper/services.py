@@ -13,7 +13,7 @@ from .utils import (
     get_display_name, get_champion_id, get_champion_image_name,
     get_champion_list, normalize_patch_for_lolalytics
 )
-from .firebase_utils import FirebaseManager
+from .turso_utils import TursoManager
 from .logging_utils import get_logger, log_scraping_start, log_scraping_success, log_scraping_error, log_rate_limiting
 from .config import get_config
 from .models import ChampionData, ScrapingResult, ChampionAbility, ChampionRole, RoleStats, CounterMatchup
@@ -288,28 +288,28 @@ class DataProcessor:
 
 
 class StorageService:
-    """Service for storing champion data in Firebase"""
+    """Service for storing champion data in Turso"""
 
-    def __init__(self, firebase_manager: FirebaseManager, config=None):
-        self.firebase = firebase_manager
+    def __init__(self, turso_manager: TursoManager, config=None):
+        self.turso = turso_manager
         self.config = config or get_config()
         self.logger = get_logger(__name__)
 
     def get_champion_data(self, champion_key: str) -> Optional[Dict]:
         """Get champion data from storage"""
-        return self.firebase.get_champion_data(champion_key)
+        return self.turso.get_champion_data(champion_key)
 
     def store_champion_data(self, champion_key: str, data: Dict) -> bool:
         """Store champion data"""
-        return self.firebase.store_champion_data(champion_key, data)
+        return self.turso.store_champion_data(champion_key, data)
 
     def update_role_containers(self, role_data: Dict) -> bool:
         """Update role container data"""
-        return self.firebase.update_role_containers(role_data)
+        return self.turso.update_role_containers(role_data)
 
     def cleanup_old_patches(self, current_patch: str) -> int:
         """Clean up old patch data"""
-        return self.firebase.cleanup_old_patches(current_patch)
+        return 0  # To be implemented for Turso cleanly if needed
 
 
 class ScrapingOrchestrator:
@@ -320,16 +320,16 @@ class ScrapingOrchestrator:
         self.logger = get_logger(__name__)
 
         # Initialize services
-        firebase_config = self.config.firebase
-        self.firebase_manager = FirebaseManager(firebase_config)
-        self.firebase_available = self.firebase_manager.initialize()
+        from .turso_utils import TursoConfig
+        self.turso_manager = TursoManager(TursoConfig())
+        self.turso_available = self.turso_manager.initialize()
 
-        if not self.firebase_available:
-            self.logger.warning("Firebase not available - running in offline mode")
+        if not self.turso_available:
+            self.logger.warning("Turso not available - running in offline mode")
 
         self.scraper = ChampionScraper(self.config)
         self.processor = DataProcessor(self.config)
-        self.storage = StorageService(self.firebase_manager, self.config) if self.firebase_available else None
+        self.storage = StorageService(self.turso_manager, self.config) if self.turso_available else None
 
     def scrape_and_store_champion(self, champion: str, target_patch: str, current_patch: str = None, skip_wiki: bool = False) -> ScrapingResult:
         """

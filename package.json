@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
     "@vueuse/core": "^10.11.1",
     "@vueuse/firebase": "^10.11.1",
     "class-variance-authority": "^0.7.1",
