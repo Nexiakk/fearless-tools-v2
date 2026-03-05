@@ -6,7 +6,6 @@ Centralizes all configuration settings and provides environment-specific configs
 import os
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
-from .firebase_utils import FirebaseConfig
 
 
 @dataclass
@@ -34,7 +33,6 @@ class LoggingConfig:
 @dataclass
 class AppConfig:
     """Main application configuration"""
-    firebase: FirebaseConfig = field(default_factory=FirebaseConfig.from_environment)
     scraping: ScrapingConfig = field(default_factory=ScrapingConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
@@ -45,7 +43,6 @@ class AppConfig:
     def from_environment(cls) -> 'AppConfig':
         """Create configuration from environment variables"""
         return cls(
-            firebase=FirebaseConfig.from_environment(),
             scraping=ScrapingConfig(),
             logging=LoggingConfig(),
             environment=os.environ.get('ENVIRONMENT', 'development'),
@@ -55,12 +52,10 @@ class AppConfig:
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'AppConfig':
         """Create configuration from dictionary"""
-        firebase_dict = config_dict.get('firebase', {})
         scraping_dict = config_dict.get('scraping', {})
         logging_dict = config_dict.get('logging', {})
 
         return cls(
-            firebase=FirebaseConfig(**firebase_dict),
             scraping=ScrapingConfig(**scraping_dict),
             logging=LoggingConfig(**logging_dict),
             environment=config_dict.get('environment', 'development'),
@@ -70,10 +65,6 @@ class AppConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary"""
         return {
-            'firebase': {
-                'service_account_key': self.firebase.service_account_key,
-                'project_id': self.firebase.project_id
-            },
             'scraping': {
                 'request_timeout': self.scraping.request_timeout,
                 'rate_limit_delay': self.scraping.rate_limit_delay,

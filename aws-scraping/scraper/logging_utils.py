@@ -101,17 +101,7 @@ def log_patch_info(patch: str, viability_days: Optional[int] = None):
         message += f" (viable for {viability_days} days)"
     logger.info(message)
 
-def log_firebase_operation(operation: str, champion: Optional[str] = None, success: bool = True):
-    """Log Firebase operations"""
-    logger = get_logger()
-    status = "✅" if success else "❌"
-    message = f"{status} Firebase {operation}"
-    if champion:
-        message += f" for {champion}"
-    if success:
-        logger.info(message)
-    else:
-        logger.error(message)
+
 
 # Convenience functions for backward compatibility
 def info(message: str):
