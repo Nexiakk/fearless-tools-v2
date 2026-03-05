@@ -11,7 +11,10 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 from datetime import datetime
 import json
 import time
+import psutil
 
+from PySide6.QtCore import QObject, Signal
+import lcu_driver.utils
 from lcu_driver import Connector
 from lcu_driver.events.responses import WebsocketEventResponse
 
@@ -66,9 +69,13 @@ class MonitorState(Enum):
     GAME_STARTED = "game_started"
 
 
-class LCUMonitor:
+class LCUMonitor(QObject):
     """Monitors League Client Update API for draft data with state machine"""
-
+    
+    # GUI Signals
+    status_changed = Signal(str, str) # (system, status_text) like ("LCU", "Connected")
+    workspace_updated = Signal(str)
+    
     # LCU API endpoints
     CHAMP_SELECT_URL = '/lol-champ-select/v1/session'
     GAMEFLOW_URL = '/lol-gameflow/v1/gameflow-phase'
@@ -84,6 +91,7 @@ class LCUMonitor:
     PHASE_PRE_END_GAME = 'PreEndOfGame'
 
     def __init__(self):
+        super().__init__()
         # Defer connector creation until start() to avoid event loop issues
         self.connector = None
         self.champion_mapper = get_champion_mapper()
@@ -98,6 +106,7 @@ class LCUMonitor:
         self.current_phase: Optional[str] = None
         self.last_draft_data: Optional[DraftData] = None
         self.workspace_id: Optional[str] = None
+        self.target_pid: Optional[int] = None # Filter to a specific LCU instance
 
         # Track whether current draft resulted in a game
         self._game_went_through = False
@@ -111,6 +120,12 @@ class LCUMonitor:
         # CRITICAL FIX: Store raw ID-based draft data for proper change detection
         # This prevents the bug where names are compared against IDs
         self._last_raw_draft_data: Optional[DraftData] = None
+        
+        # Track initial timestamps for draft actions
+        self._action_timestamps: Dict[int, datetime] = {}
+        
+        # Track initial picks for cells so swaps don't override the drafted champion
+        self._initial_picks: Dict[int, str] = {}
 
     def _set_state(self, new_state: MonitorState) -> None:
         """Change monitor state with logging and notification"""
@@ -119,6 +134,12 @@ class LCUMonitor:
             self.state = new_state
             self.notifier.on_state_changed(old_state.value, new_state.value)
             logger.info(f"Monitor state: {old_state.value} → {new_state.value}")
+
+    def set_target_pid(self, pid: Optional[int]):
+        self.target_pid = pid
+        # Restart connector if necessary
+        if self.connector:
+            pass # Usually requires restarting the connector entirely, best handled at app level
 
     def _setup_event_handlers(self):
         """Set up LCU event handlers"""
@@ -129,6 +150,10 @@ class LCUMonitor:
             self.is_connected = True
             self.workspace_id = self.config_manager.get_workspace_id()
             self.notifier.on_connection_restored()
+            self.status_changed.emit("LCU", f"Connected to {self.workspace_id}")
+            self.status_changed.emit("Netlify", "Ready")
+            if self.workspace_id:
+                self.workspace_updated.emit(self.workspace_id)
             
             # Store connection reference for use in other methods
             self._connection = connection
@@ -158,6 +183,7 @@ class LCUMonitor:
         async def disconnect(connection):
             logger.info('LCU connection closed')
             self.is_connected = False
+            self.status_changed.emit("LCU", "Disconnected")
             self.notifier.on_connection_lost()
 
         @self.connector.ws.register(self.CHAMP_SELECT_URL)
@@ -201,7 +227,7 @@ class LCUMonitor:
             # In other states, lobby data is handled via gameflow transitions
 
     def start(self) -> bool:
-        """Start the LCU monitor - this will run the event loop"""
+        """Start the LCU monitor - meant to be called within an existing event loop"""
         if not self.config_manager.is_configured():
             logger.error("LCU client not properly configured")
             return False
@@ -209,17 +235,69 @@ class LCUMonitor:
         try:
             logger.info("Starting LCU monitor...")
 
-            # Create new event loop for lcu-driver
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # We DO NOT create a new event loop here. 
+            # qasync provides the loop and lcu-driver will use it.
+            
+            # Monkeypatch lcu_driver to filter by PID if targeted
+            import lcu_driver.utils
+            from psutil import process_iter, STATUS_ZOMBIE
+            
+            original_return_ux_process = lcu_driver.utils._return_ux_process
+            
+            def custom_return_ux_process():
+                for process in process_iter(attrs=["cmdline"]):
+                    if process.status() == STATUS_ZOMBIE:
+                        continue
+                    if self.target_pid and process.pid != self.target_pid:
+                        continue
+                    if process.name() in ["LeagueClientUx.exe", "LeagueClientUx"]:
+                        yield process
+                    cmdline = process.info.get("cmdline", [])
+                    if cmdline and cmdline[0].endswith("LeagueClientUx.exe"):
+                        yield process
+            
+            lcu_driver.utils._return_ux_process = custom_return_ux_process
 
             # Create connector
             self.connector = Connector()
             self._setup_event_handlers()
 
-            # Start the connector - this will run the event loop
-            self.connector.start()
+            # We must run it as a task because Connector.start() blocks
+            import asyncio
+            
+            # Rather than calling connector.start() which blocks with run_forever
+            # we just start it asynchronously matching its internal logic.
+            async def background_start():
+                try:
+                    import lcu_driver.utils
+                    from lcu_driver.connection import Connection
+                    
+                    while self.connector._repeat_flag:
+                        process = next(lcu_driver.utils._return_ux_process(), None)
+                        if process:
+                            # We found a process, create connection and init it
+                            # Force lcu_driver to use the current qt loop
+                            connection = Connection(self.connector, process)
+                            self.connector.register_connection(connection)
+                            
+                            # Safely await the initialization without crashing the loop 
+                            await connection.init()
+                            
+                        await asyncio.sleep(0.5)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.error(f"Connector bg loop error: {e}", exc_info=True)
+                    
+            # Use asyncio to run the async initialization logic of lcu-driver 
+            # without blocking the whole thread the way .start() does
+            
+            # Explicitly capture the qasync loop
+            loop = asyncio.get_event_loop()
+            self.connector.loop = loop
+            
+            self._bg_task = loop.create_task(background_start())
+            
             return True
         except Exception as e:
             logger.error(f"Failed to start LCU monitor: {e}")
@@ -232,6 +310,9 @@ class LCUMonitor:
             await self.data_transmitter.stop()
             if self.connector:
                 await self.connector.stop()
+            
+            if hasattr(self, '_bg_task') and self._bg_task:
+                self._bg_task.cancel()
         except Exception as e:
             logger.error(f"Error stopping LCU monitor: {e}")
 
@@ -347,6 +428,12 @@ class LCUMonitor:
         self.last_draft_data = None
         self._game_went_through = False
         self._champ_select_notification_sent = False
+        
+        # Clear action timestamps
+        self._action_timestamps.clear()
+        
+        # Clear initial picks
+        self._initial_picks.clear()
 
         # Clear blocked lobbies in transmitter to prevent memory growth
         # and allow reuse of lobby IDs if needed
@@ -582,7 +669,7 @@ class LCUMonitor:
         return has_completed_actions or has_valid_phase
 
     def _extract_draft_data(self, session_data: Dict[str, Any]) -> Optional[DraftData]:
-        """Extract draft data from champ select session"""
+        """Extract draft data from champ select session using chronological actions"""
         try:
             # Initialize draft data
             draft_data = DraftData(
@@ -591,38 +678,33 @@ class LCUMonitor:
                 phase=self._get_champ_select_phase(session_data)
             )
 
-            # Extract actions data (this is where bans are stored)
-            actions = session_data.get('actions', [])
-
-            # Process actions to extract bans only (picks come from team data)
-            blue_bans, red_bans, blue_ban_events, red_ban_events = self._extract_bans_from_actions(actions)
-
-            # Extract picks from team data (myTeam + theirTeam)
-            # This ensures only LOCKED IN champions are captured (not just selected)
+            # Build a reliable cell -> team map to avoid perspective bugs
             my_team = session_data.get('myTeam', [])
             their_team = session_data.get('theirTeam', [])
+            all_players = my_team + their_team
             
-            # Extract picks from both team arrays, respecting actual blue/red side
-            my_team_blue, my_team_red = self._extract_team_picks_by_side(my_team)
-            their_team_blue, their_team_red = self._extract_team_picks_by_side(their_team)
-            
-            # Combine picks from both arrays for each side
-            blue_picks = my_team_blue + their_team_blue
-            red_picks = my_team_red + their_team_red
+            cell_to_team = {}
+            for p in all_players:
+                cell_id = p.get('cellId')
+                team_id = p.get('team')
+                if cell_id is not None and team_id is not None:
+                    cell_to_team[cell_id] = team_id
 
+            # Extract actions chronologically to ensure strict pick/ban ordering and stable timestamps
+            actions = session_data.get('actions', [])
+            
+            extracted = self._extract_completed_actions_chronological(actions, cell_to_team)
+            
             # Set team data
-            draft_data.blue_side.bans = blue_bans
-            draft_data.blue_side.picks = blue_picks
-            draft_data.red_side.bans = red_bans
-            draft_data.red_side.picks = red_picks
-
-            # Set timestamped events for bans (from actions)
-            draft_data.blue_side.ban_events = blue_ban_events
-            draft_data.red_side.ban_events = red_ban_events
+            draft_data.blue_side.picks = extracted['blue_picks']
+            draft_data.red_side.picks = extracted['red_picks']
+            draft_data.blue_side.bans = extracted['blue_bans']
+            draft_data.red_side.bans = extracted['red_bans']
             
-            # Set timestamped events for picks (from team data)
-            draft_data.blue_side.pick_events = self._create_pick_events_from_team(blue_picks)
-            draft_data.red_side.pick_events = self._create_pick_events_from_team(red_picks)
+            draft_data.blue_side.pick_events = extracted['blue_pick_events']
+            draft_data.red_side.pick_events = extracted['red_pick_events']
+            draft_data.blue_side.ban_events = extracted['blue_ban_events']
+            draft_data.red_side.ban_events = extracted['red_ban_events']
 
             # Check if this is a new game
             draft_data.is_new_game = self._is_new_game(draft_data)
@@ -633,114 +715,96 @@ class LCUMonitor:
             logger.error(f"Error extracting draft data: {e}")
             return None
 
-    def _extract_bans_from_actions(self, actions: List[List[Dict[str, Any]]]) -> tuple:
-        """Extract bans from actions data only.
+    def _extract_completed_actions_chronological(self, actions: List[List[Dict[str, Any]]], cell_to_team: Dict[int, int]) -> Dict[str, Any]:
+        """Extract firmly locked picks and bans strictly by their chronological action phase."""
+        result = {
+            'blue_picks': [], 'red_picks': [],
+            'blue_bans': [], 'red_bans': [],
+            'blue_pick_events': [], 'red_pick_events': [],
+            'blue_ban_events': [], 'red_ban_events': []
+        }
         
-        Picks are NOT extracted from actions because they would include
-        champions that are only selected (not locked in). Instead, picks
-        are extracted from team data which only contains locked-in champions.
-        
-        NOTE: Empty bans (championId = 0 or -1) are now tracked as "None" to preserve ban order.
-        This ensures that when a player chooses "no ban", the slot is still recorded
-        and subsequent bans appear in the correct position.
-        """
-        blue_bans = []
-        red_bans = []
-        
-        # Timestamped ban events
-        blue_ban_events: List[ChampionEvent] = []
-        red_ban_events: List[ChampionEvent] = []
-
         try:
-            # Track order counters for bans
-            blue_ban_order = 0
-            red_ban_order = 0
+            blue_pick_order, red_pick_order = 0, 0
+            blue_ban_order, red_ban_order = 0, 0
             
             for action_group in actions:
                 for action in action_group:
+                    # Ignore hovers, we only want firmly locked choices
+                    if not action.get('completed', False):
+                        continue
+                        
+                    action_id = action.get('id')
                     action_type = action.get('type')
                     champion_id = action.get('championId', 0)
-                    is_ally_action = action.get('isAllyAction', True)
-                    completed = action.get('completed', False)
-
-                    # Only process bans (not picks) from actions
-                    # Bans are committed immediately when completed
-                    # FIX: Track empty bans (championId <= 0) as "None" to preserve order
-                    if action_type == 'ban' and completed:
+                    actor_cell_id = action.get('actorCellId')
+                    
+                    # Stable timestamp generator based on action ID
+                    if action_id is not None:
+                        if action_id not in self._action_timestamps:
+                            self._action_timestamps[action_id] = datetime.now()
+                        event_timestamp = self._action_timestamps[action_id]
+                    else:
                         event_timestamp = datetime.now()
                         
-                        # Determine champion string: "None" for empty bans, actual ID for real bans
-                        if champion_id > 0:
-                            champion_str = str(champion_id)
-                        else:
-                            champion_str = "None"  # Empty ban placeholder
+                    # Rely on true team association (1=Blue, 2=Red) instead of player perspective
+                    team_id = cell_to_team.get(actor_cell_id, 0)
+                    is_blue = (team_id == 1)
+                    is_red = (team_id == 2)
+                    
+                    if not (is_blue or is_red):
+                        logger.debug(f"Action ignored due to unknown team assignment for cell {actor_cell_id}")
+                        continue
                         
-                        if is_ally_action:
+                    # CRITICAL: Prevent swaps from overriding original pick entirely
+                    champion_str = "None"
+                    if action_type == 'pick':
+                        # If this cell already picked a champion previously, ignore the current action's champion
+                        if actor_cell_id in self._initial_picks:
+                            champion_str = self._initial_picks[actor_cell_id]
+                        else:
+                            # If it's the first time they locked in a valid champion
+                            if champion_id > 0:
+                                champion_str = str(champion_id)
+                                self._initial_picks[actor_cell_id] = champion_str
+                            else:
+                                champion_str = "None"
+                    else:
+                        champion_str = str(champion_id) if champion_id > 0 else "None"
+                    
+                    if action_type == 'ban':
+                        if is_blue:
                             blue_ban_order += 1
-                            blue_bans.append(champion_str)
-                            blue_ban_events.append(ChampionEvent(
-                                champion_id=champion_str,
-                                order=blue_ban_order,
-                                timestamp=event_timestamp
+                            result['blue_bans'].append(champion_str)
+                            result['blue_ban_events'].append(ChampionEvent(
+                                champion_id=champion_str, order=blue_ban_order, timestamp=event_timestamp
                             ))
                         else:
                             red_ban_order += 1
-                            red_bans.append(champion_str)
-                            red_ban_events.append(ChampionEvent(
-                                champion_id=champion_str,
-                                order=red_ban_order,
-                                timestamp=event_timestamp
+                            result['red_bans'].append(champion_str)
+                            result['red_ban_events'].append(ChampionEvent(
+                                champion_id=champion_str, order=red_ban_order, timestamp=event_timestamp
                             ))
-
+                    elif action_type == 'pick':
+                        # Empty picks (championId <= 0) mean they haven't picked yet
+                        if champion_str != "None":
+                            if is_blue:
+                                blue_pick_order += 1
+                                result['blue_picks'].append(champion_str)
+                                result['blue_pick_events'].append(ChampionEvent(
+                                    champion_id=champion_str, order=blue_pick_order, timestamp=event_timestamp
+                                ))
+                            else:
+                                red_pick_order += 1
+                                result['red_picks'].append(champion_str)
+                                result['red_pick_events'].append(ChampionEvent(
+                                    champion_id=champion_str, order=red_pick_order, timestamp=event_timestamp
+                                ))
+                                
         except Exception as e:
-            logger.error(f"Error extracting bans from actions: {e}")
+            logger.error(f"Error chronologically extracting actions: {e}")
 
-        return blue_bans, red_bans, blue_ban_events, red_ban_events
-
-    def _create_pick_events_from_team(self, picks: List[str]) -> List[ChampionEvent]:
-        """Create pick events from team data picks.
-        
-        Since team data only contains locked-in champions,
-        we create events with the current timestamp.
-        """
-        events = []
-        for i, champion_id in enumerate(picks):
-            events.append(ChampionEvent(
-                champion_id=champion_id,
-                order=i + 1,
-                timestamp=datetime.now()
-            ))
-        return events
-
-    def _extract_team_picks_by_side(self, team_data: List[Dict[str, Any]]) -> tuple:
-        """Extract champion picks from team data separated by actual blue/red side
-        
-        Returns: (blue_picks, red_picks) where each is a list of champion IDs
-        In LCU API: team=1 means blue side, team=2 means red side
-        """
-        blue_picks = []
-        red_picks = []
-        
-        try:
-            for player in team_data:
-                champion_id = player.get('championId', 0)
-                team_id = player.get('team', 0)  # 1 = blue, 2 = red
-                
-                # championId > 0 means a champion is assigned (including bots)
-                if champion_id > 0:
-                    champion_str = str(champion_id)
-                    if team_id == 1:
-                        blue_picks.append(champion_str)
-                    elif team_id == 2:
-                        red_picks.append(champion_str)
-                    else:
-                        # Fallback: if team is not specified, log a warning
-                        logger.debug(f"Player with champion {champion_id} has unknown team {team_id}")
-                        
-        except Exception as e:
-            logger.error(f"Error extracting team picks by side: {e}")
-        
-        return blue_picks, red_picks
+        return result
 
     def _extract_team_data(self, team_data: List[Dict[str, Any]]) -> TeamData:
         """Extract team data from LCU format (fallback method)"""
