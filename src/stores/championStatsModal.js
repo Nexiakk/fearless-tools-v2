@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/services/firebase/config'
+import { fetchChampionDetailsFromTurso } from '@/services/firebase/championData'
 import { riotApiService } from '@/services/riotApi'
 import { useChampionsStore } from './champions'
 
@@ -377,12 +376,11 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
 
       console.log(`Loading detailed data for ${champion.value.name} (key: ${internalKey})`)
 
-      // Fetch from Firebase using the correct 4-segment path
-      const docRef = doc(db, 'champions', 'data', 'champions', internalKey)
-      const docSnap = await getDoc(docRef)
+      // Fetch from Turso using the correct key
+      const result = await fetchChampionDetailsFromTurso(internalKey)
 
-      if (docSnap.exists()) {
-        detailedData.value = docSnap.data()
+      if (result) {
+        detailedData.value = result
         console.log(`✅ Loaded detailed data for ${champion.value.name}`, detailedData.value)
       } else {
         console.warn(`⚠️ No detailed data found for ${champion.value.name}`)

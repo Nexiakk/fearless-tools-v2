@@ -73,6 +73,27 @@ export async function migrateChampionDataToFirestore(workspaceId, allChampions, 
   return { success: false, error: 'Disabled in Turso migration' }
 }
 
+export async function fetchChampionDetailsFromTurso(championId) {
+  try {
+    const rs = await turso.execute({
+      sql: 'SELECT roles_json, abilities_json FROM champions WHERE id = ?',
+      args: [championId]
+    })
+    
+    if (rs.rows.length > 0) {
+      const row = rs.rows[0]
+      return {
+        roles: row.roles_json ? JSON.parse(row.roles_json) : null,
+        abilities: row.abilities_json ? JSON.parse(row.abilities_json) : null
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('Error fetching champion details from Turso:', error)
+    return null
+  }
+}
+
 /**
  * EFFICIENT SYSTEM: Fetch champions using role containers only
  */
