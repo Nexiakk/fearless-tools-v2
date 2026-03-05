@@ -354,7 +354,8 @@ class ScrapingOrchestrator:
             processed_data = self.processor.process_champion_data(raw_data)
 
             # Get current data for smart updates
-            current_data = self.storage.get_champion_data(champion)
+            storage = self.storage
+            current_data = storage.get_champion_data(champion) if storage else None
 
             # Determine update strategy - pass current_patch for abilities tracking
             update_decision = self.processor.should_update_champion(current_data, raw_data, current_patch)
@@ -364,11 +365,14 @@ class ScrapingOrchestrator:
                 final_data = self._apply_selective_updates(current_data or {}, raw_data, update_decision)
 
                 # Store the data
-                success = self.storage.store_champion_data(champion, final_data)
-                if not success:
-                    raise Exception(f"Failed to store data for {champion}")
-
-                self.logger.info(f"✅ Successfully updated data for {champion}")
+                storage = self.storage
+                if storage:
+                    success = storage.store_champion_data(champion, final_data)
+                    if not success:
+                        raise Exception(f"Failed to store data for {champion}")
+                    self.logger.info(f"✅ Successfully updated data for {champion}")
+                else:
+                    self.logger.info(f"✅ Extracted data for {champion} (offline mode - not stored)")
             else:
                 self.logger.info(f"⏭️ Skipping update for {champion}")
 
@@ -391,6 +395,11 @@ class ScrapingOrchestrator:
 
     def update_role_containers(self):
         """Update role containers for optimized queries"""
+        storage = self.storage
+        if not storage:
+            self.logger.warning("⚠️ Cannot update role containers without storage")
+            return
+
         self.logger.info("Updating role containers for optimized queries...")
 
         try:
@@ -399,7 +408,7 @@ class ScrapingOrchestrator:
             champions_list = get_champion_list()
 
             for champion_key in champions_list:
-                data = self.storage.get_champion_data(champion_key)
+                data = storage.get_champion_data(champion_key)
                 if data:
                     all_champions[champion_key] = data
 
@@ -441,7 +450,7 @@ class ScrapingOrchestrator:
                     role_data['patch'] = current_patch
 
             # Store role data
-            self.storage.update_role_containers(role_data)
+            storage.update_role_containers(role_data)
             total_champions = sum(len(champs) for champs in role_champions.values())
             self.logger.info(f"✅ Updated role data: {total_champions} total champions")
 
