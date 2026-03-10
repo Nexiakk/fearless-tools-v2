@@ -142,6 +142,17 @@ const hoverStyle = computed(() => {
 })
 
 const handleClick = (event) => {
+  // Check for ctrl+click to set matchup comparison
+  if (event.ctrlKey) {
+    const { useChampionStatsModalStore } = import('@/stores/championStatsModal').then(module => {
+      const modalStore = module.useChampionStatsModalStore()
+      if (modalStore.isOpen && modalStore.champion) {
+        modalStore.setComparingMatchup({ champion: props.champion.name })
+      }
+    })
+    return
+  }
+
   // Check for shift+click to open detailed stats modal
   if (event.shiftKey) {
     openChampionStatsModal()

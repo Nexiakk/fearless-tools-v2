@@ -229,8 +229,13 @@ class LCUMonitor(QObject):
     def start(self) -> bool:
         """Start the LCU monitor - meant to be called within an existing event loop"""
         if not self.config_manager.is_configured():
-            logger.error("LCU client not properly configured")
+            logger.warning("LCU client not configured, waiting for workspace setup")
             return False
+
+        # If already running or starting, don't start again
+        if hasattr(self, '_bg_task') and self._bg_task and not self._bg_task.done():
+            logger.debug("LCU monitor already running")
+            return True
 
         try:
             logger.info("Starting LCU monitor...")

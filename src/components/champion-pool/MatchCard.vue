@@ -14,9 +14,9 @@
             :key="`blue-ban-${index}`"
             class="ban-wrapper"
           >
-            <div class="ban-slot">
+            <div class="ban-slot" :class="{ 'is-none': ban.championName === 'None' }">
               <img
-                v-if="ban.championName"
+                v-if="ban.championName && ban.championName !== 'None'"
                 :src="getIcon(ban.championName)"
                 class="ban-img"
                 :title="ban.championName + ' (Ban)'"
@@ -71,9 +71,9 @@
             :key="`red-ban-${index}`"
             class="ban-wrapper"
           >
-            <div class="ban-slot">
+            <div class="ban-slot" :class="{ 'is-none': ban.championName === 'None' }">
               <img
-                v-if="ban.championName"
+                v-if="ban.championName && ban.championName !== 'None'"
                 :src="getIcon(ban.championName)"
                 class="ban-img"
                 :title="ban.championName + ' (Ban)'"
@@ -141,9 +141,15 @@ function getBans(draft, side) {
   const sideData = side === "blue" ? draft.blueSide : draft.redSide;
   const bans = [];
 
-  if (sideData && sideData.bans) {
-    sideData.bans.forEach((id) => {
-      if (id && id !== "0") {
+  if (sideData) {
+    const banSources = (sideData.banEvents && sideData.banEvents.length > 0) 
+      ? sideData.banEvents.map(e => e.championId) 
+      : (sideData.bans || []);
+      
+    banSources.forEach((id) => {
+      if (id === "None" || id === "0" || id === 0 || id === -1 || id === "-1") {
+        bans.push({ championName: "None" });
+      } else if (id) {
         const champ = championsStore.allChampions.find((c) => c.id === id);
         if (champ) bans.push({ championName: champ.name });
       }
@@ -185,6 +191,8 @@ function getBans(draft, side) {
   text-transform: uppercase;
   letter-spacing: 1px;
   white-space: nowrap;
+  width: auto;
+  transform: none;
 }
 
 .match-content {
@@ -262,6 +270,15 @@ function getBans(draft, side) {
   background-color: #151515;
   overflow: hidden;
   opacity: 0.7;
+}
+
+.ban-slot.is-none {
+  background-image: url("../../assets/icons/no_champion.png");
+  background-size: cover;
+  background-position: center;
+  background-color: #000;
+  border-color: #444;
+  opacity: 1;
 }
 
 .ban-img {

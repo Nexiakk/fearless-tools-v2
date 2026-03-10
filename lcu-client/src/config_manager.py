@@ -3,7 +3,7 @@ Configuration management for LCU client.
 Handles workspace authentication and app settings.
 """
 
-import os
+import sys
 import json
 import logging
 import hashlib
@@ -20,7 +20,17 @@ class ConfigManager:
     """Manages configuration files and settings"""
 
     def __init__(self, config_dir: Optional[str] = None):
-        self.config_dir = Path(config_dir) if config_dir else Path(__file__).parent.parent / "config"
+        if config_dir:
+            self.config_dir = Path(config_dir)
+        else:
+            # If running as a PyInstaller executable, use the folder containing the exe.
+            # Otherwise, use the project root's config folder.
+            if getattr(sys, 'frozen', False):
+                # sys.executable is the path to the .exe
+                self.config_dir = Path(sys.executable).parent / "config"
+            else:
+                self.config_dir = Path(__file__).parent.parent / "config"
+                
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Config file paths
@@ -252,6 +262,11 @@ class ConfigManager:
             "passwordHash": password_hash
         }
         return self._save_json_file(self.workspace_config, config)
+
+    def save_credentials(self, workspace_id: str, password: str) -> bool:
+        """Save workspace ID and raw password (will be hashed internally)"""
+        password_hash = self._hash_password(password)
+        return self.save_workspace_credentials(workspace_id, password_hash)
 
     def get_password_hash(self) -> Optional[str]:
         """Get saved password hash"""

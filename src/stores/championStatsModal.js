@@ -433,6 +433,7 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     selectedFormIndex,
     abilityDescriptions,
     currentPatch,
+    comparingMatchupExternal: ref(null), // For external setting of matchup
 
     // Getters
     championIconUrl,
@@ -454,6 +455,9 @@ export const useChampionStatsModalStore = defineStore('championStatsModal', () =
     setSelectedFormIndex,
     loadDetailedData,
     loadAbilityDescriptions,
-    getCounterIconUrl
+    getCounterIconUrl,
+    setComparingMatchup(matchup) {
+      this.comparingMatchupExternal = matchup
+    }
   }
 })

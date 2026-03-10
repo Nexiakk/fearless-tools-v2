@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QLabel, QPushButton, QFrame, QSizePolicy
+    QLabel, QPushButton, QFrame, QSizePolicy, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QMouseEvent
@@ -29,7 +29,7 @@ class MainWindow(FramelessWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Fearless LCU Tools")
-        self.resize(350, 450)
+        self.resize(380, 580)
         
         self.setup_ui()
         self.apply_styles()
@@ -121,6 +121,25 @@ class MainWindow(FramelessWindow):
         
         content_layout.addWidget(client_frame)
         
+        # Log Section
+        log_frame = QFrame()
+        log_frame.setObjectName("logFrame")
+        log_layout = QVBoxLayout(log_frame)
+        log_layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.log_viewer = QPlainTextEdit()
+        self.log_viewer.setObjectName("logViewer")
+        self.log_viewer.setReadOnly(True)
+        # Monospace font for logs
+        font = self.log_viewer.font()
+        font.setFamily("Consolas")
+        font.setPointSize(9)
+        self.log_viewer.setFont(font)
+        
+        log_layout.addWidget(self.log_viewer)
+        
+        content_layout.addWidget(log_frame)
+        
         content_layout.addStretch()
         main_layout.addWidget(content_widget)
 
@@ -175,5 +194,16 @@ class MainWindow(FramelessWindow):
             }
             QPushButton#actionBtn:hover {
                 background-color: #3f6bf5;
+            }
+            QFrame#logFrame {
+                background-color: #1a1a1f;
+                border-radius: 8px;
+                border: 1px solid #333333;
+            }
+            QPlainTextEdit#logViewer {
+                background-color: transparent;
+                color: #a0a0a0;
+                border: none;
+                padding: 5px;
             }
         """)

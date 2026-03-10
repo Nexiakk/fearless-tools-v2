@@ -47,8 +47,20 @@ class LCUClientApp:
         # Start the background LCUMonitor logic
         self.monitor.start()
 
+        # Connect the Qt log handler to the UI right before displaying it
+        if hasattr(self, 'qt_handler') and self.qt_handler:
+            self.qt_handler.signals.log_message.connect(self._append_log)
+
         # Show window initially, but user can minimize to tray
         self.main_window.show()
+
+    def _append_log(self, msg: str):
+        """Append log message to the main window's log viewer"""
+        if self.main_window and hasattr(self.main_window, 'log_viewer'):
+            self.main_window.log_viewer.appendPlainText(msg)
+            # Auto scroll to bottom
+            scrollbar = self.main_window.log_viewer.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
 
     def _setup_tray_icon(self):
         from PySide6.QtWidgets import QStyle
@@ -105,8 +117,9 @@ class LCUClientApp:
                     self.config_manager.save_credentials(wid, pwd)
                     self.main_window.workspace_lbl.setText(f"Workspace: {wid}")
                     QMessageBox.information(self.main_window, "Success", "Workspace credentials saved!")
-                    # Tell monitor to update
+                    # Tell monitor to update and start
                     self.monitor.workspace_id = wid
+                    self.monitor.start()
                 except Exception as e:
                     QMessageBox.warning(self.main_window, "Error", f"Failed to save credentials: {e}")
 

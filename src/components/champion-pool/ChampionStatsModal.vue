@@ -2,7 +2,7 @@
   <Teleport to="body">
     <!-- Click outside overlay - transparent but captures clicks -->
     <div
-      v-if="modalStore.isOpen"
+      v-if="modalStore.isOpen && !isShiftPressed && !isCtrlPressed"
       class="fixed inset-0 z-40"
       @click="closeModal"
     ></div>
@@ -10,7 +10,8 @@
     <Transition name="drawer">
       <div
         v-if="modalStore.isOpen"
-        class="fixed bottom-0 left-[15%] right-[15%] w-[70%] rounded-t-xl z-50 bg-[#161616] shadow-2xl border-t border-x border-gray-800 flex flex-col font-sans"
+        class="fixed bottom-0 left-[15%] right-[15%] w-[70%] rounded-t-xl z-50 shadow-2xl border-t border-x border-gray-800 flex flex-col font-sans transition-all duration-200"
+        :class="(isShiftPressed || isCtrlPressed) ? 'bg-[#161616]/20 opacity-30 pointer-events-none' : 'bg-[#161616] opacity-100 pointer-events-auto'"
         style="height: 340px;"
         @click.stop
       >
@@ -32,6 +33,84 @@
           </div>
         </div>
 
+        <!-- Comparing State -->
+        <div v-else-if="comparingMatchup" class="flex-1 flex flex-col min-h-0 bg-[#161616] relative overflow-hidden">
+          <div v-if="isComparingLoading" class="absolute inset-0 z-50 flex items-center justify-center bg-[#161616]/80 backdrop-blur-sm">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
+          </div>
+
+          <!-- Header -->
+          <div class="flex items-center p-5 border-b border-gray-800/60 shrink-0 bg-gray-900/30">
+            <button @click="clearComparison" class="p-2 hover:bg-gray-800 rounded-full transition-colors text-gray-500 hover:text-white mr-auto cursor-pointer pointer-events-auto">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            </button>
+            
+            <div class="flex-1 flex flex-row items-center justify-center gap-10">
+              <!-- Champ A -->
+              <div class="flex items-center gap-4">
+                <div class="relative">
+                  <img :src="modalStore.championIconUrl" class="w-14 h-14 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.2)] border border-cyan-500/30" />
+                </div>
+                <div class="flex flex-col items-start">
+                  <span class="text-xl font-black text-white leading-none tracking-tight">{{ modalStore.champion.name }}</span>
+                  <span class="text-[11px] text-gray-500 mt-1 capitalize">{{ modalStore.champion.title || 'Champion' }}</span>
+                </div>
+              </div>
+              
+              <!-- VS Icon -->
+              <div class="text-gray-600 flex items-center justify-center">
+                <svg class="w-5 h-5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21l18-18m0 18L3 3" /></svg>
+              </div>
+              
+              <!-- Champ B -->
+              <div class="flex items-center gap-4">
+                <div class="flex flex-col items-end">
+                  <span class="text-xl font-black text-white leading-none tracking-tight">{{ getChampionDisplayName(comparingMatchup.champion) }}</span>
+                  <span class="text-[11px] text-gray-500 mt-1 capitalize truncate max-w-[150px] text-right">{{ comparingChampionRiotData?.title || 'Enemy' }}</span>
+                </div>
+                <div class="relative">
+                  <img :src="getCounterIconUrl(comparingMatchup)" class="w-14 h-14 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.2)] border border-red-500/30" />
+                </div>
+              </div>
+            </div>
+            
+            <div class="w-9 ml-auto"></div>
+          </div>
+
+          <!-- Abilities Layout -->
+          <div class="flex-1 flex p-6 min-h-0 bg-[#121212]">
+            <!-- Champ A Abilities -->
+            <div class="flex-1 flex justify-end gap-5 pr-8 border-r border-gray-800/80 items-center">
+              <div v-for="ability in abilityIcons" :key="'A-'+ability.key" class="flex flex-col items-center gap-2">
+                <div class="relative">
+                  <img :src="ability.iconUrl" class="w-9 h-9 border border-gray-700 shadow-lg object-cover" :class="ability.key === 'P' ? 'rounded-full' : 'rounded'" @error="handleAbilityImageError" />
+                  <div class="absolute -bottom-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 bg-[#0a0a0a] border border-gray-700/80 rounded-sm flex items-center justify-center text-[8px] font-bold text-gray-300 z-10">
+                    {{ability.key}}
+                  </div>
+                </div>
+                <div class="text-[9px] text-gray-400 font-medium tracking-tight mt-0.5 w-[42px] text-center leading-tight">
+                  <span class="line-clamp-2">{{ ability.cooldown || '-' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Champ B Abilities -->
+            <div class="flex-1 flex justify-start gap-5 pl-8 items-center">
+              <div v-for="ability in comparingAbilityIcons" :key="'B-'+ability.key" class="flex flex-col items-center gap-2">
+                <div class="relative">
+                  <img :src="ability.iconUrl" class="w-9 h-9 border border-gray-700 shadow-lg object-cover" :class="ability.key === 'P' ? 'rounded-full' : 'rounded'" @error="handleAbilityImageError" />
+                  <div class="absolute -bottom-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 bg-[#0a0a0a] border border-gray-700/80 rounded-sm flex items-center justify-center text-[8px] font-bold text-gray-300 z-10">
+                    {{ability.key}}
+                  </div>
+                </div>
+                <div class="text-[9px] text-gray-400 font-medium tracking-tight mt-0.5 w-[42px] text-center leading-tight">
+                  <span class="line-clamp-2">{{ ability.cooldown || '-' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Content -->
         <div v-else-if="modalStore.champion" class="flex-1 flex flex-col min-h-0 bg-[#161616] relative overflow-hidden">
           
@@ -42,27 +121,18 @@
           <div class="flex-shrink-0 px-5 pt-4 pb-1 flex items-start gap-4 z-10">
             <!-- Champion Identity -->
             <div class="flex items-start gap-3 flex-shrink-0">
-              <div class="relative group">
+              <div class="relative group shrink-0 mt-1">
                 <img
                   :src="modalStore.championIconUrl"
                   :alt="modalStore.champion.name"
                   class="w-16 h-16 rounded-lg shadow-lg border-2 border-gray-700 group-hover:border-amber-500/50 transition-colors"
                 />
-                <!-- Form Tabs Overlay -->
-                <div v-if="modalStore.hasMultipleForms" class="absolute -bottom-2 left-1/2 -translate-x-1/2 flex gap-0.5 bg-black/80 rounded px-1 py-0.5 shadow-sm">
-                   <button
-                    v-for="(formName, index) in modalStore.formNames"
-                    :key="index"
-                    @click="modalStore.setSelectedFormIndex(index)"
-                    class="w-2 h-2 rounded-full transition-all border border-gray-600"
-                    :class="modalStore.selectedFormIndex === index ? 'bg-amber-500 scale-125 border-amber-300' : 'bg-gray-600 hover:bg-gray-400'"
-                    :title="formName"
-                  ></button>
-                </div>
               </div>
               
               <div class="flex flex-col pt-0.5">
-                <h3 class="text-2xl font-bold text-white tracking-tight leading-none mb-1">{{ modalStore.champion.name }}</h3>
+                <div class="flex items-center gap-3 mb-1">
+                  <h3 class="text-2xl font-bold text-white tracking-tight leading-none">{{ modalStore.champion.name }}</h3>
+                </div>
                 <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
                   <span class="capitalize text-amber-500/90">{{ modalStore.selectedRole }}</span>
                   <span class="w-1 h-1 rounded-full bg-gray-600"></span>
@@ -71,41 +141,54 @@
                   <span class="text-gray-500">Rank {{ formattedStats?.rank || '-' }}</span>
                 </div>
                 
-                <!-- Abilities Row (moved here for compactness) -->
-                 <TooltipProvider :delay-duration="100">
-                  <div class="flex flex-wrap items-start gap-3 mt-3">
-                    <Tooltip v-for="ability in abilityIcons" :key="ability.key">
-                      <TooltipTrigger as-child>
-                        <div class="flex flex-col items-center gap-1 group/ability cursor-help">
-                          <div
-                            class="w-8 h-8 rounded border border-gray-700 overflow-hidden transition-all group-hover/ability:border-amber-500/70 group-hover/ability:scale-110 relative"
-                            :class="ability.key === 'P' ? 'bg-purple-900/10' : 'bg-gray-800'"
-                          >
-                            <img
-                              v-if="ability.iconUrl"
-                              :src="ability.iconUrl"
-                              :alt="ability.name"
-                              class="w-full h-full object-cover opacity-80 group-hover/ability:opacity-100"
-                              @error="handleAbilityImageError"
-                            />
-                            <span v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{{ ability.key }}</span>
-                          </div>
-                          <div v-if="ability.cooldown" class="text-[10px] text-gray-400 font-medium whitespace-nowrap leading-none mt-[2px]" style="max-width: none;">
-                            {{ ability.cooldown }}
-                          </div>
-                        </div>
-                      </TooltipTrigger>
-                       <TooltipContent side="top" :side-offset="5" class="bg-gray-900 border-gray-700 text-xs p-2 max-w-xs z-[60]">
-                        <p class="font-bold text-amber-400 mb-1">{{ ability.name }} <span class="text-gray-500 font-normal">({{ ability.key }})</span></p>
-                        <p class="text-gray-300 leading-snug">{{ ability.description }}</p>
-                        <div v-if="ability.cooldown" class="mt-1 pt-1 border-t border-gray-700 text-gray-500 flex justify-between">
-                            <span>CD: {{ ability.cooldown }}</span>
-                            <span v-if="ability.cost">{{ ability.cost.value }} {{ ability.cost.resource }}</span>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
+                <!-- Abilities Bar Area -->
+                <div class="mt-3 w-fit flex flex-col items-start pr-4 relative">
+                  <!-- Form Tabs (folder style) -->
+                  <div v-if="modalStore.hasMultipleForms" class="flex items-end px-2 z-10 w-full mb-0" style="padding-left: 2px;">
+                     <button
+                      v-for="(formName, index) in modalStore.formNames"
+                      :key="index"
+                      @click="modalStore.setSelectedFormIndex(index)"
+                      class="text-[10px] font-bold transition-all relative px-3 py-1"
+                    >
+                      <span :class="modalStore.selectedFormIndex === index ? 'text-amber-500' : 'text-gray-400 group-hover:text-gray-300'">{{ formName }}</span>
+                      <div v-if="modalStore.selectedFormIndex === index" class="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 rounded-t-full"></div>
+                    </button>
                   </div>
-                </TooltipProvider>
+                  
+                  <!-- Abilities Bar -->
+                  <TooltipProvider :delay-duration="100">
+                    <div class="flex border border-gray-700/80 rounded-xl overflow-hidden shrink-0 bg-transparent shadow-md max-w-full relative z-0"
+                         :class="{'rounded-tl-none': modalStore.hasMultipleForms, 'bg-[#1a1a1a]': true}">
+                      <Tooltip v-for="(ability, idx) in abilityIcons" :key="ability.key">
+                        <TooltipTrigger as-child>
+                          <div 
+                            class="flex flex-col items-center py-2 px-2.5 min-w-[50px] group/ability cursor-help relative hover:bg-gray-800 transition-colors"
+                            :class="{ 'border-r border-gray-700/60': idx !== abilityIcons.length - 1 }"
+                          >
+                            <div class="w-7 h-7 rounded overflow-hidden transition-all group-hover/ability:scale-105 shadow-sm shrink-0 border border-gray-900 border-opacity-50 relative">
+                              <img v-if="ability.iconUrl" :src="ability.iconUrl" :alt="ability.name" class="w-full h-full object-cover opacity-90 group-hover/ability:opacity-100" @error="handleAbilityImageError" />
+                              <span v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-400 bg-gray-800">{{ ability.key }}</span>
+                            </div>
+                            <div class="mt-1 flex items-center justify-center w-full shrink-0">
+                              <div v-if="ability.cooldown" class="text-[9px] text-gray-400 font-medium whitespace-nowrap leading-none text-center">
+                                {{ ability.cooldown }}
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" :side-offset="5" class="bg-gray-900 border-gray-700 text-xs p-2 max-w-xs z-[60]">
+                          <p class="font-bold text-amber-400 mb-1">{{ ability.name }} <span class="text-gray-500 font-normal">({{ ability.key }})</span></p>
+                          <p class="text-gray-300 leading-snug">{{ ability.description }}</p>
+                          <div v-if="ability.cooldown" class="mt-1 pt-1 border-t border-gray-700 text-gray-500 flex justify-between gap-4">
+                              <span>CD: {{ ability.cooldown }}</span>
+                              <span v-if="ability.cost">{{ ability.cost.value }} {{ ability.cost.resource }}</span>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
+                </div>
               </div>
             </div>
 
@@ -171,7 +254,12 @@
             </div>
 
             <!-- Matchups Horizontal List -->
-            <div v-if="currentRoleCounters.length > 0" class="flex-1 overflow-x-auto overflow-y-hidden min-h-0 py-1 scrollbar-thin">
+            <div 
+              v-if="currentRoleCounters.length > 0" 
+              class="flex-1 overflow-x-auto overflow-y-hidden min-h-0 py-1 scrollbar-thin"
+              ref="matchupsListRef"
+              @wheel.prevent="handleWheel"
+            >
               <div class="flex gap-2 h-full items-center pl-1 w-max px-2 pb-1">
                 
                 <div class="flex-shrink-0 px-3 flex flex-col items-center justify-center opacity-70">
@@ -186,7 +274,8 @@
                   ></div>
                   
                   <div
-                    class="flex-shrink-0 w-[4.5rem] h-full bg-[#1e1e1e] rounded border border-gray-800 hover:border-gray-600 transition-all group flex flex-col relative overflow-hidden"
+                    class="flex-shrink-0 w-[4.5rem] h-full bg-[#1e1e1e] rounded border border-gray-800 hover:border-gray-600 transition-all group flex flex-col relative overflow-hidden cursor-pointer hover:border-amber-500 pointer-events-auto"
+                    @click="handleCounterClick(counter)"
                   >
                     <!-- Background Image (blurred) -->
                      <div class="absolute inset-0 overflow-hidden opacity-20 group-hover:opacity-30 transition-opacity">
@@ -200,7 +289,7 @@
                           class="w-8 h-8 rounded shadow-sm border border-gray-700/50 group-hover:border-gray-500 transition-colors"
                           @error="handleImageError"
                         />
-                        <div class="text-[10px] font-medium text-gray-300 truncate w-full text-center leading-tight">{{ counter.champion }}</div>
+                        <div class="text-[10px] font-medium text-gray-300 truncate w-full text-center leading-tight">{{ getChampionDisplayName(counter.champion) }}</div>
                         <div class="text-[11px] font-bold leading-none" :class="counter.win_rate >= 50 ? 'text-green-400/90' : 'text-red-400/90'">
                           {{ formatWinRate(counter.win_rate) }}
                         </div>
@@ -226,7 +315,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { fetchChampionDetailsFromTurso } from '@/services/firebase/championData'
 import { useChampionStatsModalStore } from '@/stores/championStatsModal'
 import { useChampionsStore } from '@/stores/champions'
 import { riotApiService } from '@/services/riotApi'
@@ -240,6 +330,103 @@ import {
 const modalStore = useChampionStatsModalStore()
 const championsStore = useChampionsStore()
 
+const isShiftPressed = ref(false)
+const isCtrlPressed = ref(false)
+
+function onKeyDown(e) {
+  if (e.key === 'Shift') isShiftPressed.value = true
+  if (e.key === 'Control') isCtrlPressed.value = true
+}
+
+function onKeyUp(e) {
+  if (e.key === 'Shift') isShiftPressed.value = false
+  if (e.key === 'Control') isCtrlPressed.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
+})
+
+const comparingMatchup = ref(null)
+const comparingChampionData = ref(null)
+const comparingChampionRiotData = ref(null)
+const isComparingLoading = ref(false)
+
+async function handleCounterClick(counter) {
+  isComparingLoading.value = true
+  comparingMatchup.value = counter
+  try {
+    const idLower = counter.champion?.toLowerCase()
+    const champB = championsStore.allChampions.find(c => 
+      c.id?.toLowerCase() === idLower || 
+      c.imageName?.toLowerCase() === idLower ||
+      c.name?.replace(/['\s]/g, '').toLowerCase() === idLower
+    )
+    if (champB) {
+      comparingChampionData.value = await fetchChampionDetailsFromTurso(champB.imageName)
+      comparingChampionRiotData.value = await riotApiService.getChampionDetails(champB.imageName, modalStore.currentPatch)
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    isComparingLoading.value = false
+  }
+}
+
+watch(() => modalStore.comparingMatchupExternal, (newVal) => {
+  if (newVal && modalStore.isOpen) {
+    handleCounterClick(newVal)
+  }
+})
+
+function clearComparison() {
+  comparingMatchup.value = null
+  comparingChampionData.value = null
+  comparingChampionRiotData.value = null
+  modalStore.setComparingMatchup(null)
+}
+
+const comparingAbilityIcons = computed(() => {
+  if (!comparingChampionData.value || !comparingChampionRiotData.value) return []
+  const firebaseAbilities = comparingChampionData.value.abilities || []
+  const riotAbilities = comparingChampionRiotData.value
+  
+  const icons = []
+  const passive = firebaseAbilities.find(a => a.type === 'Passive')
+  if (passive || riotAbilities?.passive) {
+    icons.push({
+      key: 'P',
+      name: passive?.name || riotAbilities?.passive?.name,
+      description: riotAbilities?.passive?.description,
+      cooldown: passive?.cooldown || '',
+      iconUrl: riotAbilities?.passive?.image ? riotApiService.getPassiveIconUrl(riotAbilities.passive.image, modalStore.currentPatch) : null
+    })
+  }
+  
+  const types = ['Q', 'W', 'E', 'R']
+  types.forEach((type, idx) => {
+    const fbAbil = firebaseAbilities.find(a => a.type === type)
+    const riotSpell = riotAbilities?.spells?.[idx]
+    if (fbAbil || riotSpell) {
+      icons.push({
+        key: type,
+        name: fbAbil?.name || riotSpell?.name,
+        description: riotSpell?.description,
+        cooldown: fbAbil?.cooldown || riotSpell?.cooldownBurn || '',
+        iconUrl: riotSpell?.image ? riotApiService.getAbilityIconUrl(riotSpell.image, modalStore.currentPatch) : null
+      })
+    }
+  })
+  
+  return icons
+})
+
 const abilityIcons = computed(() => modalStore.abilityIcons || [])
 const formattedStats = computed(() => modalStore.formattedStats)
 const currentRoleCounters = computed(() => modalStore.currentRoleCounters || [])
@@ -248,7 +435,16 @@ const selectedRole = computed(() => modalStore.selectedRole)
 
 const allRoles = ['top', 'jungle', 'middle', 'bottom', 'support']
 
+const matchupsListRef = ref(null)
+
+function handleWheel(e) {
+  if (matchupsListRef.value) {
+    matchupsListRef.value.scrollLeft += e.deltaY;
+  }
+}
+
 function closeModal() {
+  clearComparison()
   modalStore.closeModal()
 }
 
@@ -294,8 +490,25 @@ function formatWinRate(winRate) {
   return `${winRate.toFixed(1)}%`
 }
 
+function getChampionDisplayName(championId) {
+  if (!championId) return '';
+  const idLower = championId.toLowerCase();
+  const champ = championsStore.allChampions.find(c => 
+    c.id?.toLowerCase() === idLower || 
+    c.imageName?.toLowerCase() === idLower ||
+    c.name?.replace(/['\s]/g, '').toLowerCase() === idLower
+  );
+  return champ?.name || championId;
+}
+
 function getCounterIconUrl(counter) {
-  const imageName = counter.champion?.replace(/['\s]/g, '').replace(/[^a-zA-Z0-9]/g, '')
+  const idLower = counter.champion?.toLowerCase();
+  const champ = championsStore.allChampions.find(c => 
+    c.id?.toLowerCase() === idLower || 
+    c.imageName?.toLowerCase() === idLower ||
+    c.name?.replace(/['\s]/g, '').toLowerCase() === idLower
+  );
+  const imageName = champ?.imageName || counter.champion?.replace(/['\s]/g, '').replace(/[^a-zA-Z0-9]/g, '');
   return riotApiService.getChampionIconUrl(imageName, modalStore.currentPatch)
 }
 
