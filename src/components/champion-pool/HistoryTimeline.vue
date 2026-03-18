@@ -1,7 +1,7 @@
 <template>
   <div class="history-timeline">
     <div v-if="batches.length === 0" class="empty-state">
-      <span class="text-gray-500">No events recorded</span>
+      <span class="text-gray-500">{{ compact ? '-' : 'No matches recorded' }}</span>
     </div>
 
     <div v-for="(batch, batchIndex) in batches" :key="batchIndex" class="timeline-batch">

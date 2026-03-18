@@ -1,6 +1,5 @@
 <template>
-  <div 
-    v-if="hasAnyContent" 
+  <div  
     class="event-history-outer-wrapper"
     :class="{ 'is-collapsed': isCollapsed, 'is-expanded-hover': isExpandedHover }"
     @mouseenter="handleMouseEnter"

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '@/services/firebase/config'
 import { authService } from '@/services/firebase/auth'
 
@@ -10,6 +10,7 @@ export const useAdminStore = defineStore('admin', () => {
   const activeTab = ref('settings') // 'settings', 'workspaceSettings', 'defaultTiers'
   const error = ref('')
   const success = ref('')
+  let unsubscribeSettings = null
 
   // Global Settings State
   const globalSettings = ref({
@@ -48,20 +49,27 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   async function loadGlobalSettings() {
+    // If we already have a listener, don't start another one
+    if (unsubscribeSettings) return
+
     try {
       const settingsRef = doc(db, 'settings', 'global')
-      const settingsDoc = await getDoc(settingsRef)
-
-      if (settingsDoc.exists()) {
-        const data = settingsDoc.data()
-        globalSettings.value = {
-          anonymousUserMode: data.anonymousUserMode || 'interact',
-          useHeadlessBrowser: data.useHeadlessBrowser || false
+      
+      // Use onSnapshot for real-time updates
+      unsubscribeSettings = onSnapshot(settingsRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data()
+          globalSettings.value = {
+            anonymousUserMode: data.anonymousUserMode || 'interact',
+            useHeadlessBrowser: data.useHeadlessBrowser || false
+          }
+          console.log('Real-time global settings update:', globalSettings.value)
         }
-        console.log('Loaded global settings:', globalSettings.value)
-      }
+      }, (err) => {
+        console.error('Error in global settings listener:', err)
+      })
     } catch (err) {
-      console.error('Error loading global settings:', err)
+      console.error('Error initializing settings listener:', err)
     }
   }
 
