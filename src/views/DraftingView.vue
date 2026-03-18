@@ -196,6 +196,24 @@
                     >
                       <svg viewBox="0 0 24 24" class="zoom-icon"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                     </button>
+                    <!-- Spacing divider -->
+                    <div style="width: 1px; height: 16px; background-color: #4a4a4a; margin: 0 4px;"></div>
+                    <!-- Gap Controls -->
+                    <button 
+                      class="zoom-button gap-btn" 
+                      @click="settingsStore.updateDraftingSetting('championGridGap', Math.max(0, (settingsStore.settings.drafting?.championGridGap || 6) - 1))" 
+                      title="Decrease Grid Spacing"
+                    >
+                      <svg viewBox="0 0 24 24" class="zoom-icon" style="width: 1rem; height: 1rem;"><path fill="currentColor" d="M19 13H5v-2h14v2z"/></svg>
+                    </button>
+                    <span style="font-size: 0.75rem; color: #a0a0a0; min-width: 24px; text-align: center;">{{ settingsStore.settings.drafting?.championGridGap ?? 6 }}</span>
+                    <button 
+                      class="zoom-button gap-btn" 
+                      @click="settingsStore.updateDraftingSetting('championGridGap', Math.min(24, (settingsStore.settings.drafting?.championGridGap || 6) + 1))" 
+                      title="Increase Grid Spacing"
+                    >
+                      <svg viewBox="0 0 24 24" class="zoom-icon" style="width: 1rem; height: 1rem;"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
                   </div>
                   
                   <div class="role-filters-container pool-filters">
@@ -244,7 +262,9 @@
                   name="grid-anim" 
                   tag="div" 
                   class="draft-creator-champion-grid" 
-                  :style="{ '--card-scale': currentZoomScale }"
+                  :style="{
+                    gap: `${settingsStore.settings.drafting?.championGridGap || 6}px`
+                  }"
                 >
                   <div
                     v-for="champion in filteredChampions"
@@ -300,6 +320,10 @@
                     No champions match filter/search.
                   </p>
                 </transition-group>
+                <!-- LCU Drafts Panel inside Center Area! -->
+                <div class="draft-creator-bottom-panel" v-if="draftingStore.draftingMode === 'lcu-sync'">
+                  <LcuDraftsPanel />
+                </div>
               </div>
 
               <!-- Red Side -->
@@ -360,6 +384,7 @@ import { useSettingsStore } from "@/stores/settings";
 import SeriesNavigator from "@/components/drafting/SeriesNavigator.vue";
 import SeriesManager from "@/components/drafting/SeriesManager.vue";
 import DraftSlot from "@/components/drafting/DraftSlot.vue";
+import LcuDraftsPanel from "@/components/drafting/LcuDraftsPanel.vue";
 import { useWorkspaceTiersStore } from "@/stores/workspaceTiers";
 
 const workspaceStore = useWorkspaceStore();
@@ -373,6 +398,63 @@ const workspaceTiersStore = useWorkspaceTiersStore();
 
 const zoomScales = [0.57, 0.62, 0.67, 0.73, 0.81, 0.9, 1.0, 1.14];
 const currentZoomScale = computed(() => zoomScales[draftingStore.championGridZoomIndex]);
+
+function getCardScale(champion) {
+  // We strictly base "isUnavailable" on the "Drafting Pool" logic, meaning 
+  // they are picked in previous games or unavailable. We DO NOT count them 
+  // as unavailable just for being placed in the *current* game slots.
+  const isUnavailable = !isChampionAvailable(champion.name);
+  const pickedMode = settingsStore.settings.drafting?.pickedMode || "default";
+  
+  // Determine Source Model (Pool or Drafting)
+  const sourceModule = settingsStore.settings.drafting?.cardSizeSource === "custom" 
+    ? settingsStore.settings.drafting 
+    : settingsStore.settings.pool;
+
+  const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+
+  // Base normal card size 
+  // User explicitly wants A-Z sorted cards to be 100% size, 
+  // and only use the "Normal Card Size" setting when sorting by Tier.
+  let baseScale = 1.0; 
+  if (isSortingByTier) {
+    baseScale = (sourceModule?.normalCardSize || 100) / 100;
+  }
+
+  // Rule 1: We only show Tiers (and apply their scale modifier) if sorting by Tier
+  if (isSortingByTier) {
+    const tier = workspaceTiersStore.getTierForChampion(champion.name, getCurrentRoleFilter());
+    
+    if (tier && tier.id !== 'unassigned') {
+       // Apply the tier base scale size modifier specifically
+       const moduleName = settingsStore.settings.drafting?.cardSizeSource === "custom" ? "drafting" : "pool";
+       baseScale = settingsStore.getTierCardSize(tier.id, moduleName) / 100;
+    }
+  }
+
+  // Rule 2: Unavailable (picked) champions get their modifier applied specifically 
+  // ONLY if rendering at bottom
+  if (isUnavailable && pickedMode === "bottom") {
+    // Note: The preset modifier is e.g. 83%. We multiply this against the normal BaseScale!
+    const unavailableModifier = (sourceModule?.unavailableCardSize || 83) / 100;
+    
+    // Instead of replacing baseScale, we MULTIPLY IT against baseScale per user request
+    baseScale = baseScale * unavailableModifier;
+  }
+
+  return currentZoomScale.value * baseScale;
+}
+
+function getTierClasses(champion) {
+  const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+  if (!isSortingByTier) return [];
+  
+  const tier = workspaceTiersStore.getTierForChampion(champion.name, getCurrentRoleFilter());
+  if (tier && tier.id !== 'unassigned') {
+    return [`tier-${tier.id}`];
+  }
+  return [];
+}
 
 const roles = ["Top", "Jungle", "Mid", "Bot", "Support"];
 
@@ -414,9 +496,7 @@ const currentDraft = computed(() => {
 
 // Get unavailable champions for current game
 const unavailableChampions = computed(() => {
-  if (
-    !settingsStore.settings.drafting?.integrateUnavailableChampions
-  ) {
+  if (draftingStore.draftingMode === 'sandbox') {
     return new Set();
   }
   
@@ -486,6 +566,8 @@ const filteredChampions = computed(() => {
     // 1. Picked mode sorting grouping
     const pickedMode = settingsStore.settings.drafting?.pickedMode || 'default';
     if (pickedMode === 'bottom') {
+      // Use STRICT isAvailable (which ignores current game placements) 
+      // so active game placements don't drop to the bottom!
       if (!a.isAvailable && b.isAvailable) return 1;
       if (a.isAvailable && !b.isAvailable) return -1;
     }
@@ -516,9 +598,8 @@ function getChampionTierScore(championName) {
 }
 
 function getTierHighlightClass(champion) {
-   const mode = settingsStore.settings.drafting?.tierHighlightMode || 'sort';
-   if (mode === 'none') return '';
-   if (mode === 'sort' && draftingStore.draftCreatorSortMode !== 'tier') return '';
+   const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+   if (!isSortingByTier) return '';
    
    const filterRole = getCurrentRoleFilter();
    const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
@@ -536,9 +617,8 @@ function getTierBadgeText(champion) {
 }
 
 function getTierColor(champion) {
-   const mode = settingsStore.settings.drafting?.tierHighlightMode || 'sort';
-   if (mode === 'none') return '';
-   if (mode === 'sort' && draftingStore.draftCreatorSortMode !== 'tier') return '';
+   const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+   if (!isSortingByTier) return '';
    
    const filterRole = getCurrentRoleFilter();
    const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
@@ -546,32 +626,34 @@ function getTierColor(champion) {
 }
 
 function getChampionCardStyle(champion) {
+  let styleObj = {
+    '--card-scale': getCardScale(champion)
+  };
+
   const color = getTierColor(champion);
-  if (!color) return {};
+  if (!color) return styleObj;
   
   const filterRole = getCurrentRoleFilter();
   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
-  if (!tier) return {};
+  if (!tier) return styleObj;
 
   if (tier.style === 'border') {
-    return { border: `1px solid ${color}` };
+    styleObj.border = `1px solid ${color}`;
   } else if (tier.style === 'highlight') {
-    return {
-      border: `1px solid ${color}CC`,
-      boxShadow: `0 0 4px 1px ${color}99`
-    };
+    styleObj.border = `1px solid ${color}CC`;
+    styleObj.boxShadow = `0 0 4px 1px ${color}99`;
   } else {
     // Default to shadow style
-    return {
-      border: `1px solid ${color}CC`,
-      boxShadow: `0 0 4px 1px ${color}99`
-    };
+    styleObj.border = `1px solid ${color}CC`;
+    styleObj.boxShadow = `0 0 4px 1px ${color}99`;
   }
+
+  return styleObj;
 }
 
-// Check if champion is available. Now just returns actual boolean since logic is extracted
+// Check if champion is available.
 const isChampionAvailable = (championName) => {
-  if (!settingsStore.settings.drafting?.integrateUnavailableChampions) {
+  if (draftingStore.draftingMode === 'sandbox') {
     return true;
   }
   return !unavailableChampions.value.has(championName);
@@ -590,6 +672,7 @@ const handleImageError = (e) => {
 function handleSlotClick(slotData) {
   const { side, type, index } = slotData;
   if (!currentDraft.value) return;
+  if (currentDraft.value.isReadOnly) return; // Prevent interaction with read-only drafts
 
   const slotKey = `${side}${type.charAt(0).toUpperCase() + type.slice(1)}`;
   const slot = currentDraft.value[slotKey]?.[index];
@@ -690,6 +773,8 @@ function handleSlotClick(slotData) {
 function handleClearSlot(slotData) {
   const { side, type, index } = slotData;
   if (!currentDraft.value) return;
+  if (currentDraft.value.isReadOnly) return; // Prevent interaction with read-only drafts
+
   seriesStore.updateCurrentDraftSlot(side, type, index, null);
   if (
     draftingStore.selectedChampionSource &&
@@ -711,6 +796,8 @@ function handleClearSlot(slotData) {
 
 // Champion click handler
 function handleChampionClick(championName) {
+  if (currentDraft.value?.isReadOnly) return; // Prevent interaction with read-only drafts
+
   if (!isChampionAvailableForPlacement(championName)) {
     return; // Don't allow interaction with unavailable champions
   }
@@ -753,6 +840,12 @@ onMounted(async () => {
   // Initialize default series if none exists
   if (!seriesStore.hasSeries) {
     seriesStore.initializeDefaultSeries();
+  }
+
+  // Hydrate any existing LCU drafts into the series
+  // This handles the case where LCU drafts were loaded before the series was initialized
+  if (draftStore.lcuDraftsRaw?.length > 0) {
+    seriesStore.hydrateLcuDraftsInSeries(draftStore.lcuDraftsRaw);
   }
 
   // Always try to refresh saved series (will handle local workspace internally)

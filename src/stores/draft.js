@@ -201,6 +201,12 @@ export const useDraftStore = defineStore("draft", () => {
       lcuDrafts,
       championsStore,
     );
+
+    // Hydrate old LCU drafts into Series iterations so they appear immediately in UI on load
+    const seriesStore = useSeriesStore();
+    if (seriesStore && seriesStore.hydrateLcuDraftsInSeries) {
+      seriesStore.hydrateLcuDraftsInSeries(lcuDrafts || []);
+    }
   }
 
   // Actions

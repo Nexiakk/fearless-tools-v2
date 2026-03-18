@@ -28,8 +28,14 @@ export const useDraftingStore = defineStore('drafting', () => {
   const draftCreatorSearchTerm = ref('')
   const draftCreatorRoleFilter = ref('all')
   const draftCreatorSortMode = ref('alphabetical')
-  const draftingMode = ref('sandbox')
   
+  // Try to load persisted mode, fallback to 'lcu-sync'
+  const savedMode = localStorage.getItem('fearlessDraftingMode')
+  const validModes = ['lcu-sync', 'fearless-pool', 'sandbox']
+  const initialMode = validModes.includes(savedMode) ? savedMode : 'lcu-sync'
+  
+  const draftingMode = ref(initialMode)
+  const lcuActivityDetected = ref(false)
   // Custom Zoom Level State (Indices 0 to 7)
   const championGridZoomIndex = computed({
     get: () => {
@@ -353,6 +359,13 @@ export const useDraftingStore = defineStore('drafting', () => {
     })
   }
 
+  function setDraftingMode(mode) {
+    if (['lcu-sync', 'fearless-pool', 'sandbox'].includes(mode)) {
+      draftingMode.value = mode
+      localStorage.setItem('fearlessDraftingMode', mode)
+    }
+  }
+
   function zoomInGrid() {
     if (championGridZoomIndex.value < maxGridZoomIndex) {
       championGridZoomIndex.value++
@@ -377,6 +390,7 @@ export const useDraftingStore = defineStore('drafting', () => {
     draftCreatorRoleFilter,
     draftCreatorSortMode,
     draftingMode,
+    lcuActivityDetected,
     championGridZoomIndex,
     maxGridZoomIndex,
     // Computed
@@ -396,6 +410,7 @@ export const useDraftingStore = defineStore('drafting', () => {
     isChampionBannedInCurrentDraft,
     selectChampionForPlacement,
     setDraftCreatorRoleFilter,
+    setDraftingMode,
     toggleNotesVisibility,
     zoomInGrid,
     zoomOutGrid

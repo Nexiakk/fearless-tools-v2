@@ -161,19 +161,87 @@
             </div>
           </div>
 
-          <!-- Tier Highlighting Setting -->
-          <div class="flex items-center justify-between">
-            <label class="font-medium">Tier Highlighting</label>
-            <select
-              :value="settingsStore.settings.drafting.tierHighlightMode"
-              @change="handleDraftingSettingChange('tierHighlightMode', $event)"
-              class="unavailable-grouping-select"
-            >
-              <option value="none">None</option>
-              <option value="sort">Only while sorting</option>
-              <option value="always">Always</option>
-            </select>
+          <!-- Grid Spacing Setting -->
+          <div class="flex items-center justify-between mt-4">
+            <label class="font-medium">Grid Spacing</label>
+            <div class="flex items-center gap-3">
+              <Slider
+                v-model="championGridGap"
+                :min="0"
+                :max="24"
+                :step="1"
+                class="w-32"
+              />
+              <span class="text-sm text-muted-foreground w-8 text-right">{{ settingsStore.settings.drafting.championGridGap }}px</span>
+            </div>
           </div>
+
+          <!-- Base Card Size Source -->
+          <div class="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
+            <div class="flex items-center justify-between">
+              <label class="font-medium">Base Card Size</label>
+              <select
+                :value="settingsStore.settings.drafting.cardSizeSource"
+                @change="handleDraftingSettingChange('cardSizeSource', $event)"
+                class="unavailable-grouping-select"
+              >
+                <option value="pool">Sync with Pool</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            
+            <div v-if="settingsStore.settings.drafting.cardSizeSource === 'custom'" class="custom-settings-panel">
+              <div class="preset-previews-row mb-4">
+                <CardSizePresetPreview
+                  preset="standard"
+                  :is-active="draftingPreset === 'standard'"
+                  @select="handleDraftingPresetSelect"
+                />
+                <CardSizePresetPreview
+                  preset="compact"
+                  :is-active="draftingPreset === 'compact'"
+                  @select="handleDraftingPresetSelect"
+                />
+                <CardSizePresetPreview
+                  preset="custom"
+                  :is-active="draftingPreset === 'custom'"
+                  :is-expanded="isDraftingCustomExpanded"
+                  @select="handleDraftingPresetSelect"
+                />
+              </div>
+              
+              <div v-if="isDraftingCustomExpanded" class="space-y-4">
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-sm">Normal Cards</label>
+                    <span class="text-sm text-muted-foreground">{{ settingsStore.settings.drafting.normalCardSize }}%</span>
+                  </div>
+                  <Slider
+                    v-model="draftNormalCardSize"
+                    :min="50"
+                    :max="200"
+                    :step="1"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-sm">Unavailable Cards</label>
+                    <span class="text-sm text-muted-foreground">{{ settingsStore.settings.drafting.unavailableCardSize }}%</span>
+                  </div>
+                  <Slider
+                    v-model="draftUnavailableCardSize"
+                    :min="50"
+                    :max="200"
+                    :step="1"
+                    class="w-full"
+                  />
+                </div>
+                <TierCardSizeSettings targetModule="drafting" />
+              </div>
+            </div>
+          </div>
+
 
           <!-- Picked Champions Display Setting -->
           <div class="flex items-center justify-between">
@@ -306,6 +374,37 @@ function handlePresetSelect(preset) {
   }
 }
 
+// Drafting Custom preset expansion state
+const isDraftingCustomExpanded = ref(false);
+
+// Drafting Current preset tracking
+const draftingPreset = computed({
+  get: () => settingsStore.settings.drafting.cardSizePreset,
+  set: (value) => { settingsStore.applyCardSizePreset(value, 'drafting'); }
+});
+
+// Watch for preset changes to auto-expand custom
+watch(() => settingsStore.settings.drafting.cardSizePreset, (newPreset) => {
+  if (newPreset === 'custom') {
+    isDraftingCustomExpanded.value = true;
+  }
+});
+
+// Handle drafting preset selection
+function handleDraftingPresetSelect(preset) {
+  if (preset === 'custom') {
+    if (draftingPreset.value === 'custom') {
+      isDraftingCustomExpanded.value = !isDraftingCustomExpanded.value;
+    } else {
+      draftingPreset.value = 'custom';
+      isDraftingCustomExpanded.value = true;
+    }
+  } else {
+    draftingPreset.value = preset;
+    isDraftingCustomExpanded.value = false;
+  }
+}
+
 // Computed properties for sliders (Slider component expects arrays)
 const normalCardSize = computed({
   get: () => [settingsStore.settings.pool.normalCardSize],
@@ -346,6 +445,33 @@ const gridSizeIndex = computed({
   get: () => [settingsStore.settings.drafting.championGridZoomIndex],
   set: (value) => {
     settingsStore.updateDraftingSetting('championGridZoomIndex', value[0]);
+  }
+});
+
+const championGridGap = computed({
+  get: () => [settingsStore.settings.drafting.championGridGap],
+  set: (value) => {
+    settingsStore.updateDraftingSetting('championGridGap', value[0]);
+  }
+});
+
+const draftNormalCardSize = computed({
+  get: () => [settingsStore.settings.drafting.normalCardSize],
+  set: (value) => {
+    settingsStore.updateDraftingSetting('normalCardSize', value[0]);
+    if (draftingPreset.value !== 'custom') {
+      settingsStore.applyCardSizePreset('custom', 'drafting');
+    }
+  }
+});
+
+const draftUnavailableCardSize = computed({
+  get: () => [settingsStore.settings.drafting.unavailableCardSize],
+  set: (value) => {
+    settingsStore.updateDraftingSetting('unavailableCardSize', value[0]);
+    if (draftingPreset.value !== 'custom') {
+      settingsStore.applyCardSizePreset('custom', 'drafting');
+    }
   }
 });
 

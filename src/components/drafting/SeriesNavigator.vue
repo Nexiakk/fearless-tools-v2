@@ -1,15 +1,16 @@
 <template>
   <div class="series-navigator">
     <div class="game-draft-group">
-      <div class="current-game-section" v-if="!isFearlessSync">
+      <div class="current-game-section">
         <button
           class="current-game-button"
-          :class="{ expanded: showAllGames }"
+          :class="{ expanded: showAllGames, disabled: draftingMode === 'fearless-pool' }"
           :title="`Game ${currentGameNumber}`"
+          :disabled="draftingMode === 'fearless-pool'"
         >
           Game {{ currentGameNumber }}
         </button>
-        <div class="expanded-games-list">
+        <div class="expanded-games-list" v-if="draftingMode !== 'fearless-pool'">
           <button
             v-for="gameNumber in 5"
             :key="gameNumber"
@@ -26,19 +27,25 @@
         </div>
       </div>
       <div class="draft-iterations-container">
-        <button
-          v-for="(draft, index) in currentGameDrafts"
-          :key="draft.id || index"
-          @click="handleDraftClick(index)"
-          @contextmenu="handleDraftRightClick($event, index)"
-          class="draft-iteration-button"
-          :class="{ active: isDraftActive(index) }"
-          :title="`Draft ${index + 1}`"
-        >
-          {{ index + 1 }}
-        </button>
+        <template v-for="(draft, index) in currentGameDrafts" :key="draft.id || index">
+          <button
+            @click="handleDraftClick(index)"
+            @contextmenu="handleDraftRightClick($event, index)"
+            class="draft-iteration-button"
+            :class="{ 
+              active: isDraftActive(index),
+              'is-read-only': draft.isReadOnly 
+            }"
+            :title="draft.isReadOnly ? `LCU Draft (Read Only)` : `Draft ${index + 1}`"
+          >
+            <span v-if="draft.isReadOnly" class="read-only-indicator">L</span>
+            <span v-else>{{ getDraftDisplayIndex(index) }}</span>
+          </button>
+          <div v-if="draft.isReadOnly && currentGameDrafts.length > index + 1" class="draft-separator"></div>
+        </template>
         <button
           @click="handleAddDraft"
+          v-show="!isCurrentDraftReadOnly"
           class="draft-iteration-button add-draft-button"
           title="Add Draft Iteration"
         >
@@ -50,18 +57,34 @@
       <div class="compact-mode-toggle relative-toggle-wrapper">
         <div class="button-wrapper">
           <button
-            @click="toggleFearlessSync"
-            :class="['mode-button', { active: isFearlessSync }]"
+            @click="setDraftingMode('lcu-sync')"
+            :class="['mode-button', { active: draftingMode === 'lcu-sync', 'lcu-pulse': isLcuPulseActive }]"
           >
-            Fearless Sync: {{ isFearlessSync ? 'ON' : 'OFF' }}
+            LCU Sync
+          </button>
+          <button
+            @click="setDraftingMode('fearless-pool')"
+            :class="['mode-button', { active: draftingMode === 'fearless-pool' }]"
+          >
+            Fearless Pool
+          </button>
+          <button
+            @click="setDraftingMode('sandbox')"
+            :class="['mode-button', { active: draftingMode === 'sandbox' }]"
+          >
+            Sandbox
           </button>
           <TooltipProvider>
             <Tooltip :delayDuration="100">
               <TooltipTrigger asChild>
                 <div class="info-badge">?</div>
               </TooltipTrigger>
-              <TooltipContent class="max-w-[300px] text-center" side="top">
-                <p>When enabled, previously picked champions from the Fearless Pool are being transferred here in real time. The current game selector is locked so you only test different drafting iterations for the same game.</p>
+              <TooltipContent class="max-w-[400px] text-center" side="bottom">
+                <div class="text-left space-y-2">
+                  <p><strong>LCU Sync:</strong> Automatically detects drafts from your League Client. Completed drafts disable champions for the next game.</p>
+                  <p><strong>Fearless Pool:</strong> Select champions manually from Fearless Pool page. Game Selector is locked.</p>
+                  <p><strong>Sandbox:</strong> Unlinked drafts. Build any composition without affecting fearless tools or disabling champions.</p>
+                </div>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -91,7 +114,7 @@ import { useSeriesStore } from "@/stores/series";
 import { useConfirmationStore } from "@/stores/confirmation";
 import { useSettingsStore } from "@/stores/settings";
 import DraftDeletionModal from "@/components/common/DraftDeletionModal.vue";
-import ModeToggle from "./ModeToggle.vue";
+import { useDraftingStore } from "@/stores/drafting";
 import {
   Tooltip,
   TooltipContent,
@@ -102,6 +125,7 @@ import {
 const seriesStore = useSeriesStore();
 const confirmationStore = useConfirmationStore();
 const settingsStore = useSettingsStore();
+const draftingStore = useDraftingStore();
 
 const draftDeletionModal = ref(null);
 
@@ -120,15 +144,35 @@ const currentGameHasChanges = computed(() => {
   return gameHasChanges(currentGameNumber.value);
 });
 
-const isFearlessSync = computed(
-  () => settingsStore.settings.drafting?.integrateUnavailableChampions
-);
+const draftingMode = computed(() => draftingStore.draftingMode);
 
-function toggleFearlessSync() {
-  settingsStore.updateDraftingSetting(
-    'integrateUnavailableChampions',
-    !isFearlessSync.value
-  );
+const isLcuPulseActive = computed(() => {
+  return draftingMode.value !== 'lcu-sync' && draftingStore.lcuActivityDetected;
+});
+
+const isCurrentDraftReadOnly = computed(() => {
+  if (!seriesStore.currentGame?.drafts) return false;
+  const current = seriesStore.currentGame.drafts[seriesStore.currentGame.currentDraftIndex];
+  return current?.isReadOnly || false;
+});
+
+function getDraftDisplayIndex(globalIndex) {
+  // We need to number the regular drafts sequentially, ignoring LCU drafts
+  // So if index 0 is an LCU draft, index 1 becomes "1", index 2 becomes "2", etc.
+  if (!seriesStore.currentGame?.drafts) return globalIndex + 1;
+  
+  let regularDraftCount = 0;
+  for (let i = 0; i <= globalIndex; i++) {
+    if (!seriesStore.currentGame.drafts[i].isReadOnly) {
+      regularDraftCount++;
+    }
+  }
+  
+  return regularDraftCount > 0 ? regularDraftCount : globalIndex + 1;
+}
+
+function setDraftingMode(mode) {
+  draftingStore.setDraftingMode(mode);
 }
 
 function toggleGameExpansion() {
@@ -399,6 +443,18 @@ function handleReset() {
   color: white;
 }
 
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); border-color: rgba(14, 165, 233, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(14, 165, 233, 0); border-color: rgba(14, 165, 233, 1); }
+  100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+}
+
+.mode-button.lcu-pulse {
+  animation: pulse-glow 2s infinite;
+  color: #38bdf8;
+  border: 1px solid transparent;
+}
+
 .button-wrapper {
   position: relative;
   display: inline-block;
@@ -523,6 +579,18 @@ function handleReset() {
 .draft-iteration-button.active:hover {
   background-color: #92400e;
   border-color: #78350f;
+}
+
+.draft-iteration-button.read-only-indicator {
+  font-family: monospace;
+  font-weight: bold;
+}
+
+.draft-separator {
+  width: 1px;
+  height: 20px;
+  background-color: #4a4a4a;
+  margin: 0 2px;
 }
 
 .draft-iteration-button.add-draft-button {

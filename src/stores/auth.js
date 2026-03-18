@@ -33,9 +33,22 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = newUser
       isAuthenticated.value = !!newUser
       
-      if (newUser && !newUser.isAnonymous) {
-        const admin = await authService.isAdmin()
-        isAdmin.value = admin
+      if (newUser) {
+        // Load global settings as soon as we have a session (regular or anonymous)
+        // This ensures the "View Only" state is correctly synchronized for new users
+        try {
+          const { useAdminStore } = await import('@/stores/admin')
+          const adminStore = useAdminStore()
+          // We don't await this to keep auth initialization fast
+          adminStore.loadGlobalSettings()
+        } catch (err) {
+          console.error('Failed to load admin store in auth listener:', err)
+        }
+
+        if (!newUser.isAnonymous) {
+          const admin = await authService.isAdmin()
+          isAdmin.value = admin
+        }
       } else {
         isAdmin.value = false
       }

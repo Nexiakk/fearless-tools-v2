@@ -28,11 +28,23 @@ export const useSettingsStore = defineStore("settings", () => {
       unavailableChampionsGrouping: "top", // 'top' | 'bottom' | 'hidden', default: 'top'
     },
     drafting: {
-      integrateUnavailableChampions: false, // default: enabled
+      integrateUnavailableChampions: false, // Deprecated, replaced by mode
       disableDraftDeletionWarning: false, // default: show warning
       tierHighlightMode: "sort", // 'sort' | 'always' | 'none', default: 'sort'
       pickedMode: "default", // 'default' | 'bottom' | 'hidden', default: 'default'
       championGridZoomIndex: 4, // default: index 4 (1.0 scale)
+      championGridGap: 6, // default: 6px
+      cardSizeSource: "pool", // 'pool' | 'custom'
+      // NEW: Tier scaling support in Custom mode for drafting
+      cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
+      useGlobalTierSize: true, // Use single value for all tier cards
+      tierCardSizes: {
+        op: 100,
+        highlight: 100,
+      },
+      globalTierCardSize: 100, // Global tier card size
+      normalCardSize: 100, // custom size for drafting
+      unavailableCardSize: 83, // custom size for drafting
     },
   });
 
@@ -124,6 +136,31 @@ export const useSettingsStore = defineStore("settings", () => {
           if (parsed.drafting.championGridZoomIndex === undefined) {
             parsed.drafting.championGridZoomIndex = 4;
           }
+          if (parsed.drafting.championGridGap === undefined) {
+            parsed.drafting.championGridGap = 6;
+          }
+          if (parsed.drafting.cardSizeSource === undefined) {
+            parsed.drafting.cardSizeSource = "pool";
+          }
+          if (parsed.drafting.cardSizePreset === undefined) {
+            parsed.drafting.cardSizePreset = "compact";
+          }
+          if (parsed.drafting.useGlobalTierSize === undefined) {
+            parsed.drafting.useGlobalTierSize = true;
+          }
+          if (parsed.drafting.tierCardSizes === undefined) {
+            parsed.drafting.tierCardSizes = { op: 100, highlight: 100 };
+          }
+          if (parsed.drafting.globalTierCardSize === undefined) {
+            parsed.drafting.globalTierCardSize = 100;
+          }
+          if (parsed.drafting.normalCardSize === undefined) {
+            parsed.drafting.normalCardSize = 100;
+          }
+          if (parsed.drafting.unavailableCardSize === undefined) {
+            parsed.drafting.unavailableCardSize = 83;
+          }
+          
           settings.value.drafting = {
             ...settings.value.drafting,
             ...parsed.drafting,
@@ -158,65 +195,69 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   // NEW: Apply card size preset
-  function applyCardSizePreset(preset) {
+  function applyCardSizePreset(preset, module = "pool") {
     const presetConfig = PRESETS[preset];
     if (!presetConfig) return;
 
-    settings.value.pool.cardSizePreset = preset;
+    settings.value[module].cardSizePreset = preset;
 
     if (preset !== "custom") {
       // Apply preset values
-      settings.value.pool.normalCardSize = presetConfig.normalCardSize;
-      settings.value.pool.unavailableCardSize =
+      settings.value[module].normalCardSize = presetConfig.normalCardSize;
+      settings.value[module].unavailableCardSize =
         presetConfig.unavailableCardSize;
-      settings.value.pool.highlightCardSize = presetConfig.highlightCardSize;
-      settings.value.pool.globalTierCardSize = presetConfig.highlightCardSize;
+      if (settings.value[module].highlightCardSize !== undefined) {
+        settings.value[module].highlightCardSize = presetConfig.highlightCardSize;
+      }
+      settings.value[module].globalTierCardSize = presetConfig.highlightCardSize;
     }
 
     saveSettings();
   }
 
   // NEW: Set whether to use global tier size or per-tier
-  function setUseGlobalTierSize(useGlobal) {
-    settings.value.pool.useGlobalTierSize = useGlobal;
+  function setUseGlobalTierSize(useGlobal, module = "pool") {
+    settings.value[module].useGlobalTierSize = useGlobal;
     saveSettings();
   }
 
   // NEW: Update tier card size (global or per-tier)
-  function updateTierCardSize(tierId, value) {
-    if (settings.value.pool.useGlobalTierSize) {
-      settings.value.pool.globalTierCardSize = value;
-      settings.value.pool.highlightCardSize = value;
+  function updateTierCardSize(tierId, value, module = "pool") {
+    if (settings.value[module].useGlobalTierSize) {
+      settings.value[module].globalTierCardSize = value;
+      if (settings.value[module].highlightCardSize !== undefined) {
+        settings.value[module].highlightCardSize = value;
+      }
     } else {
-      settings.value.pool.tierCardSizes[tierId] = value;
+      settings.value[module].tierCardSizes[tierId] = value;
     }
     saveSettings();
   }
 
   // NEW: Get effective tier card size for a specific tier
-  function getTierCardSize(tierId) {
-    if (settings.value.pool.useGlobalTierSize) {
-      return settings.value.pool.globalTierCardSize;
+  function getTierCardSize(tierId, module = "pool") {
+    if (settings.value[module].useGlobalTierSize) {
+      return settings.value[module].globalTierCardSize;
     }
     return (
-      settings.value.pool.tierCardSizes[tierId] ||
-      settings.value.pool.globalTierCardSize
+      settings.value[module].tierCardSizes[tierId] ||
+      settings.value[module].globalTierCardSize
     );
   }
 
   // NEW: Initialize tier card sizes for new tiers
-  function initializeTierCardSize(tierId) {
-    if (!settings.value.pool.tierCardSizes[tierId]) {
-      settings.value.pool.tierCardSizes[tierId] =
-        settings.value.pool.globalTierCardSize;
+  function initializeTierCardSize(tierId, module = "pool") {
+    if (!settings.value[module].tierCardSizes[tierId]) {
+      settings.value[module].tierCardSizes[tierId] =
+        settings.value[module].globalTierCardSize;
       saveSettings();
     }
   }
 
   // NEW: Remove tier card size when tier is deleted
-  function removeTierCardSize(tierId) {
-    if (settings.value.pool.tierCardSizes[tierId]) {
-      delete settings.value.pool.tierCardSizes[tierId];
+  function removeTierCardSize(tierId, module = "pool") {
+    if (settings.value[module].tierCardSizes[tierId]) {
+      delete settings.value[module].tierCardSizes[tierId];
       saveSettings();
     }
   }
@@ -242,11 +283,19 @@ export const useSettingsStore = defineStore("settings", () => {
         unavailableChampionsGrouping: "top", // Reset unavailable champions grouping to default
       },
       drafting: {
-        integrateUnavailableChampions: false, // default: enabled
-        disableDraftDeletionWarning: false, // default: show warning
+        integrateUnavailableChampions: false,
+        disableDraftDeletionWarning: false,
         tierHighlightMode: "sort",
         pickedMode: "default",
         championGridZoomIndex: 4,
+        championGridGap: 6,
+        cardSizeSource: "pool",
+        cardSizePreset: "compact",
+        useGlobalTierSize: true,
+        tierCardSizes: { op: 100, highlight: 100 },
+        globalTierCardSize: 100,
+        normalCardSize: 100,
+        unavailableCardSize: 83,
       },
     };
     // Save the reset settings

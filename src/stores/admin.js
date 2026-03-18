@@ -13,7 +13,7 @@ export const useAdminStore = defineStore('admin', () => {
 
   // Global Settings State
   const globalSettings = ref({
-    anonymousUserMode: 'view', // 'interact' or 'view' - default to 'view' for safety
+    anonymousUserMode: 'interact', // 'interact' or 'view' - default to 'interact' for new users
     useHeadlessBrowser: false // Use headless browser for op.gg scraping (slower but more reliable)
   })
   const isSavingSettings = ref(false)

@@ -69,22 +69,29 @@ import { useWorkspaceTiersStore } from '@/stores/workspaceTiers';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 
+const props = defineProps({
+  targetModule: {
+    type: String,
+    default: 'pool'
+  }
+});
+
 const settingsStore = useSettingsStore();
 const workspaceTiersStore = useWorkspaceTiersStore();
 
 // Global toggle state
 const useGlobal = computed({
-  get: () => settingsStore.settings.pool.useGlobalTierSize,
-  set: (value) => settingsStore.setUseGlobalTierSize(value)
+  get: () => settingsStore.settings[props.targetModule].useGlobalTierSize,
+  set: (value) => settingsStore.setUseGlobalTierSize(value, props.targetModule)
 });
 
 // Global size
-const globalSize = computed(() => settingsStore.settings.pool.globalTierCardSize);
+const globalSize = computed(() => settingsStore.settings[props.targetModule].globalTierCardSize);
 
 const globalSizeModel = computed({
   get: () => [globalSize.value],
   set: (value) => {
-    settingsStore.updateTierCardSize('global', value[0]);
+    settingsStore.updateTierCardSize('global', value[0], props.targetModule);
   }
 });
 
@@ -93,22 +100,22 @@ const sortedTiers = computed(() => workspaceTiersStore.sortedTiers);
 
 // Get tier size (per-tier or fallback to global)
 function getTierSize(tierId) {
-  return settingsStore.getTierCardSize(tierId);
+  return settingsStore.getTierCardSize(tierId, props.targetModule);
 }
 
 // Update tier size
 function updateTierSize(tierId, value) {
-  settingsStore.updateTierCardSize(tierId, value);
+  settingsStore.updateTierCardSize(tierId, value, props.targetModule);
 }
 
 // Toggle global/per-tier mode
 function toggleGlobal(value) {
-  settingsStore.setUseGlobalTierSize(value);
+  settingsStore.setUseGlobalTierSize(value, props.targetModule);
 
   // If switching to per-tier, ensure all tiers have sizes initialized
   if (!value) {
     sortedTiers.value.forEach(tier => {
-      settingsStore.initializeTierCardSize(tier.id);
+      settingsStore.initializeTierCardSize(tier.id, props.targetModule);
     });
   }
 }
