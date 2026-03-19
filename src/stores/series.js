@@ -533,9 +533,17 @@ export const useSeriesStore = defineStore('series', () => {
     let hasChanges = false;
 
     const championIdToName = (id) => {
-      if (!id || id === 'None') return null
-      const idNum = parseInt(id, 10)
-      const champion = championsStore.allChampions.find(c => c.id === idNum)
+      if (!id || id === 'None' || id === '0') return null
+      
+      // Try to match directly by string ID or Name
+      let champion = championsStore.allChampions.find(c => c.id === id || c.name === id)
+      
+      // Fallback: if it's numeric, try numeric comparison
+      if (!champion && !isNaN(parseInt(id, 10))) {
+        const idNum = parseInt(id, 10)
+        champion = championsStore.allChampions.find(c => c.id === idNum)
+      }
+      
       return champion ? champion.name : null
     }
 
@@ -676,9 +684,7 @@ export const useSeriesStore = defineStore('series', () => {
       for (const draft of game.drafts || []) {
         const allSlots = [
           ...(draft.bluePicks || []),
-          ...(draft.blueBans || []),
-          ...(draft.redPicks || []),
-          ...(draft.redBans || [])
+          ...(draft.redPicks || [])
         ]
         
         allSlots.forEach(slot => {

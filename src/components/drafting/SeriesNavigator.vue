@@ -1,7 +1,7 @@
 <template>
   <div class="series-navigator">
     <div class="game-draft-group">
-      <div class="current-game-section">
+      <div class="current-game-section" v-if="draftingMode !== 'fearless-pool'">
         <button
           class="current-game-button"
           :class="{ expanded: showAllGames, disabled: draftingMode === 'fearless-pool' }"
@@ -10,7 +10,7 @@
         >
           Game {{ currentGameNumber }}
         </button>
-        <div class="expanded-games-list" v-if="draftingMode !== 'fearless-pool'">
+        <div class="expanded-games-list" v-show="true">
           <button
             v-for="gameNumber in 5"
             :key="gameNumber"
@@ -28,20 +28,22 @@
       </div>
       <div class="draft-iterations-container">
         <template v-for="(draft, index) in currentGameDrafts" :key="draft.id || index">
-          <button
-            @click="handleDraftClick(index)"
-            @contextmenu="handleDraftRightClick($event, index)"
-            class="draft-iteration-button"
-            :class="{ 
-              active: isDraftActive(index),
-              'is-read-only': draft.isReadOnly 
-            }"
-            :title="draft.isReadOnly ? `LCU Draft (Read Only)` : `Draft ${index + 1}`"
-          >
-            <span v-if="draft.isReadOnly" class="read-only-indicator">L</span>
-            <span v-else>{{ getDraftDisplayIndex(index) }}</span>
-          </button>
-          <div v-if="draft.isReadOnly && currentGameDrafts.length > index + 1" class="draft-separator"></div>
+          <template v-if="!(draft.isReadOnly && draftingMode !== 'lcu-sync')">
+            <button
+              @click="handleDraftClick(index)"
+              @contextmenu="handleDraftRightClick($event, index)"
+              class="draft-iteration-button"
+              :class="{ 
+                active: isDraftActive(index),
+                'is-read-only': draft.isReadOnly 
+              }"
+              :title="draft.isReadOnly ? `LCU Draft (Read Only)` : `Draft ${index + 1}`"
+            >
+              <span v-if="draft.isReadOnly" class="read-only-indicator">L</span>
+              <span v-else>{{ getDraftDisplayIndex(index) }}</span>
+            </button>
+            <div v-if="draft.isReadOnly && currentGameDrafts.length > index + 1" class="draft-separator"></div>
+          </template>
         </template>
         <button
           @click="handleAddDraft"
