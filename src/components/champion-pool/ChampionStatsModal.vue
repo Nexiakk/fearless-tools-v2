@@ -513,7 +513,7 @@ function getCounterIconUrl(counter) {
 }
 
 function handleImageError(event) {
-  event.target.src = '/assets/icons/no_champion.png'
+  event.target.style.opacity = '0'
 }
 
 function handleAbilityImageError(event) {

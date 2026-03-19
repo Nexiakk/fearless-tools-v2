@@ -15,6 +15,10 @@
             class="ban-wrapper"
           >
             <div class="ban-slot" :class="{ 'is-none': ban.championName === 'None' }">
+              <HelmetIcon 
+                v-if="ban.championName === 'None'" 
+                class="helmet-placeholder" 
+              />
               <img
                 v-if="ban.championName && ban.championName !== 'None'"
                 :src="getIcon(ban.championName)"
@@ -72,6 +76,10 @@
             class="ban-wrapper"
           >
             <div class="ban-slot" :class="{ 'is-none': ban.championName === 'None' }">
+              <HelmetIcon 
+                v-if="ban.championName === 'None'" 
+                class="helmet-placeholder" 
+              />
               <img
                 v-if="ban.championName && ban.championName !== 'None'"
                 :src="getIcon(ban.championName)"
@@ -91,6 +99,7 @@
 <script setup>
 import { computed } from "vue";
 import { useChampionsStore } from "@/stores/champions";
+import HelmetIcon from "@/components/icons/HelmetIcon.vue";
 
 const props = defineProps({
   draft: {
@@ -273,12 +282,17 @@ function getBans(draft, side) {
 }
 
 .ban-slot.is-none {
-  background-image: url("../../assets/icons/no_champion.png");
-  background-size: cover;
-  background-position: center;
-  background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-color: #444;
   opacity: 1;
+}
+
+.helmet-placeholder {
+  width: 50%;
+  height: 50%;
+  color: #555;
 }
 
 .ban-img {

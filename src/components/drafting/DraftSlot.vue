@@ -13,12 +13,17 @@
       draggable="false"
       @error="handleImageError"
     />
+    <HelmetIcon 
+      v-else-if="type === 'picks'"
+      class="helmet-placeholder" 
+    />
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useChampionsStore } from '@/stores/champions'
+import HelmetIcon from '@/components/icons/HelmetIcon.vue'
 
 const props = defineProps({
   side: {
@@ -183,8 +188,7 @@ const handleImageError = (e) => {
 .draft-creator-slot.pick-slot {
   width: 110px;
   height: 110px;
-  background-image: url("../../assets/icons/no_champion.png");
-  background-color: #000000;
+  background-color: #1a1a1a;
   border-color: #444444;
 }
 
@@ -198,5 +202,11 @@ const handleImageError = (e) => {
   height: 100%;
   object-fit: cover;
   transform: scale(1.1);
+}
+
+.helmet-placeholder {
+  width: 55%;
+  height: 55%;
+  color: #333;
 }
 </style>

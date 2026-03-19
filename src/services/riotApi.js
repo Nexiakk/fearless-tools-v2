@@ -201,7 +201,7 @@ export const riotApiService = {
    */
   getChampionIconUrl(imageName, patchVersion) {
     if (!imageName || !patchVersion) {
-      return '/assets/icons/no_champion.png' // Fallback to local placeholder
+      return '' // Fallback to empty string if image is not found
     }
     return `${CHAMPION_DATA_BASE_URL}/${patchVersion}/img/champion/${imageName}.png`
   },

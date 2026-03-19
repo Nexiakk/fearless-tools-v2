@@ -305,7 +305,6 @@
 .draft-creator-slot.pick-slot {
   width: 110px; /* Reverted from 125px */
   height: 110px;
-  background-image: url("../assets/icons/no_champion.png");
   background-color: #000000; /* Darker empty pick background */
   border-color: #444444; /* Darker default border */
 }
