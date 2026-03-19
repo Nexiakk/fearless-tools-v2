@@ -11,7 +11,6 @@ import { workspaceService } from "@/services/workspace";
 import { useWorkspaceStore } from "./workspace";
 import { useChampionsStore } from "./champions";
 import { useSeriesStore } from "./series";
-import { useDraftingStore } from "./drafting";
 import { canWrite } from "@/composables/usePermissions";
 
 export const useDraftStore = defineStore("draft", () => {
@@ -30,26 +29,19 @@ export const useDraftStore = defineStore("draft", () => {
   // Getters
   const unavailableChampions = computed(() => {
     const championsStore = useChampionsStore();
-    const draftingStore = useDraftingStore();
-    const seriesStore = useSeriesStore();
 
-    const combined = new Set();
-    
-    if (draftingStore.draftingMode === 'lcu-sync') {
-      const gameNumber = seriesStore.currentGameNumber || 1;
-      const gameUnavailable = seriesStore.getUnavailableChampionsForGame(gameNumber);
-      gameUnavailable.forEach(champ => combined.add(champ));
-      return combined;
-    }
+    // Combine manually picked and LCU unavailable champions
+    const combined = new Set(pickedChampions.value);
 
-    // Fearless/Sandbox mode: Include manually picked champions
-    pickedChampions.value.forEach(champ => combined.add(champ));
-
-    // In Fearless Pool mode, include ALL champions picked in ALL games
-    if (draftingStore.draftingMode === 'fearless-pool') {
-      const allSeriesUnavailable = seriesStore.getUnavailableChampionsForGame(100);
-      allSeriesUnavailable.forEach(champ => combined.add(champ));
-    }
+    // Convert LCU unavailable champions (internal IDs) to display names
+    lcuUnavailableChampions.value.forEach((internalId) => {
+      const champion = championsStore.allChampions.find(
+        (c) => c.id === internalId,
+      );
+      if (champion) {
+        combined.add(champion.name);
+      }
+    });
 
     return combined;
   });
@@ -232,10 +224,7 @@ export const useDraftStore = defineStore("draft", () => {
   }
 
   function isBannedChampion(championName) {
-    const draftingStore = useDraftingStore();
-    
-    // Only include manually banned champions in Fearless/Sandbox modes
-    if (draftingStore.draftingMode !== 'lcu-sync' && bannedChampions.value.has(championName)) {
+    if (bannedChampions.value.has(championName)) {
       return true;
     }
 
