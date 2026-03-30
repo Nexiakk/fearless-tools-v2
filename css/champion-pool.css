@@ -753,7 +753,6 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
   width: 25px;
   text-align: center;
   flex-shrink: 0;
-  transform: translateY(-10px);
 }
 .role-icon-label {
   width: 18px;

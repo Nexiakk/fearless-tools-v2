@@ -379,7 +379,14 @@ export const useSeriesStore = defineStore('series', () => {
     }
 
     const game = currentGame.value
-    if (!game || !game.drafts || game.drafts.length <= 1) return
+    if (!game || !game.drafts) return
+    
+    // Count non-LCU (non-read-only) drafts
+    const nonLcuDrafts = game.drafts.filter(d => !d.isReadOnly)
+    if (nonLcuDrafts.length <= 1) {
+      console.log('[SeriesStore] removeDraftIteration blocked: Cannot remove last non-LCU iteration')
+      return
+    }
     
     const draftToRemove = game.drafts[draftIndex]
     if (draftToRemove && draftToRemove.isReadOnly) {
@@ -671,6 +678,7 @@ export const useSeriesStore = defineStore('series', () => {
   }
 
   // Get unavailable champions for a game
+  // Only LCU iteration picks from previous games are disabled
   function getUnavailableChampionsForGame(gameNumber) {
     if (!currentSeries.value) return new Set()
     
@@ -680,8 +688,10 @@ export const useSeriesStore = defineStore('series', () => {
     for (const game of currentSeries.value.games || []) {
       if (game.gameNumber >= gameNumber) break
       
-      // Collect champions from all drafts in this game
+      // Collect champions ONLY from LCU drafts in this game
       for (const draft of game.drafts || []) {
+        if (draft.source !== 'lcu') continue // Skip non-LCU drafts
+        
         const allSlots = [
           ...(draft.bluePicks || []),
           ...(draft.redPicks || [])

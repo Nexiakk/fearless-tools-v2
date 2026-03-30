@@ -31,7 +31,7 @@ export const useDraftingStore = defineStore('drafting', () => {
   
   // Try to load persisted mode, fallback to 'lcu-sync'
   const savedMode = localStorage.getItem('fearlessDraftingMode')
-  const validModes = ['lcu-sync', 'fearless-pool', 'sandbox']
+  const validModes = ['lcu-sync', 'fearless-pool']
   const initialMode = validModes.includes(savedMode) ? savedMode : 'lcu-sync'
   
   const draftingMode = ref(initialMode)
@@ -360,7 +360,7 @@ export const useDraftingStore = defineStore('drafting', () => {
   }
 
   function setDraftingMode(mode) {
-    if (['lcu-sync', 'fearless-pool', 'sandbox'].includes(mode)) {
+    if (['lcu-sync', 'fearless-pool'].includes(mode)) {
       draftingMode.value = mode
       localStorage.setItem('fearlessDraftingMode', mode)
     }

@@ -1,7 +1,7 @@
 <template>
   <div class="drafting-view-wrapper">
     <!-- Series Navigator removed from top bar -->
-    
+
     <div v-if="workspaceStore.hasWorkspace" class="draft-creator-container">
       <!-- Main Drafting Content -->
       <div class="draft-creator-view">
@@ -36,12 +36,14 @@
                 :selected-for-move="
                   draftingStore.selectedChampionSource?.side === 'blue' &&
                   draftingStore.selectedChampionSource?.type === 'bans' &&
-                  draftingStore.selectedChampionSource?.index === i - 1"
+                  draftingStore.selectedChampionSource?.index === i - 1
+                "
                 :selected-for-targeting="
                   draftingStore.selectedTargetSlot?.side === 'blue' &&
                   draftingStore.selectedTargetSlot?.type === 'bans' &&
                   draftingStore.selectedTargetSlot?.index === i - 1 &&
-                  !currentDraft.blueBans[i - 1].champion"
+                  !currentDraft.blueBans[i - 1].champion
+                "
                 :icon-context="'ban'"
                 @click="handleSlotClick"
                 @clear="handleClearSlot"
@@ -57,12 +59,14 @@
                 :selected-for-move="
                   draftingStore.selectedChampionSource?.side === 'blue' &&
                   draftingStore.selectedChampionSource?.type === 'bans' &&
-                  draftingStore.selectedChampionSource?.index === i + 2"
+                  draftingStore.selectedChampionSource?.index === i + 2
+                "
                 :selected-for-targeting="
                   draftingStore.selectedTargetSlot?.side === 'blue' &&
                   draftingStore.selectedTargetSlot?.type === 'bans' &&
                   draftingStore.selectedTargetSlot?.index === i + 2 &&
-                  !currentDraft.blueBans[i + 2].champion"
+                  !currentDraft.blueBans[i + 2].champion
+                "
                 :icon-context="'ban'"
                 @click="handleSlotClick"
                 @clear="handleClearSlot"
@@ -81,12 +85,14 @@
                 :selected-for-move="
                   draftingStore.selectedChampionSource?.side === 'red' &&
                   draftingStore.selectedChampionSource?.type === 'bans' &&
-                  draftingStore.selectedChampionSource?.index === 5 - i"
+                  draftingStore.selectedChampionSource?.index === 5 - i
+                "
                 :selected-for-targeting="
                   draftingStore.selectedTargetSlot?.side === 'red' &&
                   draftingStore.selectedTargetSlot?.type === 'bans' &&
                   draftingStore.selectedTargetSlot?.index === 5 - i &&
-                  !currentDraft.redBans[5 - i].champion"
+                  !currentDraft.redBans[5 - i].champion
+                "
                 :icon-context="'ban'"
                 @click="handleSlotClick"
                 @clear="handleClearSlot"
@@ -102,12 +108,14 @@
                 :selected-for-move="
                   draftingStore.selectedChampionSource?.side === 'red' &&
                   draftingStore.selectedChampionSource?.type === 'bans' &&
-                  draftingStore.selectedChampionSource?.index === 3 - i"
+                  draftingStore.selectedChampionSource?.index === 3 - i
+                "
                 :selected-for-targeting="
                   draftingStore.selectedTargetSlot?.side === 'red' &&
                   draftingStore.selectedTargetSlot?.type === 'bans' &&
                   draftingStore.selectedTargetSlot?.index === 3 - i &&
-                  !currentDraft.redBans[3 - i].champion"
+                  !currentDraft.redBans[3 - i].champion
+                "
                 :icon-context="'ban'"
                 @click="handleSlotClick"
                 @clear="handleClearSlot"
@@ -135,13 +143,16 @@
                       :champion="currentDraft.bluePicks[i - 1].champion"
                       :selected-for-move="
                         draftingStore.selectedChampionSource?.side === 'blue' &&
-                        draftingStore.selectedChampionSource?.type === 'picks' &&
-                        draftingStore.selectedChampionSource?.index === i - 1"
+                        draftingStore.selectedChampionSource?.type ===
+                          'picks' &&
+                        draftingStore.selectedChampionSource?.index === i - 1
+                      "
                       :selected-for-targeting="
                         draftingStore.selectedTargetSlot?.side === 'blue' &&
                         draftingStore.selectedTargetSlot?.type === 'picks' &&
                         draftingStore.selectedTargetSlot?.index === i - 1 &&
-                        !currentDraft.bluePicks[i - 1].champion"
+                        !currentDraft.bluePicks[i - 1].champion
+                      "
                       :icon-context="'pick'"
                       @click="handleSlotClick"
                       @clear="handleClearSlot"
@@ -151,119 +162,201 @@
               </div>
 
               <div class="draft-creator-center">
-                <!-- Pool Controls -->
+                <!-- Top Bar: Series + Game Buttons + Iterations + Mode Selector -->
+                <DraftTopBar />
+
+                <!-- Pool Controls: Role Filters + Search + Size/Spacing Controls -->
                 <div class="draft-creator-pool-controls">
-                  <!-- Series Navigator moved here -->
-                  <div class="series-navigator-wrapper">
-                    <SeriesNavigator />
-                  </div>
-                  
-                  <div class="draft-creator-search-container">
-                    <svg class="search-icon">
-                      <use href="#icon-search"></use>
-                    </svg>
-                    <input
-                      type="text"
-                      v-model="draftingStore.draftCreatorSearchTerm"
-                      placeholder="Search..."
-                      class="draft-creator-search-input"
-                    />
-                    <button
-                      v-if="draftingStore.draftCreatorSearchTerm"
-                      @click="draftingStore.draftCreatorSearchTerm = ''"
-                      class="clear-search-button"
-                      aria-label="Clear search"
-                    >
-                      &times;
-                    </button>
-                  </div>
-                  
-                  <!-- Zoom Controls -->
-                  <div class="grid-zoom-controls">
-                    <button 
-                      class="zoom-button" 
-                      @click="draftingStore.zoomOutGrid()" 
-                      :disabled="draftingStore.championGridZoomIndex === 0"
-                      title="Decrease Grid Size"
-                    >
-                      <svg viewBox="0 0 24 24" class="zoom-icon"><path fill="currentColor" d="M19 13H5v-2h14v2z"/></svg>
-                    </button>
-                    <button 
-                      class="zoom-button" 
-                      @click="draftingStore.zoomInGrid()" 
-                      :disabled="draftingStore.championGridZoomIndex === draftingStore.maxGridZoomIndex"
-                      title="Increase Grid Size"
-                    >
-                      <svg viewBox="0 0 24 24" class="zoom-icon"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                    </button>
-                    <!-- Spacing divider -->
-                    <div style="width: 1px; height: 16px; background-color: #4a4a4a; margin: 0 4px;"></div>
-                    <!-- Gap Controls -->
-                    <button 
-                      class="zoom-button gap-btn" 
-                      @click="settingsStore.updateDraftingSetting('championGridGap', Math.max(0, (settingsStore.settings.drafting?.championGridGap || 6) - 1))" 
-                      title="Decrease Grid Spacing"
-                    >
-                      <svg viewBox="0 0 24 24" class="zoom-icon" style="width: 1rem; height: 1rem;"><path fill="currentColor" d="M19 13H5v-2h14v2z"/></svg>
-                    </button>
-                    <span style="font-size: 0.75rem; color: #a0a0a0; min-width: 24px; text-align: center;">{{ settingsStore.settings.drafting?.championGridGap ?? 6 }}</span>
-                    <button 
-                      class="zoom-button gap-btn" 
-                      @click="settingsStore.updateDraftingSetting('championGridGap', Math.min(24, (settingsStore.settings.drafting?.championGridGap || 6) + 1))" 
-                      title="Increase Grid Spacing"
-                    >
-                      <svg viewBox="0 0 24 24" class="zoom-icon" style="width: 1rem; height: 1rem;"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                    </button>
-                  </div>
-                  
-                  <div class="role-filters-container pool-filters">
-                    <button
-                      v-for="role in roles"
-                      :key="role"
-                      @click="draftingStore.setDraftCreatorRoleFilter(role)"
-                      class="filter-button icon-button"
-                      :class="{
-                        active: draftingStore.draftCreatorRoleFilter === role,
-                      }"
-                      :title="`Filter by ${role}`"
-                    >
-                      <img
-                        :src="championsStore.getRoleIconUrl(role)"
-                        :alt="role"
-                        class="filter-icon"
-                        draggable="false"
+                  <div class="pool-controls-row">
+                    <div class="role-filters-container pool-filters">
+                      <button
+                        v-for="role in roles"
+                        :key="role"
+                        @click="draftingStore.setDraftCreatorRoleFilter(role)"
+                        class="filter-button"
+                        :class="{
+                          active: draftingStore.draftCreatorRoleFilter === role,
+                        }"
+                        :title="`Filter by ${role}`"
+                      >
+                        <img
+                          :src="championsStore.getRoleIconUrl(role)"
+                          :alt="role"
+                          class="filter-icon"
+                          draggable="false"
+                        />
+                        <span class="filter-label">{{
+                          role === "Bot" ? "ADC" : role
+                        }}</span>
+                      </button>
+                    </div>
+
+                    <div class="sort-toggle-container">
+                      <button
+                        class="sort-toggle-button"
+                        :class="{
+                          active:
+                            draftingStore.draftCreatorSortMode ===
+                            'alphabetical',
+                        }"
+                        @click="
+                          draftingStore.draftCreatorSortMode = 'alphabetical'
+                        "
+                        title="Sort A-Z"
+                      >
+                        A-Z
+                      </button>
+                      <button
+                        class="sort-toggle-button"
+                        :class="{
+                          active: draftingStore.draftCreatorSortMode === 'tier',
+                        }"
+                        @click="draftingStore.draftCreatorSortMode = 'tier'"
+                        title="Sort by Tier"
+                      >
+                        Tier
+                      </button>
+                    </div>
+
+                    <div class="search-container">
+                      <input
+                        type="text"
+                        v-model="draftingStore.draftCreatorSearchTerm"
+                        placeholder="search by name"
+                        class="search-input"
                       />
-                    </button>
-                  </div>
-                  
-                  <!-- Sorting Toggle -->
-                  <div class="draft-sort-container">
-                    <button
-                      class="sort-toggle-button"
-                      :class="{ active: draftingStore.draftCreatorSortMode === 'alphabetical' }"
-                      @click="draftingStore.draftCreatorSortMode = 'alphabetical'"
-                      title="Sort Alphabetical"
-                    >
-                      A-Z
-                    </button>
-                    <button
-                      class="sort-toggle-button"
-                      :class="{ active: draftingStore.draftCreatorSortMode === 'tier' }"
-                      @click="draftingStore.draftCreatorSortMode = 'tier'"
-                      title="Sort by Tier"
-                    >
-                      Tier
-                    </button>
+                    </div>
+
+                    <div class="controls-group">
+                      <!-- Size Controls -->
+                      <div class="control-buttons">
+                        <button
+                          class="control-button"
+                          @click="draftingStore.zoomOutGrid()"
+                          :disabled="draftingStore.championGridZoomIndex === 0"
+                          title="Decrease Size"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M5 12h14"></path>
+                          </svg>
+                        </button>
+                        <button
+                          class="control-button"
+                          @click="draftingStore.zoomInGrid()"
+                          :disabled="
+                            draftingStore.championGridZoomIndex ===
+                            draftingStore.maxGridZoomIndex
+                          "
+                          title="Increase Size"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M5 12h14"></path>
+                            <path d="M12 5v14"></path>
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div class="controls-divider"></div>
+
+                      <!-- Spacing Controls -->
+                      <div class="control-buttons">
+                        <button
+                          class="control-button"
+                          @click="
+                            settingsStore.updateDraftingSetting(
+                              'championGridGap',
+                              Math.max(
+                                0,
+                                (settingsStore.settings.drafting
+                                  ?.championGridGap || 6) - 1,
+                              ),
+                            )
+                          "
+                          title="Decrease Spacing"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-grid-3x3"
+                          >
+                            <rect width="18" height="18" x="3" y="3" rx="2" />
+                            <path d="M3 9h18" />
+                            <path d="M3 15h18" />
+                            <path d="M9 3v18" />
+                            <path d="M15 3v18" />
+                          </svg>
+                        </button>
+                        <button
+                          class="control-button"
+                          @click="
+                            settingsStore.updateDraftingSetting(
+                              'championGridGap',
+                              Math.min(
+                                24,
+                                (settingsStore.settings.drafting
+                                  ?.championGridGap || 6) + 1,
+                              ),
+                            )
+                          "
+                          title="Increase Spacing"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-maximize-2"
+                          >
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="22" x2="11" y1="2" y2="13" />
+                            <line x1="2" x2="13" y1="22" y2="11" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Champion Grid -->
-                <transition-group 
-                  name="grid-anim" 
-                  tag="div" 
-                  class="draft-creator-champion-grid" 
+                <transition-group
+                  name="grid-anim"
+                  tag="div"
+                  class="draft-creator-champion-grid"
                   :style="{
-                    gap: `${settingsStore.settings.drafting?.championGridGap || 6}px`
+                    gap: `${settingsStore.settings.drafting?.championGridGap || 6}px`,
                   }"
                 >
                   <div
@@ -274,16 +367,21 @@
                       'selected-for-placement':
                         draftingStore.selectedChampionForPlacement ===
                         champion.name,
-                      'already-placed':
-                        isChampionPlacedInCurrentDraft(champion.name),
-                      'is-picked': draftingStore.isChampionPickedInCurrentDraft(champion.name),
-                      'is-banned': draftingStore.isChampionBannedInCurrentDraft(champion.name),
+                      'already-placed': isChampionPlacedInCurrentDraft(
+                        champion.name,
+                      ),
+                      'is-picked': draftingStore.isChampionPickedInCurrentDraft(
+                        champion.name,
+                      ),
+                      'is-banned': draftingStore.isChampionBannedInCurrentDraft(
+                        champion.name,
+                      ),
                       'selected-as-source':
                         draftingStore.selectedChampionSource &&
                         draftingStore.selectedChampionSource.championName ===
                           champion.name,
                       unavailable: !isChampionAvailable(champion.name),
-                      'has-tier': getTierHighlightClass(champion) !== ''
+                      'has-tier': getTierHighlightClass(champion) !== '',
                     }"
                     :style="getChampionCardStyle(champion)"
                     @click="handleChampionClick(champion.name)"
@@ -295,7 +393,7 @@
                         :src="
                           championsStore.getChampionIconUrl(
                             champion.name,
-                            'creator-pool'
+                            'creator-pool',
                           )
                         "
                         :alt="champion.name"
@@ -305,11 +403,20 @@
                     </div>
 
                     <!-- Tier badge -->
-                    <div class="draft-tier-badge" v-if="getTierHighlightClass(champion)" :style="{ backgroundColor: getTierColor(champion), color: '#ffffff' }">
-                       {{ getTierBadgeText(champion) }}
+                    <div
+                      class="draft-tier-badge"
+                      v-if="getTierHighlightClass(champion)"
+                      :style="{
+                        backgroundColor: getTierColor(champion),
+                        color: '#ffffff',
+                      }"
+                    >
+                      {{ getTierBadgeText(champion) }}
                     </div>
                     <div class="champion-label">
-                      <span class="champion-name-text">{{ champion.name }}</span>
+                      <span class="champion-name-text">{{
+                        champion.name
+                      }}</span>
                     </div>
                   </div>
                   <p
@@ -320,9 +427,133 @@
                     No champions match filter/search.
                   </p>
                 </transition-group>
-                <!-- LCU Drafts Panel inside Center Area! -->
-                <div class="draft-creator-bottom-panel" v-if="draftingStore.draftingMode === 'lcu-sync'">
-                  <LcuDraftsPanel />
+                <!-- Used Champions This Series Panel -->
+                <div
+                  class="fearless-picks-panel"
+                  v-if="gamesWithPicks.length > 0"
+                >
+                  <div class="fearless-picks-header">
+                    <span class="fearless-picks-title"
+                      >Used Champions This Series</span
+                    >
+                    <button
+                      @click="toggleFearlessPanel"
+                      class="fearless-toggle-btn"
+                      :title="
+                        isFearlessPanelExpanded
+                          ? 'Hide used champions'
+                          : 'Show used champions'
+                      "
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"
+                        ></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    v-if="isFearlessPanelExpanded"
+                    class="fearless-picks-list"
+                  >
+                    <div
+                      v-for="game in gamesWithPicks"
+                      :key="game.gameNumber"
+                      class="fearless-game-row"
+                    >
+                      <!-- Blue Team Picks - get from first draft -->
+                      <div class="fearless-team-picks">
+                        <template
+                          v-for="(pick, idx) in game.drafts?.[0]?.bluePicks ||
+                          []"
+                          :key="`${game.gameNumber}-blue-${idx}`"
+                        >
+                          <div
+                            v-if="pick?.champion"
+                            class="fearless-pick"
+                            :title="`${pick.champion} - Game ${game.gameNumber}`"
+                          >
+                            <img
+                              :src="
+                                championsStore.getChampionIconUrl(pick.champion)
+                              "
+                              :alt="pick.champion"
+                              loading="lazy"
+                            />
+                            <div class="strikethrough"></div>
+                          </div>
+                          <div v-else class="fearless-empty-slot">
+                            <svg
+                              class="helmet-icon"
+                              width="130"
+                              height="142"
+                              viewBox="0 0 130 142"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M1 95.5C20.2 125.5 36.3333 137.667 42 140C29.6 116.8 36.8333 92.6667 42 83.5C25.6 78.7 24.5 61.1667 26 53C58 60.6 58.6667 78.8333 55 87C56.6 96.6 62.6667 104 65.5 106.5C72.7 97.7 74.8333 89.8333 75 87C68.2 64.6 91.8333 55 104.5 53C106.5 71.8 94.6667 81.1667 88.5 83.5C100.1 103.9 93.3333 129.667 88.5 140C107.7 127.2 123.5 105 129 95.5C108.2 79.9 111.333 48.3333 115.5 34.5C101.9 18.9 75.8333 5.66667 64.5 1C40.5 10.2 20.8333 27.1667 14 34.5C23.6 72.1 9.33333 90.8333 1 95.5Z"
+                                fill="currentColor"
+                              ></path>
+                            </svg>
+                          </div>
+                        </template>
+                      </div>
+
+                      <!-- Game Label -->
+                      <div class="fearless-game-label">
+                        Game {{ game.gameNumber }}
+                      </div>
+
+                      <!-- Red Team Picks - get from first draft -->
+                      <div class="fearless-team-picks justify-end">
+                        <template
+                          v-for="(pick, idx) in game.drafts?.[0]?.redPicks ||
+                          []"
+                          :key="`${game.gameNumber}-red-${idx}`"
+                        >
+                          <div
+                            v-if="pick?.champion"
+                            class="fearless-pick"
+                            :title="`${pick.champion} - Game ${game.gameNumber}`"
+                          >
+                            <img
+                              :src="
+                                championsStore.getChampionIconUrl(pick.champion)
+                              "
+                              :alt="pick.champion"
+                              loading="lazy"
+                            />
+                            <div class="strikethrough"></div>
+                          </div>
+                          <div v-else class="fearless-empty-slot">
+                            <svg
+                              class="helmet-icon"
+                              width="130"
+                              height="142"
+                              viewBox="0 0 130 142"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M1 95.5C20.2 125.5 36.3333 137.667 42 140C29.6 116.8 36.8333 92.6667 42 83.5C25.6 78.7 24.5 61.1667 26 53C58 60.6 58.6667 78.8333 55 87C56.6 96.6 62.6667 104 65.5 106.5C72.7 97.7 74.8333 89.8333 75 87C68.2 64.6 91.8333 55 104.5 53C106.5 71.8 94.6667 81.1667 88.5 83.5C100.1 103.9 93.3333 129.667 88.5 140C107.7 127.2 123.5 105 129 95.5C108.2 79.9 111.333 48.3333 115.5 34.5C101.9 18.9 75.8333 5.66667 64.5 1C40.5 10.2 20.8333 27.1667 14 34.5C23.6 72.1 9.33333 90.8333 1 95.5Z"
+                                fill="currentColor"
+                              ></path>
+                            </svg>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -342,13 +573,16 @@
                       :champion="currentDraft.redPicks[i - 1].champion"
                       :selected-for-move="
                         draftingStore.selectedChampionSource?.side === 'red' &&
-                        draftingStore.selectedChampionSource?.type === 'picks' &&
-                        draftingStore.selectedChampionSource?.index === i - 1"
+                        draftingStore.selectedChampionSource?.type ===
+                          'picks' &&
+                        draftingStore.selectedChampionSource?.index === i - 1
+                      "
                       :selected-for-targeting="
                         draftingStore.selectedTargetSlot?.side === 'red' &&
                         draftingStore.selectedTargetSlot?.type === 'picks' &&
                         draftingStore.selectedTargetSlot?.index === i - 1 &&
-                        !currentDraft.redPicks[i - 1].champion"
+                        !currentDraft.redPicks[i - 1].champion
+                      "
                       :icon-context="'pick'"
                       @click="handleSlotClick"
                       @clear="handleClearSlot"
@@ -381,7 +615,7 @@ import { useSeriesStore } from "@/stores/series";
 import { useChampionsStore } from "@/stores/champions";
 import { useConfirmationStore } from "@/stores/confirmation";
 import { useSettingsStore } from "@/stores/settings";
-import SeriesNavigator from "@/components/drafting/SeriesNavigator.vue";
+import DraftTopBar from "@/components/drafting/DraftTopBar.vue";
 import SeriesManager from "@/components/drafting/SeriesManager.vue";
 import DraftSlot from "@/components/drafting/DraftSlot.vue";
 import LcuDraftsPanel from "@/components/drafting/LcuDraftsPanel.vue";
@@ -396,48 +630,77 @@ const confirmationStore = useConfirmationStore();
 const settingsStore = useSettingsStore();
 const workspaceTiersStore = useWorkspaceTiersStore();
 
+// Fearless panel state
+const isFearlessPanelExpanded = ref(false);
+
+function toggleFearlessPanel() {
+  isFearlessPanelExpanded.value = !isFearlessPanelExpanded.value;
+}
+
+// Get games with actual picks data
+const gamesWithPicks = computed(() => {
+  if (!seriesStore.currentSeries?.games) return [];
+  return seriesStore.currentSeries.games.filter((game) => {
+    // Check if any draft in this game has champions
+    for (const draft of game.drafts || []) {
+      const allSlots = [...(draft.bluePicks || []), ...(draft.redPicks || [])];
+      if (allSlots.some((slot) => slot?.champion)) return true;
+    }
+    return false;
+  });
+});
+
 const zoomScales = [0.57, 0.62, 0.67, 0.73, 0.81, 0.9, 1.0, 1.14];
-const currentZoomScale = computed(() => zoomScales[draftingStore.championGridZoomIndex]);
+const currentZoomScale = computed(
+  () => zoomScales[draftingStore.championGridZoomIndex],
+);
 
 function getCardScale(champion) {
-  // We strictly base "isUnavailable" on the "Drafting Pool" logic, meaning 
-  // they are picked in previous games or unavailable. We DO NOT count them 
+  // We strictly base "isUnavailable" on the "Drafting Pool" logic, meaning
+  // they are picked in previous games or unavailable. We DO NOT count them
   // as unavailable just for being placed in the *current* game slots.
   const isUnavailable = !isChampionAvailable(champion.name);
   const pickedMode = settingsStore.settings.drafting?.pickedMode || "default";
-  
+
   // Determine Source Model (Pool or Drafting)
-  const sourceModule = settingsStore.settings.drafting?.cardSizeSource === "custom" 
-    ? settingsStore.settings.drafting 
-    : settingsStore.settings.pool;
+  const sourceModule =
+    settingsStore.settings.drafting?.cardSizeSource === "custom"
+      ? settingsStore.settings.drafting
+      : settingsStore.settings.pool;
 
-  const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+  const isSortingByTier = draftingStore.draftCreatorSortMode === "tier";
 
-  // Base normal card size 
-  // User explicitly wants A-Z sorted cards to be 100% size, 
+  // Base normal card size
+  // User explicitly wants A-Z sorted cards to be 100% size,
   // and only use the "Normal Card Size" setting when sorting by Tier.
-  let baseScale = 1.0; 
+  let baseScale = 1.0;
   if (isSortingByTier) {
     baseScale = (sourceModule?.normalCardSize || 100) / 100;
   }
 
   // Rule 1: We only show Tiers (and apply their scale modifier) if sorting by Tier
   if (isSortingByTier) {
-    const tier = workspaceTiersStore.getTierForChampion(champion.name, getCurrentRoleFilter());
-    
-    if (tier && tier.id !== 'unassigned') {
-       // Apply the tier base scale size modifier specifically
-       const moduleName = settingsStore.settings.drafting?.cardSizeSource === "custom" ? "drafting" : "pool";
-       baseScale = settingsStore.getTierCardSize(tier.id, moduleName) / 100;
+    const tier = workspaceTiersStore.getTierForChampion(
+      champion.name,
+      getCurrentRoleFilter(),
+    );
+
+    if (tier && tier.id !== "unassigned") {
+      // Apply the tier base scale size modifier specifically
+      const moduleName =
+        settingsStore.settings.drafting?.cardSizeSource === "custom"
+          ? "drafting"
+          : "pool";
+      baseScale = settingsStore.getTierCardSize(tier.id, moduleName) / 100;
     }
   }
 
-  // Rule 2: Unavailable (picked) champions get their modifier applied specifically 
+  // Rule 2: Unavailable (picked) champions get their modifier applied specifically
   // ONLY if rendering at bottom
   if (isUnavailable && pickedMode === "bottom") {
     // Note: The preset modifier is e.g. 83%. We multiply this against the normal BaseScale!
     const unavailableModifier = (sourceModule?.unavailableCardSize || 83) / 100;
-    
+
     // Instead of replacing baseScale, we MULTIPLY IT against baseScale per user request
     baseScale = baseScale * unavailableModifier;
   }
@@ -446,11 +709,14 @@ function getCardScale(champion) {
 }
 
 function getTierClasses(champion) {
-  const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
+  const isSortingByTier = draftingStore.draftCreatorSortMode === "tier";
   if (!isSortingByTier) return [];
-  
-  const tier = workspaceTiersStore.getTierForChampion(champion.name, getCurrentRoleFilter());
-  if (tier && tier.id !== 'unassigned') {
+
+  const tier = workspaceTiersStore.getTierForChampion(
+    champion.name,
+    getCurrentRoleFilter(),
+  );
+  if (tier && tier.id !== "unassigned") {
     return [`tier-${tier.id}`];
   }
   return [];
@@ -459,15 +725,18 @@ function getTierClasses(champion) {
 const roles = ["Top", "Jungle", "Mid", "Bot", "Support"];
 
 const roleMap = {
-  'Top': 'top',
-  'Jungle': 'jungle',
-  'Mid': 'middle',
-  'Bot': 'bottom',
-  'Support': 'support'
+  Top: "top",
+  Jungle: "jungle",
+  Mid: "middle",
+  Bot: "bottom",
+  Support: "support",
 };
 
 function getCurrentRoleFilter() {
-  if (draftingStore.draftCreatorRoleFilter !== "all" && roleMap[draftingStore.draftCreatorRoleFilter]) {
+  if (
+    draftingStore.draftCreatorRoleFilter !== "all" &&
+    roleMap[draftingStore.draftCreatorRoleFilter]
+  ) {
     return roleMap[draftingStore.draftCreatorRoleFilter];
   }
   return null;
@@ -496,25 +765,21 @@ const currentDraft = computed(() => {
 
 // Get unavailable champions for current game
 const unavailableChampions = computed(() => {
-  if (draftingStore.draftingMode === 'sandbox') {
-    return new Set();
-  }
-  
   const unavailable = new Set();
-  
+
   // Add champions from previous games in the series
   if (seriesStore.currentGame) {
     const gameUnavailable = seriesStore.getUnavailableChampionsForGame(
-      seriesStore.currentGame.gameNumber
+      seriesStore.currentGame.gameNumber,
     );
-    gameUnavailable.forEach(champ => unavailable.add(champ));
+    gameUnavailable.forEach((champ) => unavailable.add(champ));
   }
-  
+
   // Add champions from the Fearless Pool (only unavailable/picked champions, not banned)
   if (draftStore.unavailableChampions) {
-    draftStore.unavailableChampions.forEach(champ => unavailable.add(champ));
+    draftStore.unavailableChampions.forEach((champ) => unavailable.add(champ));
   }
-  
+
   return unavailable;
 });
 
@@ -530,24 +795,22 @@ const filteredChampions = computed(() => {
   const filterRole = getCurrentRoleFilter();
   if (filterRole) {
     champs = champs.filter(
-      (c) =>
-        Array.isArray(c.roles) &&
-        c.roles.includes(filterRole)
+      (c) => Array.isArray(c.roles) && c.roles.includes(filterRole),
     );
   }
 
   // Filter by search term
   if (draftingStore.draftCreatorSearchTerm.trim() !== "") {
     const normalizedSearch = normalizeString(
-      draftingStore.draftCreatorSearchTerm.trim()
+      draftingStore.draftCreatorSearchTerm.trim(),
     );
     champs = champs.filter((c) =>
-      normalizeString(c.name).includes(normalizedSearch)
+      normalizeString(c.name).includes(normalizedSearch),
     );
   }
 
   // Add tier and availability states to objects
-  champs = champs.map(c => {
+  champs = champs.map((c) => {
     const isAvail = isChampionAvailable(c.name);
     // Is it placed in the *current* draft specifically?
     const isPlaced = isChampionPlacedInCurrentDraft(c.name);
@@ -555,91 +818,112 @@ const filteredChampions = computed(() => {
       ...c,
       isAvailable: isAvail,
       isPlaced: isPlaced,
-      isHidden: (!isAvail && settingsStore.settings.drafting?.pickedMode === 'hidden') || (isPlaced && settingsStore.settings.drafting?.pickedMode === 'hidden'),
+      isHidden:
+        (!isAvail &&
+          settingsStore.settings.drafting?.pickedMode === "hidden") ||
+        (isPlaced && settingsStore.settings.drafting?.pickedMode === "hidden"),
       sortTierScore: getChampionTierScore(c.name),
-      isUnavailableOrPlaced: !isAvail || isPlaced
-    }
+      isUnavailableOrPlaced: !isAvail || isPlaced,
+    };
   });
 
   // Sort logic
   champs.sort((a, b) => {
     // 1. Picked mode sorting grouping
-    const pickedMode = settingsStore.settings.drafting?.pickedMode || 'default';
-    if (pickedMode === 'bottom') {
-      // Use STRICT isAvailable (which ignores current game placements) 
+    const pickedMode = settingsStore.settings.drafting?.pickedMode || "default";
+    if (pickedMode === "bottom") {
+      // Use STRICT isAvailable (which ignores current game placements)
       // so active game placements don't drop to the bottom!
       if (!a.isAvailable && b.isAvailable) return 1;
       if (a.isAvailable && !b.isAvailable) return -1;
     }
 
     // 2. Main sort selection
-    if (draftingStore.draftCreatorSortMode === 'tier') {
+    if (draftingStore.draftCreatorSortMode === "tier") {
       // Primary: Tier score (higher is better so sort descending)
-      if (a.sortTierScore !== b.sortTierScore) return b.sortTierScore - a.sortTierScore;
+      if (a.sortTierScore !== b.sortTierScore)
+        return b.sortTierScore - a.sortTierScore;
     }
-    
+
     // Fallback: Alphabetical
     return a.name.localeCompare(b.name);
   });
 
-  return champs.filter(c => !c.isHidden);
+  return champs.filter((c) => !c.isHidden);
 });
 
 function getChampionTierScore(championName) {
   const filterRole = getCurrentRoleFilter();
   const tier = workspaceTiersStore.getTierForChampion(championName, filterRole);
   if (!tier) return 0;
-  
+
   // Highest ID weight based on `workspaceTiersStore.sortedTiers`
   const reversedTiers = [...workspaceTiersStore.sortedTiers].reverse();
-  const idx = reversedTiers.findIndex(rt => rt.id === tier.id);
-  
+  const idx = reversedTiers.findIndex((rt) => rt.id === tier.id);
+
   return idx + 1; // +1 to ensure untiered is 0
 }
 
 function getTierHighlightClass(champion) {
-   const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
-   if (!isSortingByTier) return '';
-   
-   const filterRole = getCurrentRoleFilter();
-   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
-   if (!tier) return '';
-   
-   return tier.id.toLowerCase();
+  const isSortingByTier = draftingStore.draftCreatorSortMode === "tier";
+  if (!isSortingByTier) return "";
+
+  const filterRole = getCurrentRoleFilter();
+  const tier = workspaceTiersStore.getTierForChampion(
+    champion.name,
+    filterRole,
+  );
+  if (!tier) return "";
+
+  return tier.id.toLowerCase();
 }
 
 function getTierBadgeText(champion) {
-   const filterRole = getCurrentRoleFilter();
-   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
-   if (!tier) return '';
-   
-   return tier.name.charAt(0).toUpperCase();
+  const filterRole = getCurrentRoleFilter();
+  const tier = workspaceTiersStore.getTierForChampion(
+    champion.name,
+    filterRole,
+  );
+  if (!tier) return "";
+
+  return tier.name.charAt(0).toUpperCase();
 }
 
 function getTierColor(champion) {
-   const isSortingByTier = draftingStore.draftCreatorSortMode === 'tier';
-   if (!isSortingByTier) return '';
-   
-   const filterRole = getCurrentRoleFilter();
-   const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
-   return tier ? tier.color : '';
+  const isSortingByTier = draftingStore.draftCreatorSortMode === "tier";
+  if (!isSortingByTier) return "";
+
+  const filterRole = getCurrentRoleFilter();
+  const tier = workspaceTiersStore.getTierForChampion(
+    champion.name,
+    filterRole,
+  );
+  return tier ? tier.color : "";
 }
 
 function getChampionCardStyle(champion) {
   let styleObj = {
-    '--card-scale': getCardScale(champion)
+    "--card-scale": getCardScale(champion),
   };
+
+  // Don't apply tier styles for unavailable or already-placed champions
+  if (!isChampionAvailable(champion.name) || isChampionPlacedInCurrentDraft(champion.name)) {
+    return styleObj;
+  }
 
   const color = getTierColor(champion);
   if (!color) return styleObj;
-  
+
   const filterRole = getCurrentRoleFilter();
-  const tier = workspaceTiersStore.getTierForChampion(champion.name, filterRole);
+  const tier = workspaceTiersStore.getTierForChampion(
+    champion.name,
+    filterRole,
+  );
   if (!tier) return styleObj;
 
-  if (tier.style === 'border') {
+  if (tier.style === "border") {
     styleObj.border = `1px solid ${color}`;
-  } else if (tier.style === 'highlight') {
+  } else if (tier.style === "highlight") {
     styleObj.border = `1px solid ${color}CC`;
     styleObj.boxShadow = `0 0 4px 1px ${color}99`;
   } else {
@@ -653,15 +937,15 @@ function getChampionCardStyle(champion) {
 
 // Check if champion is available.
 const isChampionAvailable = (championName) => {
-  if (draftingStore.draftingMode === 'sandbox') {
-    return true;
-  }
   return !unavailableChampions.value.has(championName);
 };
 
 // Returns false if placed OR unavailable to prevent selection
 const isChampionAvailableForPlacement = (championName) => {
-  return isChampionAvailable(championName) && !isChampionPlacedInCurrentDraft(championName);
+  return (
+    isChampionAvailable(championName) &&
+    !isChampionPlacedInCurrentDraft(championName)
+  );
 };
 
 const handleImageError = (e) => {
@@ -703,14 +987,16 @@ function handleSlotClick(slotData) {
     // Place champion from grid
     if (
       slot &&
-      !slot.champion && 
-      isChampionAvailableForPlacement(draftingStore.selectedChampionForPlacement)
+      !slot.champion &&
+      isChampionAvailableForPlacement(
+        draftingStore.selectedChampionForPlacement,
+      )
     ) {
       seriesStore.updateCurrentDraftSlot(
         side,
         type,
         index,
-        draftingStore.selectedChampionForPlacement
+        draftingStore.selectedChampionForPlacement,
       );
       draftingStore.selectedChampionForPlacement = null;
     }
@@ -741,16 +1027,14 @@ function handleSlotClick(slotData) {
     // Ensure we don't accidentally duplicate
     const targetKey = `${draftingStore.selectedTargetSlot.side}${draftingStore.selectedTargetSlot.type.charAt(0).toUpperCase() + draftingStore.selectedTargetSlot.type.slice(1)}`;
     const targetSlot =
-      currentDraft.value[targetKey]?.[
-        draftingStore.selectedTargetSlot.index
-      ];
+      currentDraft.value[targetKey]?.[draftingStore.selectedTargetSlot.index];
 
     if (targetSlot && !targetSlot.champion) {
       targetSlot.champion = slot.champion;
       targetSlot.notes = slot.notes;
 
       slot.champion = null;
-      slot.notes = '';
+      slot.notes = "";
 
       draftingStore.selectedTargetSlot = null;
       seriesStore.queueSave();
@@ -805,14 +1089,15 @@ function handleChampionClick(championName) {
   // If targeting an empty slot, place the champion directly there
   if (draftingStore.selectedTargetSlot) {
     const targetKey = `${draftingStore.selectedTargetSlot.side}${draftingStore.selectedTargetSlot.type.charAt(0).toUpperCase() + draftingStore.selectedTargetSlot.type.slice(1)}`;
-    const targetSlot = currentDraft.value[targetKey]?.[draftingStore.selectedTargetSlot.index];
+    const targetSlot =
+      currentDraft.value[targetKey]?.[draftingStore.selectedTargetSlot.index];
 
     if (targetSlot && !targetSlot.champion) {
       seriesStore.updateCurrentDraftSlot(
         draftingStore.selectedTargetSlot.side,
         draftingStore.selectedTargetSlot.type,
         draftingStore.selectedTargetSlot.index,
-        championName
+        championName,
       );
       draftingStore.selectedTargetSlot = null;
       return;
@@ -922,13 +1207,15 @@ onMounted(async () => {
 .sort-toggle-button.active {
   background-color: #3b3b3b;
   color: #ffffff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Animations for grid filtering/sorting */
 .grid-anim-move,
 .grid-anim-enter-active {
-  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease !important;
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.25s ease !important;
 }
 
 .grid-anim-enter-from {
@@ -963,21 +1250,39 @@ onMounted(async () => {
   justify-content: center;
 }
 
-
-
 /* Tier borders are now handled dynamically via inline styles */
 
-.draft-creator-champion-card.tier-S .champion-icon { border: 1px solid #f87171 !important; }
-.draft-creator-champion-card.tier-S .draft-tier-badge { background-color: #f87171; color: #4c0519; }
+.draft-creator-champion-card.tier-S .champion-icon {
+  border: 1px solid #f87171 !important;
+}
+.draft-creator-champion-card.tier-S .draft-tier-badge {
+  background-color: #f87171;
+  color: #4c0519;
+}
 
-.draft-creator-champion-card.tier-A .champion-icon { border: 1px solid #facc15 !important; }
-.draft-creator-champion-card.tier-A .draft-tier-badge { background-color: #facc15; color: #5a4503; }
+.draft-creator-champion-card.tier-A .champion-icon {
+  border: 1px solid #facc15 !important;
+}
+.draft-creator-champion-card.tier-A .draft-tier-badge {
+  background-color: #facc15;
+  color: #5a4503;
+}
 
-.draft-creator-champion-card.tier-B .champion-icon { border: 1px solid #4ade80 !important; }
-.draft-creator-champion-card.tier-B .draft-tier-badge { background-color: #4ade80; color: #064e3b; }
+.draft-creator-champion-card.tier-B .champion-icon {
+  border: 1px solid #4ade80 !important;
+}
+.draft-creator-champion-card.tier-B .draft-tier-badge {
+  background-color: #4ade80;
+  color: #064e3b;
+}
 
-.draft-creator-champion-card.tier-C .champion-icon { border: 1px solid #60a5fa !important; }
-.draft-creator-champion-card.tier-C .draft-tier-badge { background-color: #60a5fa; color: #1e3a8a; }
+.draft-creator-champion-card.tier-C .champion-icon {
+  border: 1px solid #60a5fa !important;
+}
+.draft-creator-champion-card.tier-C .draft-tier-badge {
+  background-color: #60a5fa;
+  color: #1e3a8a;
+}
 
 /* In drafting, we make the unavailable completely grey and hidden */
 .draft-creator-champion-card.unavailable .champion-icon,
