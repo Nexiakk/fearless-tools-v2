@@ -34,17 +34,21 @@
   margin: 0 auto;
   height: 100%;
   gap: 0.5rem;
+  padding-top: 1rem; /* Compensate for removed indicator spacing */
 }
 
-/* Side Indicator Container */
-.draft-indicator-container {
+/* Side Indicator Container - Horizontal between B5 and R5 */
+/* .draft-indicator-container {
   display: flex;
-  width: 100%;
+  flex-direction: row;
+  width: 200px;
   height: 8px;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
   flex-shrink: 0;
-  margin-top: 1rem;
+  margin-right: 1rem;
+  margin-left: 1rem;
+  align-self: center;
 }
 .indicator-rect {
   flex: 1;
@@ -52,10 +56,10 @@
 }
 .blue-indicator {
   background-color: #3b82f6;
-} /* Keep blue/red accents */
+}
 .red-indicator {
   background-color: #ef4444;
-}
+} */
 
 /* Bans Header Container */
 .draft-creator-bans-header {

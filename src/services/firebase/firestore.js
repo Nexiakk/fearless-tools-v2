@@ -931,3 +931,158 @@ export function setupLcuDraftsRealtimeSync(workspaceId, callback) {
     return () => {}
   }
 }
+
+// ========== TIER TEMPLATE FUNCTIONS ==========
+
+/**
+ * Create a new tier template in Firestore
+ */
+export async function createTierTemplateInFirestore(name, tiers, userId) {
+  if (!name || !tiers || !userId) {
+    throw new Error('Template name, tiers, and user ID are required')
+  }
+
+  try {
+    const templatesRef = collection(db, 'tierTemplates')
+    const docRef = doc(templatesRef)
+
+    const templateData = {
+      name: name.trim(),
+      tiers: tiers.map(tier => ({
+        id: tier.id,
+        name: tier.name,
+        order: tier.order,
+        style: tier.style,
+        color: tier.color,
+        champions: tier.champions || {}
+      })),
+      createdAt: serverTimestamp(),
+      createdBy: userId,
+      updatedAt: serverTimestamp()
+    }
+
+    await setDoc(docRef, templateData)
+    console.log('Tier template created successfully:', docRef.id)
+    return { id: docRef.id, ...templateData }
+  } catch (error) {
+    console.error('Error creating tier template:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch all tier templates from Firestore
+ */
+export async function fetchAllTierTemplatesFromFirestore() {
+  try {
+    const templatesRef = collection(db, 'tierTemplates')
+    const q = query(templatesRef, orderBy('createdAt', 'desc'))
+    const querySnapshot = await getDocs(q)
+
+    const templates = []
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data()
+      templates.push({
+        id: docSnap.id,
+        name: data.name,
+        tiers: data.tiers || [],
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        createdBy: data.createdBy,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      })
+    })
+
+    return templates
+  } catch (error) {
+    console.error('Error fetching tier templates:', error)
+    return []
+  }
+}
+
+/**
+ * Load a specific tier template from Firestore
+ */
+export async function loadTierTemplateFromFirestore(templateId) {
+  if (!templateId) {
+    throw new Error('Template ID is required')
+  }
+
+  try {
+    const templateRef = doc(db, 'tierTemplates', templateId)
+    const docSnap = await getDoc(templateRef)
+
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        name: data.name,
+        tiers: data.tiers || [],
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        createdBy: data.createdBy,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+      }
+    } else {
+      return null
+    }
+  } catch (error) {
+    console.error('Error loading tier template:', error)
+    throw error
+  }
+}
+
+/**
+ * Delete a tier template from Firestore
+ */
+export async function deleteTierTemplateFromFirestore(templateId) {
+  if (!templateId) {
+    throw new Error('Template ID is required')
+  }
+
+  try {
+    const templateRef = doc(db, 'tierTemplates', templateId)
+    await deleteDoc(templateRef)
+    console.log('Tier template deleted successfully:', templateId)
+  } catch (error) {
+    console.error('Error deleting tier template:', error)
+    throw error
+  }
+}
+
+/**
+ * Update a tier template in Firestore
+ */
+export async function updateTierTemplateInFirestore(templateId, name, tiers) {
+  if (!templateId) {
+    throw new Error('Template ID is required')
+  }
+
+  try {
+    const templateRef = doc(db, 'tierTemplates', templateId)
+
+    const updateData = {
+      updatedAt: serverTimestamp()
+    }
+
+    if (name) {
+      updateData.name = name.trim()
+    }
+
+    if (tiers) {
+      updateData.tiers = tiers.map(tier => ({
+        id: tier.id,
+        name: tier.name,
+        order: tier.order,
+        style: tier.style,
+        color: tier.color,
+        champions: tier.champions || {}
+      }))
+    }
+
+    await updateDoc(templateRef, updateData)
+    console.log('Tier template updated successfully:', templateId)
+    return { id: templateId, ...updateData }
+  } catch (error) {
+    console.error('Error updating tier template:', error)
+    throw error
+  }
+}

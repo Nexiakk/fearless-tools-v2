@@ -16,12 +16,6 @@
         </div>
 
         <div v-else class="draft-creator-main-wrapper">
-          <!-- Side Indicators -->
-          <div class="draft-indicator-container">
-            <div class="indicator-rect blue-indicator"></div>
-            <div class="indicator-rect red-indicator"></div>
-          </div>
-
           <!-- Bans Header -->
           <div class="draft-creator-bans-header">
             <!-- Blue Bans -->
@@ -430,7 +424,7 @@
                 <!-- Used Champions This Series Panel -->
                 <div
                   class="fearless-picks-panel"
-                  v-if="gamesWithPicks.length > 0"
+                  v-if="gamesWithPicks.length > 0 && isLcuModeActive"
                 >
                   <div class="fearless-picks-header">
                     <span class="fearless-picks-title"
@@ -632,6 +626,11 @@ const workspaceTiersStore = useWorkspaceTiersStore();
 
 // Fearless panel state
 const isFearlessPanelExpanded = ref(false);
+
+// Check if LCU mode is active
+const isLcuModeActive = computed(() => {
+  return draftingStore.draftingMode === 'lcu-sync';
+});
 
 function toggleFearlessPanel() {
   isFearlessPanelExpanded.value = !isFearlessPanelExpanded.value;

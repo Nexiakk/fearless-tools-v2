@@ -344,6 +344,12 @@ export const useDraftStore = defineStore("draft", () => {
       lcuDraftsRaw.value = [];
     }
 
+    // Remove LCU draft iterations from series store
+    const seriesStore = useSeriesStore();
+    if (seriesStore && seriesStore.removeLcuDraftIterations) {
+      seriesStore.removeLcuDraftIterations();
+    }
+
     queueSave();
   }
 

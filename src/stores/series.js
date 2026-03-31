@@ -159,7 +159,101 @@ export const useSeriesStore = defineStore('series', () => {
     }
   }
 
-  // Reset series
+  // Reset current iteration only
+  function resetCurrentIteration() {
+    const draft = currentDraft.value
+    const game = currentGame.value
+    if (!draft || !game) return
+
+    // Clear all picks
+    for (let i = 0; i < 5; i++) {
+      if (draft.bluePicks && draft.bluePicks[i]) {
+        draft.bluePicks[i].champion = null
+        draft.bluePicks[i].notes = ''
+      }
+      if (draft.blueBans && draft.blueBans[i]) {
+        draft.blueBans[i].champion = null
+        draft.blueBans[i].notes = ''
+      }
+      if (draft.redPicks && draft.redPicks[i]) {
+        draft.redPicks[i].champion = null
+        draft.redPicks[i].notes = ''
+      }
+      if (draft.redBans && draft.redBans[i]) {
+        draft.redBans[i].champion = null
+        draft.redBans[i].notes = ''
+      }
+    }
+
+    // Clear general notes
+    draft.generalNotes = ''
+    draft.hasChanges = true
+    draft.updatedAt = new Date()
+    game.hasChanges = true
+    queueSave()
+  }
+
+  // Reset all iterations (removes non-LCU drafts, preserves LCU)
+  function resetAllIterations(wipeAllDrafts = false) {
+    const game = currentGame.value
+    if (!game || !game.drafts) return
+
+    if (wipeAllDrafts) {
+      // Complete wipe - remove everything except one empty draft
+      game.drafts = [createDefaultDraft()]
+      game.currentDraftIndex = 0
+    } else {
+      // Remove only non-LCU drafts, keep LCU iterations
+      const lcuDrafts = game.drafts.filter(d => d.isReadOnly)
+      
+      if (lcuDrafts.length > 0) {
+        // Keep LCU drafts and add one empty manual draft
+        const newManualDraft = createDefaultDraft()
+        newManualDraft.name = 'Draft 1'
+        game.drafts = [...lcuDrafts, newManualDraft]
+        // Switch to the new manual draft
+        game.currentDraftIndex = game.drafts.length - 1
+      } else {
+        // No LCU drafts, just create one empty draft
+        game.drafts = [createDefaultDraft()]
+        game.currentDraftIndex = 0
+      }
+    }
+
+    game.hasChanges = true
+    queueSave()
+  }
+
+  // Reset all games - resets all iterations in all games (user created only, LCU and Fearless Pool data unaffected)
+  function resetAllGames() {
+    if (!currentSeries.value || !currentSeries.value.games) return
+
+    currentSeries.value.games.forEach(game => {
+      if (!game.drafts) return
+
+      // Remove only non-LCU drafts, keep LCU iterations
+      const lcuDrafts = game.drafts.filter(d => d.isReadOnly)
+      
+      if (lcuDrafts.length > 0) {
+        // Keep LCU drafts and add one empty manual draft
+        const newManualDraft = createDefaultDraft()
+        newManualDraft.name = 'Draft 1'
+        game.drafts = [...lcuDrafts, newManualDraft]
+        // Switch to the new manual draft
+        game.currentDraftIndex = game.drafts.length - 1
+      } else {
+        // No LCU drafts, just create one empty draft
+        game.drafts = [createDefaultDraft()]
+        game.currentDraftIndex = 0
+      }
+
+      game.hasChanges = true
+    })
+
+    queueSave()
+  }
+
+  // Reset series (legacy - kept for backward compatibility)
   function resetSeries() {
     const workspaceStore = useWorkspaceStore()
     const defaultSeries = createDefaultSeries('New Series')
@@ -677,6 +771,40 @@ export const useSeriesStore = defineStore('series', () => {
     }
   }
 
+  // Remove all LCU draft iterations from all games
+  function removeLcuDraftIterations() {
+    if (!currentSeries.value || !currentSeries.value.games) return
+
+    let hasChanges = false
+
+    currentSeries.value.games.forEach(game => {
+      if (!game.drafts) return
+
+      const originalLength = game.drafts.length
+      game.drafts = game.drafts.filter(d => !d.isReadOnly && d.source !== 'lcu')
+
+      if (game.drafts.length !== originalLength) {
+        hasChanges = true
+        game.hasChanges = true
+
+        // Reset to first draft if current index is out of bounds
+        if (game.currentDraftIndex >= game.drafts.length) {
+          game.currentDraftIndex = Math.max(0, game.drafts.length - 1)
+        }
+
+        // Ensure at least one draft exists
+        if (game.drafts.length === 0) {
+          game.drafts = [createDefaultDraft()]
+          game.currentDraftIndex = 0
+        }
+      }
+    })
+
+    if (hasChanges && canWrite()) {
+      queueSave()
+    }
+  }
+
   // Get unavailable champions for a game
   // Only LCU iteration picks from previous games are disabled
   function getUnavailableChampionsForGame(gameNumber) {
@@ -901,6 +1029,9 @@ export const useSeriesStore = defineStore('series', () => {
     createDefaultSeries,
     initializeDefaultSeries,
     createNewSeries,
+    resetCurrentIteration,
+    resetAllIterations,
+    resetAllGames,
     resetSeries,
     loadSeries,
     refreshSavedSeries,
@@ -917,6 +1048,7 @@ export const useSeriesStore = defineStore('series', () => {
     updateCurrentDraftGeneralNotes,
     updateLcuDraftSlot,
     hydrateLcuDraftsInSeries, // Added to exports
+    removeLcuDraftIterations,
     completeLcuDraft,
     getUnavailableChampionsForGame,
     gameHasChanges,

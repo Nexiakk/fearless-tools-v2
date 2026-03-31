@@ -139,6 +139,7 @@
     </div>
 
     <DraftDeletionModal ref="draftDeletionModal" />
+    <ResetModal ref="resetModal" />
   </div>
 </template>
 
@@ -148,6 +149,7 @@ import { useSeriesStore } from "@/stores/series";
 import { useDraftingStore } from "@/stores/drafting";
 import { useConfirmationStore } from "@/stores/confirmation";
 import DraftDeletionModal from "@/components/common/DraftDeletionModal.vue";
+import ResetModal from "@/components/drafting/ResetModal.vue";
 import {
   Tooltip,
   TooltipContent,
@@ -160,6 +162,7 @@ const draftingStore = useDraftingStore();
 const confirmationStore = useConfirmationStore();
 
 const draftDeletionModal = ref(null);
+const resetModal = ref(null);
 
 const currentGameDrafts = computed(() => {
   if (!seriesStore.currentGame) return [];
@@ -320,17 +323,19 @@ async function handleSave() {
   });
 }
 
-function handleReset() {
-  if (!seriesStore.resetSeries) return;
+async function handleReset() {
+  if (!resetModal.value) return;
 
-  confirmationStore.open({
-    message:
-      "Are you sure you want to reset the current series? This will clear all games, drafts, and notes. This cannot be undone.",
-    confirmAction: () => {
-      seriesStore.resetSeries();
-    },
-    isDanger: true,
-  });
+  const result = await resetModal.value.open();
+  if (!result.confirmed) return;
+
+  if (result.mode === 'all') {
+    // Reset all games - user created only, LCU and Fearless Pool data unaffected
+    seriesStore.resetAllGames();
+  } else {
+    // Reset current iteration only (default)
+    seriesStore.resetCurrentIteration();
+  }
 }
 </script>
 
@@ -466,7 +471,7 @@ function handleReset() {
 .draft-iterations:hover {
   max-height: 200px;
   overflow-y: hidden;
-  z-index: 100;
+  z-index: 10;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   border-color: #404040;
 }
@@ -475,7 +480,11 @@ function handleReset() {
   position: absolute;
   top: -6px;
   right: -6px;
-  z-index: 150;
+  z-index: 5;
+}
+
+.draft-iterations:hover ~ .info-badge {
+  z-index: 15;
 }
 
 .iteration-button {

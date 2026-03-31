@@ -8,6 +8,12 @@ import { useChampionsStore } from './champions'
 import { useSettingsStore } from './settings'
 import { authService } from '@/services/firebase/auth'
 import { canWrite } from '@/composables/usePermissions'
+import {
+  createTierTemplateInFirestore,
+  fetchAllTierTemplatesFromFirestore,
+  loadTierTemplateFromFirestore,
+  deleteTierTemplateFromFirestore
+} from '@/services/firebase/firestore'
 
 export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   // State
@@ -19,6 +25,10 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   let unsubscribeRealtimeSync = null
   let saveTimeout = null
   let isSaving = ref(false)
+
+  // Template state
+  const templates = ref([])
+  const isLoadingTemplates = ref(false)
 
   // Default tiers (stored in global champions data)
   const defaultTiers = ref([
@@ -655,6 +665,119 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   // Initialize the workspace watcher immediately
   setupWorkspaceWatcher()
 
+  // ========== TEMPLATE FUNCTIONS ==========
+
+  async function loadAllTemplates() {
+    isLoadingTemplates.value = true
+    try {
+      templates.value = await fetchAllTierTemplatesFromFirestore()
+      console.log(`Loaded ${templates.value.length} tier templates`)
+    } catch (error) {
+      console.error('Error loading tier templates:', error)
+      error.value = 'Failed to load tier templates'
+    } finally {
+      isLoadingTemplates.value = false
+    }
+  }
+
+  async function saveAsTemplate(templateName) {
+    const isAdmin = await authService.isAdmin()
+    if (!isAdmin) {
+      throw new Error('Admin access required to save templates')
+    }
+
+    if (!hasWorkspaceTiers.value) {
+      throw new Error('No custom tiers to save as template')
+    }
+
+    if (!templateName || !templateName.trim()) {
+      throw new Error('Template name is required')
+    }
+
+    try {
+      const userId = authService.getUserId()
+      // Save sortedTiers to preserve hierarchy order
+      const template = await createTierTemplateInFirestore(templateName, sortedTiers.value, userId)
+      templates.value.unshift(template)
+      console.log('Tier template saved successfully:', template.id)
+      return template
+    } catch (error) {
+      console.error('Error saving tier template:', error)
+      throw error
+    }
+  }
+
+  async function loadTemplate(templateId) {
+    const workspaceStore = useWorkspaceStore()
+
+    // Check permissions
+    if (!workspaceStore.isLocalWorkspace) {
+      const isAdmin = await authService.isAdmin()
+      if (!isAdmin) {
+        error.value = 'Admin access required to load templates'
+        return false
+      }
+    }
+
+    if (!templateId) {
+      throw new Error('Template ID is required')
+    }
+
+    try {
+      const template = await loadTierTemplateFromFirestore(templateId)
+      if (template && template.tiers) {
+        // Generate new IDs for the tiers to avoid conflicts
+        const newTiers = template.tiers.map((tier, index) => ({
+          ...tier,
+          id: `tier_${Date.now()}_${index}`,
+          order: index,
+          isDefault: false
+        }))
+
+        tiers.value = newTiers
+        selectedTierId.value = null
+
+        // Initialize tier card sizes in settings
+        const settingsStore = useSettingsStore()
+        newTiers.forEach(tier => {
+          settingsStore.initializeTierCardSize(tier.id)
+        })
+
+        // Save immediately to persist
+        await saveTiers()
+
+        console.log(`Loaded template "${template.name}" with ${newTiers.length} tiers`)
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Error loading tier template:', error)
+      error.value = 'Failed to load tier template'
+      return false
+    }
+  }
+
+  async function deleteTemplate(templateId) {
+    const isAdmin = await authService.isAdmin()
+    if (!isAdmin) {
+      throw new Error('Admin access required to delete templates')
+    }
+
+    if (!templateId) {
+      throw new Error('Template ID is required')
+    }
+
+    try {
+      await deleteTierTemplateFromFirestore(templateId)
+      templates.value = templates.value.filter(t => t.id !== templateId)
+      console.log('Tier template deleted successfully:', templateId)
+      return true
+    } catch (error) {
+      console.error('Error deleting tier template:', error)
+      throw error
+    }
+  }
+
   return {
     // State
     tiers,
@@ -663,6 +786,8 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     error,
     defaultTiers,
     isSaving,
+    templates,
+    isLoadingTemplates,
     // Computed
     currentTiers,
     sortedTiers,
@@ -686,6 +811,10 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
     saveAsGlobalDefaults,
     resetGlobalDefaults,
     loadGlobalDefaults,
+    loadAllTemplates,
+    saveAsTemplate,
+    loadTemplate,
+    deleteTemplate,
     // Helpers
     getTierForChampion,
     isChampionInTier,
