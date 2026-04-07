@@ -636,12 +636,13 @@ function toggleFearlessPanel() {
   isFearlessPanelExpanded.value = !isFearlessPanelExpanded.value;
 }
 
-// Get games with actual picks data
+// Get games with actual picks data (only LCU drafts)
 const gamesWithPicks = computed(() => {
   if (!seriesStore.currentSeries?.games) return [];
   return seriesStore.currentSeries.games.filter((game) => {
-    // Check if any draft in this game has champions
+    // Only show games that have LCU drafts (source === 'lcu')
     for (const draft of game.drafts || []) {
+      if (draft.source !== 'lcu') continue; // Skip non-LCU drafts
       const allSlots = [...(draft.bluePicks || []), ...(draft.redPicks || [])];
       if (allSlots.some((slot) => slot?.champion)) return true;
     }
@@ -678,7 +679,8 @@ function getCardScale(champion) {
   }
 
   // Rule 1: We only show Tiers (and apply their scale modifier) if sorting by Tier
-  if (isSortingByTier) {
+  // AND the champion is available. Unavailable champions should all have consistent sizing.
+  if (isSortingByTier && !isUnavailable) {
     const tier = workspaceTiersStore.getTierForChampion(
       champion.name,
       getCurrentRoleFilter(),
@@ -695,8 +697,8 @@ function getCardScale(champion) {
   }
 
   // Rule 2: Unavailable (picked) champions get their modifier applied specifically
-  // ONLY if rendering at bottom
-  if (isUnavailable && pickedMode === "bottom") {
+  // ONLY if rendering at bottom AND NOT sorting by tier (for consistent sizing)
+  if (isUnavailable && pickedMode === "bottom" && !isSortingByTier) {
     // Note: The preset modifier is e.g. 83%. We multiply this against the normal BaseScale!
     const unavailableModifier = (sourceModule?.unavailableCardSize || 83) / 100;
 
@@ -1126,11 +1128,8 @@ onMounted(async () => {
     seriesStore.initializeDefaultSeries();
   }
 
-  // Hydrate any existing LCU drafts into the series
-  // This handles the case where LCU drafts were loaded before the series was initialized
-  if (draftStore.lcuDraftsRaw?.length > 0) {
-    seriesStore.hydrateLcuDraftsInSeries(draftStore.lcuDraftsRaw);
-  }
+  // Note: No need to hydrate LCU drafts here - the currentDraft computed property
+  // in seriesStore reactively merges LCU data on demand for real-time updates
 
   // Always try to refresh saved series (will handle local workspace internally)
   if (workspaceStore.hasWorkspace) {

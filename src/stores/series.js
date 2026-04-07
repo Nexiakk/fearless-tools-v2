@@ -23,20 +23,75 @@ export const useSeriesStore = defineStore('series', () => {
   let unsubscribeRealtimeSync = null
   const originalSeriesState = ref(null) // Store original state for change detection
 
-  // Watch for champions being loaded and re-hydrate LCU drafts if needed
-  let championsStoreInstance = null
-  let draftStoreInstance = null
-  watch(() => {
-    // Lazy init stores to avoid circular dependency
-    if (!championsStoreInstance) championsStoreInstance = useChampionsStore()
-    if (!draftStoreInstance) draftStoreInstance = useDraftStore()
-    return championsStoreInstance?.allChampions?.length || 0
-  }, (newLength, oldLength) => {
-    if (newLength > 0 && oldLength === 0 && draftStoreInstance?.lcuDraftsRaw?.length > 0) {
-      console.log('[SeriesStore] Champions loaded, re-hydrating LCU drafts...')
-      hydrateLcuDraftsInSeries(draftStoreInstance.lcuDraftsRaw)
+// Champion ID to Name cache - built once when champions load
+let _championIdToNameCache = null
+function getChampionIdToNameMap() {
+  if (!_championIdToNameCache) {
+    const championsStore = useChampionsStore()
+    _championIdToNameCache = new Map()
+    championsStore.allChampions?.forEach(c => {
+      _championIdToNameCache.set(String(c.id), c.name)
+      _championIdToNameCache.set(c.name, c.name) // Also map name to itself for safety
+    })
+  }
+  return _championIdToNameCache
+}
+
+// Invalidate cache when champions change
+let championsStoreInstance = null
+watch(() => {
+  if (!championsStoreInstance) championsStoreInstance = useChampionsStore()
+  return championsStoreInstance?.allChampions?.length || 0
+}, () => {
+  _championIdToNameCache = null // Force rebuild on next access
+})
+
+// Smart watcher for new LCU draft iterations
+// Only triggers hydration when NEW game numbers appear in LCU data
+let draftStoreInstance = null
+let lastKnownGameNumbers = new Set()
+watch(() => {
+  if (!draftStoreInstance) draftStoreInstance = useDraftStore()
+  return draftStoreInstance?.lcuDraftsRaw || []
+}, (newLcuDrafts) => {
+  if (!currentSeries.value || !newLcuDrafts || newLcuDrafts.length === 0) return
+  
+  // Extract game numbers from LCU drafts
+  const currentGameNumbers = new Set()
+  newLcuDrafts.forEach(draft => {
+    if (draft.id) {
+      const parts = draft.id.split('_')
+      const gameNumber = parseInt(parts[parts.length - 1], 10)
+      if (!isNaN(gameNumber)) {
+        currentGameNumbers.add(gameNumber)
+      }
     }
   })
+  
+  // Check if there are new game numbers we haven't seen before
+  let hasNewGames = false
+  for (const gameNum of currentGameNumbers) {
+    if (!lastKnownGameNumbers.has(gameNum)) {
+      // Check if this game already has an LCU draft iteration
+      const game = currentSeries.value.games?.find(g => g.gameNumber === gameNum)
+      const hasLcuDraft = game?.drafts?.some(d => d.source === 'lcu' || d.isReadOnly)
+      
+      if (!hasLcuDraft) {
+        hasNewGames = true
+        break
+      }
+    }
+  }
+  
+  // Only hydrate if there are genuinely new games
+  if (hasNewGames) {
+    console.log('[SeriesStore] New LCU game(s) detected, creating iterations...')
+    hydrateLcuDraftsInSeries(newLcuDrafts)
+  }
+  
+  // Update known game numbers
+  lastKnownGameNumbers = currentGameNumbers
+}, { deep: true })
 
   // Getters
   const hasSeries = computed(() => !!currentSeries.value)
@@ -57,8 +112,113 @@ export const useSeriesStore = defineStore('series', () => {
     const game = currentGame.value
     if (!game) return null
     const draftIndex = game.currentDraftIndex ?? 0
-    return game.drafts?.[draftIndex] || null
+    const baseDraft = game.drafts?.[draftIndex]
+    
+    if (!baseDraft) return null
+    
+    // If it's an LCU draft, merge with live LCU data for real-time updates
+    if (baseDraft.source === 'lcu' || baseDraft.isReadOnly) {
+      const draftStore = useDraftStore()
+      const lcuDrafts = draftStore.lcuDraftsRaw || []
+      
+      // Find matching LCU draft by game number
+      const matchingLcuDraft = lcuDrafts.find(d => {
+        if (!d.id) return false
+        const parts = d.id.split('_')
+        const lcuGameNumber = parseInt(parts[parts.length - 1], 10)
+        return lcuGameNumber === game.gameNumber
+      })
+      
+      if (matchingLcuDraft) {
+        // Merge LCU data into base draft for real-time reactivity
+        return mergeLcuDraftIntoBase(baseDraft, matchingLcuDraft)
+      }
+    }
+    
+    return baseDraft
   })
+
+  // Helper: Merge LCU draft data into base draft structure
+  function mergeLcuDraftIntoBase(baseDraft, lcuDraft) {
+    const idToNameMap = getChampionIdToNameMap()
+    
+    const championIdToName = (id) => {
+      if (!id || id === 'None' || id === '0') return null
+      return idToNameMap.get(String(id)) || null
+    }
+    
+    // Create a deep copy to avoid mutating original
+    const merged = {
+      ...baseDraft,
+      bluePicks: baseDraft.bluePicks.map(slot => ({...slot})),
+      blueBans: baseDraft.blueBans.map(slot => ({...slot})),
+      redPicks: baseDraft.redPicks.map(slot => ({...slot})),
+      redBans: baseDraft.redBans.map(slot => ({...slot}))
+    }
+    
+    // Merge blue side
+    if (lcuDraft.blueSide) {
+      if (lcuDraft.blueSide.bans) {
+        let actualBanIndex = 0
+        lcuDraft.blueSide.bans.forEach(banId => {
+          if (actualBanIndex < 5 && banId !== 'None') {
+            const champName = championIdToName(banId)
+            if (champName && merged.blueBans[actualBanIndex]) {
+              merged.blueBans[actualBanIndex].champion = champName
+            }
+            actualBanIndex++
+          } else if (banId === 'None') {
+            actualBanIndex++
+          }
+        })
+      }
+      if (lcuDraft.blueSide.picks) {
+        lcuDraft.blueSide.picks.forEach((pickId, index) => {
+          if (index < 5) {
+            const champName = championIdToName(pickId)
+            if (champName && merged.bluePicks[index]) {
+              merged.bluePicks[index].champion = champName
+            }
+          }
+        })
+      }
+    }
+    
+    // Merge red side
+    if (lcuDraft.redSide) {
+      if (lcuDraft.redSide.bans) {
+        let actualBanIndex = 0
+        lcuDraft.redSide.bans.forEach(banId => {
+          if (actualBanIndex < 5 && banId !== 'None') {
+            const champName = championIdToName(banId)
+            if (champName && merged.redBans[actualBanIndex]) {
+              merged.redBans[actualBanIndex].champion = champName
+            }
+            actualBanIndex++
+          } else if (banId === 'None') {
+            actualBanIndex++
+          }
+        })
+      }
+      if (lcuDraft.redSide.picks) {
+        lcuDraft.redSide.picks.forEach((pickId, index) => {
+          if (index < 5) {
+            const champName = championIdToName(pickId)
+            if (champName && merged.redPicks[index]) {
+              merged.redPicks[index].champion = champName
+            }
+          }
+        })
+      }
+    }
+    
+    // Mark as completed if all picks done
+    const bluePicksCount = merged.bluePicks.filter(s => s.champion).length
+    const redPicksCount = merged.redPicks.filter(s => s.champion).length
+    merged.isCompleted = (bluePicksCount + redPicksCount) >= 10
+    
+    return merged
+  }
   
   const canAddGame = computed(() => {
     if (!currentSeries.value) return false
@@ -633,19 +793,11 @@ export const useSeriesStore = defineStore('series', () => {
 
     let hasChanges = false;
 
+    // Use cached champion ID to name map for performance
+    const idToNameMap = getChampionIdToNameMap()
     const championIdToName = (id) => {
       if (!id || id === 'None' || id === '0') return null
-      
-      // Try to match directly by string ID or Name
-      let champion = championsStore.allChampions.find(c => c.id === id || c.name === id)
-      
-      // Fallback: if it's numeric, try numeric comparison
-      if (!champion && !isNaN(parseInt(id, 10))) {
-        const idNum = parseInt(id, 10)
-        champion = championsStore.allChampions.find(c => c.id === idNum)
-      }
-      
-      return champion ? champion.name : null
+      return idToNameMap.get(String(id)) || null
     }
 
     lcuDrafts.forEach(rawDraft => {
@@ -986,11 +1138,8 @@ export const useSeriesStore = defineStore('series', () => {
           series.currentGameIndex = savedGameIndex
 
           currentSeries.value = series
-          
-          const draftStore = useDraftStore()
-          if (draftStore.lcuDraftsRaw && draftStore.lcuDraftsRaw.length > 0) {
-            hydrateLcuDraftsInSeries(draftStore.lcuDraftsRaw)
-          }
+          // Note: No need to hydrate LCU drafts here - currentDraft computed property
+          // reactively merges LCU data on demand
         }
       }
     )
