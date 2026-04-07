@@ -988,6 +988,37 @@ watch(() => {
     return unavailable
   }
 
+  // Check if a game has any LCU draft data
+  function hasLcuData(gameNumber) {
+    if (!currentSeries.value?.games) return false
+    const game = currentSeries.value.games.find(g => g.gameNumber === gameNumber)
+    return game?.drafts?.some(d => d.source === 'lcu') || false
+  }
+
+  // Check if a game's LCU draft is completed (≥10 total picks)
+  function isGameCompleted(gameNumber) {
+    if (!currentSeries.value?.games) return false
+    const game = currentSeries.value.games.find(g => g.gameNumber === gameNumber)
+    if (!game?.drafts) return false
+    const lcuDraft = game.drafts.find(d => d.source === 'lcu')
+    if (!lcuDraft) return false
+    const blueCount = (lcuDraft.bluePicks || []).filter(s => s?.champion).length
+    const redCount = (lcuDraft.redPicks || []).filter(s => s?.champion).length
+    return (blueCount + redCount) >= 10
+  }
+
+  // Get the total pick count for the LCU draft in a game
+  function getLcuPickCount(gameNumber) {
+    if (!currentSeries.value?.games) return 0
+    const game = currentSeries.value.games.find(g => g.gameNumber === gameNumber)
+    if (!game?.drafts) return 0
+    const lcuDraft = game.drafts.find(d => d.source === 'lcu')
+    if (!lcuDraft) return 0
+    const blueCount = (lcuDraft.bluePicks || []).filter(s => s?.champion).length
+    const redCount = (lcuDraft.redPicks || []).filter(s => s?.champion).length
+    return blueCount + redCount
+  }
+
   // Check if game has changes
   function gameHasChanges(game) {
     if (!game) return false
@@ -1200,6 +1231,9 @@ watch(() => {
     removeLcuDraftIterations,
     completeLcuDraft,
     getUnavailableChampionsForGame,
+    hasLcuData,
+    isGameCompleted,
+    getLcuPickCount,
     gameHasChanges,
     getGamesWithChanges,
     hasUnsavedChanges,

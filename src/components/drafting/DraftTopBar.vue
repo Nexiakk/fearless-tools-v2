@@ -9,11 +9,16 @@
         class="game-button"
         :class="{
           active: isGameActive(gameNumber),
-          completed: isGameCompleted(gameNumber),
+          completed: isGameCompleted(gameNumber) && !isGameActive(gameNumber),
+          ongoing: isGameOngoing(gameNumber) && !isGameActive(gameNumber),
+          'active-completed': isGameActive(gameNumber) && isGameCompleted(gameNumber),
+          'active-ongoing': isGameActive(gameNumber) && isGameOngoing(gameNumber),
         }"
         :title="getGameButtonTitle(gameNumber)"
       >
-        <div v-if="isGameActive(gameNumber)" class="pulse-indicator"></div>
+        <!-- Active game: show pulse unless it has a status -->
+        <div v-if="isGameActive(gameNumber) && !isGameCompleted(gameNumber) && !isGameOngoing(gameNumber)" class="pulse-indicator"></div>
+        <!-- Completed: green checkmark -->
         <svg
           v-else-if="isGameCompleted(gameNumber)"
           xmlns="http://www.w3.org/2000/svg"
@@ -22,13 +27,15 @@
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          stroke-width="2"
+          stroke-width="3"
           stroke-linecap="round"
           stroke-linejoin="round"
           class="check-icon"
         >
           <path d="M20 6 9 17l-5-5"></path>
         </svg>
+        <!-- Ongoing: blue pulsing dot -->
+        <div v-else-if="isGameOngoing(gameNumber)" class="ongoing-indicator"></div>
         <span class="game-label">G{{ gameNumber }}</span>
       </button>
     </div>
@@ -192,11 +199,11 @@ function isGameActive(gameNumber) {
 }
 
 function isGameCompleted(gameNumber) {
-  if (!seriesStore.currentSeries) return false;
-  const game = seriesStore.currentSeries.games?.find(
-    (g) => g.gameNumber === gameNumber,
-  );
-  return game?.isCompleted || false;
+  return seriesStore.isGameCompleted(gameNumber);
+}
+
+function isGameOngoing(gameNumber) {
+  return seriesStore.hasLcuData(gameNumber) && !seriesStore.isGameCompleted(gameNumber);
 }
 
 function isGameLocked(gameNumber) {
@@ -265,6 +272,17 @@ function toggleDraftingMode() {
 function handleGameClick(gameNumber) {
   if (!seriesStore.currentSeries) return;
   seriesStore.setCurrentGame(gameNumber);
+
+  // Auto-select LCU iteration if in LCU mode and it exists
+  if (draftingMode.value === 'lcu-sync') {
+    const game = seriesStore.currentSeries.games?.find(g => g.gameNumber === gameNumber);
+    if (game?.drafts) {
+      const lcuDraftIndex = game.drafts.findIndex(d => d.isReadOnly);
+      if (lcuDraftIndex >= 0) {
+        seriesStore.setCurrentDraft(lcuDraftIndex);
+      }
+    }
+  }
 }
 
 function handleDraftClick(index) {
@@ -393,7 +411,7 @@ async function handleReset() {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.game-button:hover:not(:disabled) {
+.game-button:hover:not(:disabled):not(.active):not(.completed):not(.ongoing) {
   background: linear-gradient(180deg, #353535 0%, #2a2a2a 100%);
   color: #d0d0d0;
   border-color: #4a4a4a;
@@ -408,10 +426,72 @@ async function handleReset() {
   box-shadow: 0 0 8px rgba(251, 191, 36, 0.2);
 }
 
+.game-button.active:hover {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.5) 0%, rgba(180, 83, 9, 0.35) 100%);
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fbbf24;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+/* Completed game (not selected) - green */
 .game-button.completed {
   background: linear-gradient(180deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.08) 100%);
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.3);
+}
+
+.game-button.completed:hover {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.25) 0%, rgba(34, 197, 94, 0.15) 100%);
+  border-color: rgba(74, 222, 128, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Ongoing game (not selected) - blue */
+.game-button.ongoing {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.game-button.ongoing:hover {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.12) 100%);
+  border-color: rgba(96, 165, 250, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Active + Completed: amber bg with green checkmark */
+.game-button.active-completed {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.4) 0%, rgba(180, 83, 9, 0.25) 100%);
+  color: #bbf7d0;
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.2);
+}
+
+.game-button.active-completed:hover {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.5) 0%, rgba(180, 83, 9, 0.35) 100%);
+  border-color: rgba(251, 191, 36, 0.6);
+}
+
+.game-button.active-completed .check-icon {
+  color: #bbf7d0;
+}
+
+/* Active + Ongoing: amber bg with blue dot */
+.game-button.active-ongoing {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.4) 0%, rgba(180, 83, 9, 0.25) 100%);
+  color: #bfdbfe;
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.2);
+}
+
+.game-button.active-ongoing:hover {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.5) 0%, rgba(180, 83, 9, 0.35) 100%);
+  border-color: rgba(251, 191, 36, 0.6);
+}
+
+.game-button.active-ongoing .ongoing-indicator {
+  background-color: #93c5fd;
+  box-shadow: 0 0 6px rgba(147, 197, 253, 0.5);
 }
 
 .pulse-indicator {
@@ -424,15 +504,31 @@ async function handleReset() {
   box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
 }
 
+.ongoing-indicator {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background-color: #60a5fa;
+  animation: ongoing-pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.5);
+}
+
 @keyframes pulse-pulse {
   0%, 100% { opacity: 0.8; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+@keyframes ongoing-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
 }
 
 .check-icon {
   width: 0.6875rem;
   height: 0.6875rem;
   flex-shrink: 0;
+  color: #4ade80;
 }
 
 .game-label {

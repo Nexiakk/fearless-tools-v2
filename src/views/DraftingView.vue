@@ -768,7 +768,7 @@ const currentDraft = computed(() => {
 const unavailableChampions = computed(() => {
   const unavailable = new Set();
 
-  // Add champions from previous games in the series
+  // Add champions from previous games in the series (game-scoped LCU picks)
   if (seriesStore.currentGame) {
     const gameUnavailable = seriesStore.getUnavailableChampionsForGame(
       seriesStore.currentGame.gameNumber,
@@ -776,8 +776,11 @@ const unavailableChampions = computed(() => {
     gameUnavailable.forEach((champ) => unavailable.add(champ));
   }
 
-  // Add champions from the Fearless Pool (only unavailable/picked champions, not banned)
-  if (draftStore.unavailableChampions) {
+  // Only add Fearless Pool unavailable champions when NOT in LCU Sync mode
+  // In LCU Sync mode, the series store's game-scoped function above handles everything.
+  // draftStore.unavailableChampions collects picks from ALL LCU games globally,
+  // which would incorrectly disable current game's champions.
+  if (!isLcuModeActive.value && draftStore.unavailableChampions) {
     draftStore.unavailableChampions.forEach((champ) => unavailable.add(champ));
   }
 
