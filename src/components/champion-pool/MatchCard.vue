@@ -2,6 +2,9 @@
   <div class="match-card">
     <div class="match-header">
       <span class="game-label">Game {{ gameNumber }}</span>
+      <button class="delete-match-btn" title="Delete Game" @click="isDeleteDialogOpen = true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="trash-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      </button>
     </div>
 
     <div class="match-content">
@@ -93,13 +96,39 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <Dialog :open="isDeleteDialogOpen" @update:open="isDeleteDialogOpen = $event">
+      <DialogContent class="sm:max-w-md delete-dialog-content">
+        <DialogHeader>
+          <DialogTitle>Delete Match</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete Game {{ gameNumber }}? This action cannot be undone and will affect inherited champions.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter class="sm:justify-end gap-2 mt-4">
+          <Button variant="secondary" @click="isDeleteDialogOpen = false">Cancel</Button>
+          <Button variant="destructive" @click="confirmDelete">Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useChampionsStore } from "@/stores/champions";
+import { useDraftStore } from "@/stores/draft";
 import HelmetIcon from "@/components/icons/HelmetIcon.vue";
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 const props = defineProps({
   draft: {
@@ -113,9 +142,19 @@ const props = defineProps({
 });
 
 const championsStore = useChampionsStore();
+const draftStore = useDraftStore();
+
+const isDeleteDialogOpen = ref(false);
 
 function getIcon(name) {
   return championsStore.getChampionIconUrl(name, "event-history");
+}
+
+function confirmDelete() {
+  if (props.draft && props.draft.id) {
+    draftStore.deleteLcuDraft(props.draft.id);
+  }
+  isDeleteDialogOpen.value = false;
 }
 
 // Helpers to extract picks/bans safely
@@ -191,6 +230,39 @@ function getBans(draft, side) {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+
+.match-header:hover .delete-match-btn {
+  opacity: 1;
+}
+
+.delete-match-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  opacity: 0;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.delete-match-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.delete-dialog-content {
+  background-color: #1e1e1e !important;
+  color: #e5e5e5;
+  border: 1px solid #333 !important;
 }
 
 .game-label {

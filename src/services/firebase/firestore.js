@@ -876,6 +876,28 @@ export async function deleteAllLcuDrafts(workspaceId) {
 }
 
 /**
+ * Delete a specific LCU draft from Firestore by ID 
+ */
+export async function deleteLcuDraft(workspaceId, draftId) {
+  if (!workspaceId || !draftId) {
+    throw new Error('Workspace ID and Draft ID are required')
+  }
+
+  try {
+    const workspaceRef = doc(db, 'workspaces', workspaceId)
+    const lcuDraftsRef = collection(workspaceRef, 'lcuDrafts')
+    const draftDocRef = doc(lcuDraftsRef, draftId)
+
+    await deleteDoc(draftDocRef)
+    
+    return true
+  } catch (error) {
+    console.error(`Error deleting LCU draft ${draftId}:`, error)
+    throw error
+  }
+}
+
+/**
  * Set up real-time listener for LCU drafts
  */
 export function setupLcuDraftsRealtimeSync(workspaceId, callback) {

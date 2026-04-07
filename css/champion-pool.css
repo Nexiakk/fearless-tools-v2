@@ -947,6 +947,11 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
   /* Ensure consistent height */
   min-height: 0;
   box-sizing: border-box;
+  /* Hardware acceleration to prevent blur during scale transform */
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0) scale(1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 /* Highlighted/OP cards use highlight scale */
@@ -1026,6 +1031,10 @@ div.champion-card:not(.unavailable):not(.banned):hover img.champion-icon,
   border-radius: 3px;
   display: block;
   border: 1px solid #3a3a3a;
+  /* Hardware acceleration to prevent image blur during parent scale */
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 /* [REMOVED] .compact-champion-name-bar rule */
 .compact-champion-name {

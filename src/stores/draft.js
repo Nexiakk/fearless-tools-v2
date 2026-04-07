@@ -6,6 +6,7 @@ import {
   fetchLcuDraftsFromFirestore,
   setupLcuDraftsRealtimeSync,
   deleteAllLcuDrafts,
+  deleteLcuDraft,
 } from "@/services/firebase/firestore";
 import { workspaceService } from "@/services/workspace";
 import { useWorkspaceStore } from "./workspace";
@@ -353,6 +354,29 @@ export const useDraftStore = defineStore("draft", () => {
     queueSave();
   }
 
+  async function removeLcuDraft(draftId) {
+    if (!canWrite()) {
+      console.log('[DraftStore] removeLcuDraft blocked: User is in view-only mode');
+      return;
+    }
+
+    const workspaceStore = useWorkspaceStore();
+    if (workspaceStore.currentWorkspaceId && !workspaceStore.isLocalWorkspace) {
+      try {
+        await deleteLcuDraft(workspaceStore.currentWorkspaceId, draftId);
+        // The realtime listener will automatically fetch the updated drafts 
+        // and recompute lcuUnavailableChampions and Fearless logic.
+      } catch (error) {
+        console.error("Error deleting LCU draft:", error);
+      }
+    } else {
+      // Local workspace or no workspace
+      lcuDraftsRaw.value = lcuDraftsRaw.value.filter(d => d.id !== draftId);
+      const championsStore = useChampionsStore();
+      updateLcuUnavailableChampions(lcuDraftsRaw.value, championsStore);
+    }
+  }
+
   async function resetBans() {
     // Check permissions - block if in view-only mode
     if (!canWrite()) {
@@ -484,6 +508,7 @@ export const useDraftStore = defineStore("draft", () => {
     loadWorkspaceData,
     loadDraftData,
     loadLcuDrafts,
+    deleteLcuDraft: removeLcuDraft,
     // Internal state
     get _saveTimeout() {
       return saveTimeout;

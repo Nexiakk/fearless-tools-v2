@@ -11,7 +11,12 @@
         :key="draft.id || index"
         class="compact-match-preview"
       >
-        <div class="mini-grid-label">G{{ extractGameNumber(draft.id) || (index + 1) }}</div>
+        <div class="mini-grid-label-wrapper">
+          <div class="mini-grid-label">G{{ extractGameNumber(draft.id) || (index + 1) }}</div>
+          <button class="delete-match-btn-compact" title="Delete Game" @click.stop="promptDelete(draft)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="trash-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+        </div>
         <div class="mini-grid-container">
           <!-- Blue Side Column -->
           <div class="mini-col blue-col">
@@ -54,12 +59,39 @@
         :game-number="extractGameNumber(draft.id) || (index + 1)"
       />
     </template>
+
+    <!-- Delete Confirmation Modal -->
+    <Dialog :open="!!draftToDelete" @update:open="val => { if (!val) draftToDelete = null }">
+      <DialogContent class="sm:max-w-md delete-dialog-content">
+        <DialogHeader>
+          <DialogTitle>Delete Match</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete Game {{ draftToDelete ? (extractGameNumber(draftToDelete.id) || 1) : '' }}? This action cannot be undone and will affect inherited champions.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter class="sm:justify-end gap-2 mt-4">
+          <Button variant="secondary" @click="draftToDelete = null">Cancel</Button>
+          <Button variant="destructive" @click="confirmDelete">Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useChampionsStore } from '@/stores/champions'
+import { useDraftStore } from '@/stores/draft'
 import MatchCard from './MatchCard.vue'
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 const props = defineProps({
   drafts: {
@@ -73,6 +105,20 @@ const props = defineProps({
 })
 
 const championsStore = useChampionsStore()
+const draftStore = useDraftStore()
+
+const draftToDelete = ref(null)
+
+function promptDelete(draft) {
+  draftToDelete.value = draft
+}
+
+function confirmDelete() {
+  if (draftToDelete.value && draftToDelete.value.id) {
+    draftStore.deleteLcuDraft(draftToDelete.value.id)
+  }
+  draftToDelete.value = null
+}
 
 function getChampionIconUrl(championName) {
   return championsStore.getChampionIconUrl(championName, 'small-icon')
@@ -144,10 +190,48 @@ function extractGameNumber(draftId) {
   width: 100%;
 }
 
+.mini-grid-label-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
 .mini-grid-label {
   font-size: 0.7rem;
   color: #6b7280;
   font-weight: 700;
+}
+
+.delete-match-btn-compact {
+  position: absolute;
+  right: -20px; /* Push it outside the label area to fit the narrow constraints or align slightly inside */
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  opacity: 0;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.compact-match-preview:hover .delete-match-btn-compact {
+  opacity: 1;
+}
+
+.delete-match-btn-compact:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.delete-dialog-content {
+  background-color: #1e1e1e !important;
+  color: #e5e5e5;
+  border: 1px solid #333 !important;
 }
 
 .mini-grid-container {
