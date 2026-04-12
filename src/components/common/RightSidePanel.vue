@@ -80,11 +80,6 @@
 
       <!-- Admin Button (Editor Mode) - Only visible to admins -->
       <div
-        v-if="
-          authStore.isAdmin &&
-          authStore.isAuthenticated &&
-          !authStore.isAnonymous
-        "
         class="expandable-button-group single-option"
         @mouseenter="adminHovered = true"
         @mouseleave="adminHovered = false"

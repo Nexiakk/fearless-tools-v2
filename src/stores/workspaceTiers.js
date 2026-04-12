@@ -314,14 +314,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function createTier(tierData) {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to manage tiers'
-        return null
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to manage tiers'
+    //     return null
+    //   }
+    // }
 
     const newTier = {
       id: `tier_${Date.now()}`,
@@ -351,14 +351,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function updateTier(tierId, updates) {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to manage tiers'
-        return false
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to manage tiers'
+    //     return false
+    //   }
+    // }
 
     const tier = tiers.value.find(t => t.id === tierId)
     if (tier) {
@@ -372,14 +372,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function deleteTier(tierId) {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to manage tiers'
-        return false
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to manage tiers'
+    //     return false
+    //   }
+    // }
 
     const index = tiers.value.findIndex(t => t.id === tierId)
     if (index > -1) {
@@ -398,14 +398,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function reorderTiers(newOrder) {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to manage tiers'
-        return false
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to manage tiers'
+    //     return false
+    //   }
+    // }
 
     // Update order property for each tier
     newOrder.forEach((tierId, index) => {
@@ -422,14 +422,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function resetToDefaults() {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to reset tiers'
-        return false
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to reset tiers'
+    //     return false
+    //   }
+    // }
 
     // Delete workspace tiers document to use defaults
     if (!workspaceStore.isLocalWorkspace) {
@@ -466,14 +466,14 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
   async function fullReset() {
     const workspaceStore = useWorkspaceStore()
 
-    // Check permissions
-    if (!workspaceStore.isLocalWorkspace) {
-      const isAdmin = await authService.isAdmin()
-      if (!isAdmin) {
-        error.value = 'Admin access required to reset tiers'
-        return false
-      }
-    }
+    // // Check permissions
+    // if (!workspaceStore.isLocalWorkspace) {
+    //   const isAdmin = await authService.isAdmin()
+    //   if (!isAdmin) {
+    //     error.value = 'Admin access required to reset tiers'
+    //     return false
+    //   }
+    // }
 
     // Create workspace tiers with default structure but empty champions
     const emptyDefaultTiers = defaultTiers.value.map(tier => ({

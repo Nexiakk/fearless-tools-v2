@@ -1,168 +1,149 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, computed } from "vue";
+
+/**
+ * Single source of truth for default settings
+ *
+ * ✅ THIS IS THE ONLY PLACE WHERE DEFAULTS ARE DEFINED
+ * ✅ Change value here once - it works everywhere: initial state, load merge, reset
+ * ✅ Automatic backwards compatibility for ALL new settings
+ */
+const DEFAULT_SETTINGS = Object.freeze({
+  pool: {
+    compactMode: false, // Deprecated
+    normalCardSize: 83,
+    highlightCardSize: 100,
+    unavailableCardSize: 83,
+    disableAnimations: false,
+    centerCards: true,
+    enableSearch: false,
+    showEventHistory: true,
+    cardSizePreset: "compact",
+    useGlobalTierSize: true,
+    tierCardSizes: {
+      op: 100,
+      highlight: 100,
+    },
+    globalTierCardSize: 100,
+    unavailableChampionsGrouping: "top",
+  },
+  drafting: {
+    integrateUnavailableChampions: false, // Deprecated
+    disableDraftDeletionWarning: false,
+    tierHighlightMode: "sort",
+    pickedMode: "default",
+    championGridZoomIndex: 3,
+    championGridGap: 13,
+    cardSizeSource: "pool",
+    cardSizePreset: "compact",
+    useGlobalTierSize: true,
+    tierCardSizes: {
+      op: 100,
+      highlight: 100,
+    },
+    globalTierCardSize: 100,
+    normalCardSize: 100,
+    unavailableCardSize: 83,
+  },
+});
+
+/**
+ * Card Size Preset configurations (shared across all modules)
+ */
+const PRESETS = Object.freeze({
+  standard: {
+    normalCardSize: 100,
+    unavailableCardSize: 83,
+    highlightCardSize: 100,
+  },
+  compact: {
+    normalCardSize: 83,
+    unavailableCardSize: 83,
+    highlightCardSize: 100,
+  },
+  custom: {},
+});
+
+/**
+ * Recursive deep merge utility
+ * Automatically fills missing properties from defaults
+ * Preserves existing values, only adds missing ones
+ */
+function deepMergeDefaults(target, defaults) {
+  const result = { ...defaults };
+
+  for (const key in target) {
+    if (target[key] === undefined || target[key] === null) continue;
+
+    if (
+      typeof target[key] === "object" &&
+      target[key] !== null &&
+      !Array.isArray(target[key]) &&
+      typeof defaults[key] === "object" &&
+      defaults[key] !== null
+    ) {
+      result[key] = deepMergeDefaults(target[key], defaults[key]);
+    } else {
+      result[key] = target[key];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Migrate legacy settings to new structure
+ * Handles all old properties and converts them to current schema
+ */
+function runMigrations(settings) {
+  // Migrate legacy compactMode -> normalCardSize
+  if (settings.pool.compactMode !== undefined && settings.pool.normalCardSize === undefined) {
+    settings.pool.normalCardSize = settings.pool.compactMode ? 83 : 100;
+  }
+
+  // Auto-detect preset for existing users
+  if (settings.pool.cardSizePreset === undefined) {
+    if (settings.pool.normalCardSize === 100) {
+      settings.pool.cardSizePreset = "standard";
+    } else if (settings.pool.normalCardSize === 83) {
+      settings.pool.cardSizePreset = "compact";
+    } else {
+      settings.pool.cardSizePreset = "custom";
+    }
+  }
+
+  // Migrate legacy highlightCardSize -> globalTierCardSize
+  if (settings.pool.globalTierCardSize === undefined && settings.pool.highlightCardSize !== undefined) {
+    settings.pool.globalTierCardSize = settings.pool.highlightCardSize;
+  }
+
+  return settings;
+}
 
 export const useSettingsStore = defineStore("settings", () => {
   // State
-  const settings = ref({
-    pool: {
-      compactMode: false, // Deprecated, kept for backward compatibility
-      normalCardSize: 83, // Percentage scale (50-200), default 83
-      highlightCardSize: 100, // Percentage scale (50-200), default 100
-      unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
-      disableAnimations: false,
-      centerCards: true,
-      enableSearch: false, // Enable search bar feature, default: enabled
-      showEventHistory: true, // Show EventHistory sidebar, default: enabled
-      // NEW: Card size presets
-      cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
-      useGlobalTierSize: true, // Use single value for all tier cards
-      tierCardSizes: {
-        // Per-tier sizes (when useGlobalTierSize is false)
-        op: 100,
-        highlight: 100,
-      },
-      globalTierCardSize: 100, // Global tier card size (when useGlobalTierSize is true)
-      // NEW: Unavailable/Banned champions grouping
-      unavailableChampionsGrouping: "top", // 'top' | 'bottom' | 'hidden', default: 'top'
-    },
-    drafting: {
-      integrateUnavailableChampions: false, // Deprecated, replaced by mode
-      disableDraftDeletionWarning: false, // default: show warning
-      tierHighlightMode: "sort", // 'sort' | 'always' | 'none', default: 'sort'
-      pickedMode: "default", // 'default' | 'bottom' | 'hidden', default: 'default'
-      championGridZoomIndex: 4, // default: index 4 (1.0 scale)
-      championGridGap: 6, // default: 6px
-      cardSizeSource: "pool", // 'pool' | 'custom'
-      // NEW: Tier scaling support in Custom mode for drafting
-      cardSizePreset: "compact", // 'standard' | 'compact' | 'custom'
-      useGlobalTierSize: true, // Use single value for all tier cards
-      tierCardSizes: {
-        op: 100,
-        highlight: 100,
-      },
-      globalTierCardSize: 100, // Global tier card size
-      normalCardSize: 100, // custom size for drafting
-      unavailableCardSize: 83, // custom size for drafting
-    },
-  });
-
+  const settings = ref(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
   const isSettingsOpen = ref(false);
   const settingsTab = ref("pool");
-
-  // Preset configurations
-  const PRESETS = {
-    standard: {
-      normalCardSize: 100,
-      unavailableCardSize: 83,
-      highlightCardSize: 100,
-    },
-    compact: {
-      normalCardSize: 83,
-      unavailableCardSize: 83,
-      highlightCardSize: 100,
-    },
-    custom: {
-      // Uses current values, doesn't override
-    },
-  };
 
   // Actions
   function loadSettings() {
     const saved = localStorage.getItem("fearlessSettings");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Deep merge to preserve defaults for missing properties
-        if (parsed.pool) {
-          // First, merge saved settings with defaults
-          const mergedPool = { ...settings.value.pool, ...parsed.pool };
+    if (!saved) return;
 
-          // Then handle backward compatibility for size properties
-          if (
-            parsed.pool.compactMode !== undefined &&
-            parsed.pool.normalCardSize === undefined
-          ) {
-            mergedPool.normalCardSize = parsed.pool.compactMode ? 83 : 100;
-          }
-          if (parsed.pool.highlightCardSize === undefined) {
-            mergedPool.highlightCardSize = 100;
-          }
-          if (parsed.pool.unavailableCardSize === undefined) {
-            mergedPool.unavailableCardSize = 83;
-          }
+    try {
+      const parsed = JSON.parse(saved);
 
-          // Handle new card size preset settings
-          if (parsed.pool.cardSizePreset === undefined) {
-            // Determine preset based on current settings
-            if (mergedPool.normalCardSize === 100) {
-              mergedPool.cardSizePreset = "standard";
-            } else if (mergedPool.normalCardSize === 83) {
-              mergedPool.cardSizePreset = "compact";
-            } else {
-              mergedPool.cardSizePreset = "custom";
-            }
-          }
-          if (parsed.pool.useGlobalTierSize === undefined) {
-            mergedPool.useGlobalTierSize = true;
-          }
-          if (parsed.pool.tierCardSizes === undefined) {
-            mergedPool.tierCardSizes = { op: 100, highlight: 100 };
-          }
-          if (parsed.pool.globalTierCardSize === undefined) {
-            mergedPool.globalTierCardSize =
-              parsed.pool.highlightCardSize || 100;
-          }
-          // Handle new unavailable champions grouping setting
-          if (parsed.pool.unavailableChampionsGrouping === undefined) {
-            mergedPool.unavailableChampionsGrouping = "top";
-          }
+      // ✅ Automatic deep merge with defaults - NO MORE MANUAL IF CHECKS!
+      // All new settings will automatically get their default values
+      let merged = deepMergeDefaults(parsed, DEFAULT_SETTINGS);
 
-          settings.value.pool = mergedPool;
-        }
-        if (parsed.drafting) {
-          // Backward compatibility for new drafting settings
-          if (parsed.drafting.tierHighlightMode === undefined) {
-            parsed.drafting.tierHighlightMode = "sort";
-          }
-          if (parsed.drafting.pickedMode === undefined) {
-            parsed.drafting.pickedMode = "default";
-          }
-          if (parsed.drafting.championGridZoomIndex === undefined) {
-            parsed.drafting.championGridZoomIndex = 4;
-          }
-          if (parsed.drafting.championGridGap === undefined) {
-            parsed.drafting.championGridGap = 6;
-          }
-          if (parsed.drafting.cardSizeSource === undefined) {
-            parsed.drafting.cardSizeSource = "pool";
-          }
-          if (parsed.drafting.cardSizePreset === undefined) {
-            parsed.drafting.cardSizePreset = "compact";
-          }
-          if (parsed.drafting.useGlobalTierSize === undefined) {
-            parsed.drafting.useGlobalTierSize = true;
-          }
-          if (parsed.drafting.tierCardSizes === undefined) {
-            parsed.drafting.tierCardSizes = { op: 100, highlight: 100 };
-          }
-          if (parsed.drafting.globalTierCardSize === undefined) {
-            parsed.drafting.globalTierCardSize = 100;
-          }
-          if (parsed.drafting.normalCardSize === undefined) {
-            parsed.drafting.normalCardSize = 100;
-          }
-          if (parsed.drafting.unavailableCardSize === undefined) {
-            parsed.drafting.unavailableCardSize = 83;
-          }
-          
-          settings.value.drafting = {
-            ...settings.value.drafting,
-            ...parsed.drafting,
-          };
-        }
-      } catch (error) {
-        console.error("Error loading settings:", error);
-      }
+      // Run migrations for legacy formats
+      merged = runMigrations(merged);
+
+      settings.value = merged;
+    } catch (error) {
+      console.error("Error loading settings:", error);
     }
   }
 
@@ -178,17 +159,34 @@ export const useSettingsStore = defineStore("settings", () => {
     isSettingsOpen.value = false;
   }
 
-  function updatePoolSetting(key, value) {
-    settings.value.pool[key] = value;
+  /**
+   * ✅ Universal update function
+   * Works for ANY setting at any depth with dot notation
+   *
+   * Usage: updateSetting('pool.disableAnimations', true)
+   * Usage: updateSetting('drafting.tierCardSizes.op', 110)
+   */
+  function updateSetting(path, value) {
+    const keys = path.split(".");
+    let current = settings.value;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+      current = current[keys[i]];
+    }
+
+    current[keys[keys.length - 1]] = value;
     saveSettings();
+  }
+
+  // Legacy helpers for backwards compatibility
+  function updatePoolSetting(key, value) {
+    updateSetting(`pool.${key}`, value);
   }
 
   function updateDraftingSetting(key, value) {
-    settings.value.drafting[key] = value;
-    saveSettings();
+    updateSetting(`drafting.${key}`, value);
   }
 
-  // NEW: Apply card size preset
   function applyCardSizePreset(preset, module = "pool") {
     const presetConfig = PRESETS[preset];
     if (!presetConfig) return;
@@ -198,48 +196,48 @@ export const useSettingsStore = defineStore("settings", () => {
     if (preset !== "custom") {
       // Apply preset values
       settings.value[module].normalCardSize = presetConfig.normalCardSize;
-      settings.value[module].unavailableCardSize =
-        presetConfig.unavailableCardSize;
+      settings.value[module].unavailableCardSize = presetConfig.unavailableCardSize;
+
       if (settings.value[module].highlightCardSize !== undefined) {
         settings.value[module].highlightCardSize = presetConfig.highlightCardSize;
       }
+
       settings.value[module].globalTierCardSize = presetConfig.highlightCardSize;
     }
 
     saveSettings();
   }
 
-  // NEW: Set whether to use global tier size or per-tier
   function setUseGlobalTierSize(useGlobal, module = "pool") {
     settings.value[module].useGlobalTierSize = useGlobal;
     saveSettings();
   }
 
-  // NEW: Update tier card size (global or per-tier)
   function updateTierCardSize(tierId, value, module = "pool") {
     if (settings.value[module].useGlobalTierSize) {
       settings.value[module].globalTierCardSize = value;
+
       if (settings.value[module].highlightCardSize !== undefined) {
         settings.value[module].highlightCardSize = value;
       }
     } else {
       settings.value[module].tierCardSizes[tierId] = value;
     }
+
     saveSettings();
   }
 
-  // NEW: Get effective tier card size for a specific tier
   function getTierCardSize(tierId, module = "pool") {
     if (settings.value[module].useGlobalTierSize) {
       return settings.value[module].globalTierCardSize;
     }
+
     return (
       settings.value[module].tierCardSizes[tierId] ||
       settings.value[module].globalTierCardSize
     );
   }
 
-  // NEW: Initialize tier card sizes for new tiers
   function initializeTierCardSize(tierId, module = "pool") {
     if (!settings.value[module].tierCardSizes[tierId]) {
       settings.value[module].tierCardSizes[tierId] =
@@ -248,7 +246,6 @@ export const useSettingsStore = defineStore("settings", () => {
     }
   }
 
-  // NEW: Remove tier card size when tier is deleted
   function removeTierCardSize(tierId, module = "pool") {
     if (settings.value[module].tierCardSizes[tierId]) {
       delete settings.value[module].tierCardSizes[tierId];
@@ -257,45 +254,10 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function resetSettings() {
-    // Reset to default values
-    settings.value = {
-      pool: {
-        compactMode: false, // Deprecated, kept for backward compatibility
-        normalCardSize: 83, // Percentage scale (50-200), default 83
-        highlightCardSize: 100, // Percentage scale (50-200), default 100
-        unavailableCardSize: 83, // Percentage scale (50-200), default 83 (smaller than normal)
-        disableAnimations: false,
-        centerCards: false,
-        enableSearch: false, // Enable search bar feature, default: enabled
-        showEventHistory: true, // Show EventHistory sidebar, default: enabled
-        // NEW: Reset new settings to defaults
-        cardSizePreset: "compact",
-        useGlobalTierSize: true,
-        tierCardSizes: { op: 100, highlight: 100 },
-        globalTierCardSize: 100,
-        unavailableChampionsGrouping: "top", // Reset unavailable champions grouping to default
-      },
-      drafting: {
-        integrateUnavailableChampions: false,
-        disableDraftDeletionWarning: false,
-        tierHighlightMode: "sort",
-        pickedMode: "default",
-        championGridZoomIndex: 4,
-        championGridGap: 6,
-        cardSizeSource: "pool",
-        cardSizePreset: "compact",
-        useGlobalTierSize: true,
-        tierCardSizes: { op: 100, highlight: 100 },
-        globalTierCardSize: 100,
-        normalCardSize: 100,
-        unavailableCardSize: 83,
-      },
-    };
-    // Save the reset settings
+    // ✅ Reset directly from DEFAULT_SETTINGS - no more duplication!
+    settings.value = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     saveSettings();
   }
-
-  // Settings are now saved through updatePoolSetting() and updateDraftingSetting() methods
 
   // Initialize
   loadSettings();
@@ -305,13 +267,17 @@ export const useSettingsStore = defineStore("settings", () => {
     settings,
     isSettingsOpen,
     settingsTab,
-    // Presets
+
+    // Constants
+    DEFAULT_SETTINGS,
     PRESETS,
+
     // Actions
     loadSettings,
     saveSettings,
     openSettings,
     closeSettings,
+    updateSetting,
     updatePoolSetting,
     updateDraftingSetting,
     applyCardSizePreset,
