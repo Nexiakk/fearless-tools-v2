@@ -84,7 +84,7 @@
           <TooltipContent class="max-w-[300px] text-center" side="bottom">
             <div class="text-left space-y-1">
               <p>
-                <strong>Draft Iterations:</strong> Each iteration represents a separate draft sequence. Add multiple iterations to test different strategies. Right-click to delete.
+                <strong>Draft Scenarios:</strong> Each scenario represents a separate draft sequence. Add multiple scenarios to test different strategies. Right-click to delete.
               </p>
             </div>
           </TooltipContent>
@@ -121,7 +121,7 @@
                   <strong>LCU Mode ON:</strong> Auto-detects drafts from your League Client. LCU drafts are read-only and disable champions for the next game.
                 </p>
                 <p>
-                  <strong>LCU Mode OFF (Fearless):</strong> Select champions manually. Game Selector is unlocked.
+                  <strong>LCU Mode OFF (Fearless):</strong> Manually picked champions from Fearless Pool tab will pass over here and be disabled. Game Selector is locked.
                 </p>
               </div>
             </TooltipContent>

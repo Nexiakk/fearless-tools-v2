@@ -13,29 +13,6 @@
         </TabsList>
 
         <TabsContent value="pool" class="space-y-4 mt-4 overflow-y-auto pr-2">
-          <!-- NEW: Page Content Scale -->
-          <div class="page-content-scale-section">
-            <div class="flex items-center justify-between mb-2">
-              <label class="font-medium flex items-center gap-2">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 3H3v18h18V3zM9 9h6v6H9V9z"/>
-                </svg>
-                Page Content Scale
-              </label>
-              <span class="text-sm text-muted-foreground">{{ pageContentScale[0] }}%</span>
-            </div>
-            <Slider
-              v-model="pageContentScale"
-              :min="50"
-              :max="150"
-              :step="1"
-              class="w-full"
-            />
-            <p class="text-xs text-muted-foreground mt-1">
-              Adjust the overall size of all page content
-            </p>
-          </div>
-
           <!-- NEW: Card Size Presets -->
           <div class="space-y-3">
             <label class="font-medium block">Champions Size Presets</label>
@@ -428,7 +405,6 @@ const unavailableCardSize = computed({
   }
 });
 
-// Page Content Scale slider
 // Grid Size setup
 const GRID_SIZE_LABELS = [
   'Extremely Small (57%)',
@@ -472,13 +448,6 @@ const draftUnavailableCardSize = computed({
     if (draftingPreset.value !== 'custom') {
       settingsStore.applyCardSizePreset('custom', 'drafting');
     }
-  }
-});
-
-const pageContentScale = computed({
-  get: () => [settingsStore.settings.pool.pageContentScale],
-  set: (value) => {
-    settingsStore.updatePoolSetting('pageContentScale', value[0]);
   }
 });
 
@@ -562,15 +531,6 @@ function handleDraftingSettingChange(settingKey, event) {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Page Content Scale Section */
-.page-content-scale-section {
-  background: #1a1a1a;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
 }
 
 .unavailable-grouping-select {

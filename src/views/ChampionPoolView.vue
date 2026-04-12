@@ -10,7 +10,7 @@
         <ChampionPoolSkeleton v-if="isLoading" key="skeleton" />
         
         <!-- Actual Content - Show only when workspace exists and all data is loaded -->
-        <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area" :style="pageContentScaleStyle">
+        <div v-else-if="workspaceStore.hasWorkspace" key="content" class="pool-main-area">
           <!-- Event History - Left Side -->
           <EventHistory v-if="settingsStore.settings.pool.showEventHistory" />
 
@@ -199,14 +199,6 @@ const viewClasses = computed(() => ({
   'no-animations': settingsStore.settings.pool.disableAnimations,
   'center-cards': settingsStore.settings.pool.centerCards
 }))
-
-// Separate computed property for page content scale to apply to pool-main-area
-const pageContentScaleStyle = computed(() => {
-  const pageContentScale = settingsStore.settings.pool.pageContentScale || 100
-  return {
-    '--page-content-scale': pageContentScale / 100
-  }
-})
 
 const cardSizeStyles = computed(() => {
   const normalSize = settingsStore.settings.pool.normalCardSize || 100
