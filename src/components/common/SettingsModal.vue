@@ -107,19 +107,6 @@
             />
           </div>
 
-          <!-- Tier Display Mode -->
-          <div class="flex items-center justify-between">
-            <label class="font-medium">Tier Display Mode</label>
-            <select
-              :value="settingsStore.settings.pool.tierDisplayMode"
-              @change="handlePoolSettingChange('tierDisplayMode', $event)"
-              class="unavailable-grouping-select"
-            >
-              <option value="individual-borders">Individual Borders</option>
-              <option value="grouped-blocks">Grouped Blocks</option>
-            </select>
-          </div>
-
           <!-- Picked Champions Grouping -->
           <div class="flex items-center justify-between">
             <label class="font-medium">Picked Champions Display</label>
@@ -510,10 +497,6 @@ const handleAdminSignIn = async () => {
 // Handle unavailable champions grouping change
 function handleUnavailableGroupingChange(event) {
   settingsStore.updatePoolSetting('unavailableChampionsGrouping', event.target.value);
-}
-
-function handlePoolSettingChange(settingKey, event) {
-  settingsStore.updatePoolSetting(settingKey, event.target.value);
 }
 
 // Handle drafting settings changes

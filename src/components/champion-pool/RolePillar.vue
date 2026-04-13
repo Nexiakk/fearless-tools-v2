@@ -25,16 +25,13 @@
     </div>
     
     <!-- Non-Frozen View (single list) -->
-    <div v-else class="pillar-champions-grid fluid tier-cluster-grid">
+    <div v-else class="pillar-champions-grid fluid">
       <ChampionCard
-        v-for="(champion, index) in allChampions"
+        v-for="champion in allChampions"
         :key="`${champion.id}-${role}`"
         :champion="champion"
         :role="role"
         :search-match="championSearchStore.isSearchActive ? championSearchStore.matchesSearch(champion.name) : true"
-        :grouped-mode="settingsStore.settings.pool.tierDisplayMode === 'grouped-blocks'"
-        :tier="getTierForIndex(index)"
-        :neighbors="getNeighbors(index)"
       />
     </div>
   </div>
@@ -45,8 +42,6 @@ import { computed } from 'vue'
 import { useChampionsStore } from '@/stores/champions'
 import { useSettingsStore } from '@/stores/settings'
 import { useChampionSearchStore } from '@/stores/championSearch'
-import { useWorkspaceTiersStore } from '@/stores/workspaceTiers'
-import { useDraftStore } from '@/stores/draft'
 import ChampionCard from './ChampionCard.vue'
 
 const props = defineProps({
@@ -63,8 +58,6 @@ const props = defineProps({
 const championsStore = useChampionsStore()
 const settingsStore = useSettingsStore()
 const championSearchStore = useChampionSearchStore()
-const workspaceTiersStore = useWorkspaceTiersStore()
-const draftStore = useDraftStore()
 
 const roleIconSvg = computed(() => championsStore.getRoleIconSvg(props.role))
 const roleIconUrl = computed(() => championsStore.getRoleIconUrl(props.role))
@@ -94,54 +87,4 @@ const allChampions = computed(() => {
   }
   return []
 })
-
-const tierAssignments = computed(() => {
-  return allChampions.value.map(champion => 
-    workspaceTiersStore.getTierForChampion(champion.name, props.role)
-  )
-})
-
-function getTierForIndex(index) {
-  return tierAssignments.value[index]
-}
-
-function isChampionAvailable(champion) {
-  return !draftStore.isUnavailable(champion.name) && !draftStore.isBannedChampion(champion.name)
-}
-
-function getNeighbors(index) {
-  const total = allChampions.value.length
-  const currentTierId = tierAssignments.value[index]?.id
-  const currentChampion = allChampions.value[index]
-  
-  // Don't group unavailable champions
-  if (!isChampionAvailable(currentChampion)) {
-    return { top: false, bottom: false, left: false, right: false }
-  }
-  
-  // Grid has 5 columns
-  const cols = 5
-  const row = Math.floor(index / cols)
-  const col = index % cols
-  
-  const checkNeighbor = (neighborIndex) => {
-    if (neighborIndex < 0 || neighborIndex >= total) return false
-    const neighborChampion = allChampions.value[neighborIndex]
-    return isChampionAvailable(neighborChampion) && tierAssignments.value[neighborIndex]?.id === currentTierId
-  }
-  
-  return {
-    top: checkNeighbor(index - cols),
-    bottom: checkNeighbor(index + cols),
-    left: checkNeighbor(index - 1),
-    right: checkNeighbor(index + 1)
-  }
-}
 </script>
-
-<style scoped>
-.tier-cluster-grid {
-  gap: 4px 4px !important;
-  padding: 8px !important;
-}
-</style>

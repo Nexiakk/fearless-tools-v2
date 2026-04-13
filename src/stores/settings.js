@@ -26,7 +26,6 @@ const DEFAULT_SETTINGS = Object.freeze({
     },
     globalTierCardSize: 100,
     unavailableChampionsGrouping: "top",
-    tierDisplayMode: "individual-borders",
   },
   drafting: {
     integrateUnavailableChampions: false, // Deprecated
@@ -45,7 +44,6 @@ const DEFAULT_SETTINGS = Object.freeze({
     globalTierCardSize: 100,
     normalCardSize: 100,
     unavailableCardSize: 83,
-    tierDisplayMode: "individual-borders",
   },
 });
 
