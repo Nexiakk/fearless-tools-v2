@@ -5,7 +5,6 @@
     :style="{ ...tierCardStyle, ...hoverStyle }"
     @click="handleClick($event)"
     @contextmenu.prevent="handleRightClick"
-
     :title="champion.name"
   >
     <div class="compact-champion-icon-wrapper">
@@ -48,6 +47,23 @@ const props = defineProps({
   searchMatch: {
     type: Boolean,
     default: true
+  },
+  groupedMode: {
+    type: Boolean,
+    default: false
+  },
+  tier: {
+    type: Object,
+    default: null
+  },
+  neighbors: {
+    type: Object,
+    default: () => ({
+      top: false,
+      bottom: false,
+      left: false,
+      right: false
+    })
   }
 })
 
@@ -71,7 +87,8 @@ const cardClasses = computed(() => {
 
     'editor-mode': adminStore.isEditorModeActive,
     'search-match': props.searchMatch,
-    'search-blur': !props.searchMatch
+    'search-blur': !props.searchMatch,
+    'grouped-tier': props.groupedMode && props.tier
   }
 
   // Add tier-selected class when editor mode is active and a tier is selected
@@ -80,10 +97,9 @@ const cardClasses = computed(() => {
   }
 
   // Add tier sizing class for highlight card scale
-  const tier = workspaceTiersStore.getTierForChampion(props.champion.name, props.role)
+  const tier = props.tier || workspaceTiersStore.getTierForChampion(props.champion.name, props.role)
   if (tier && !isBanned.value && !draftStore.isUnavailable(props.champion.name)) {
     classes['tier-highlight-size'] = true
-    // Add tier-specific class for per-tier sizing (e.g., tier-op, tier-highlight)
     classes[`tier-${tier.id}`] = true
   }
 
@@ -92,31 +108,108 @@ const cardClasses = computed(() => {
 
 // Dynamic tier styling - applies to all champions regardless of availability
 const tierIconStyle = computed(() => {
-  const tier = workspaceTiersStore.getTierForChampion(props.champion.name, props.role)
+  // Don't show individual tier borders when in grouped mode
+  if (props.groupedMode) return {}
+  
+  const tier = props.tier || workspaceTiersStore.getTierForChampion(props.champion.name, props.role)
   if (!tier) return {}
 
-  if (tier.style === 'border') {
-    // Match existing OP tier: border: 2px solid #d97706
-    return { border: `2px solid ${tier.color}` }
-  } else if (tier.style === 'highlight') {
-    // Match existing manually-marked: border + shadow
-    return {
-      border: `2px solid ${tier.color}CC`,  // CC = 0.8 opacity
-      boxShadow: `0 0 4px 1px ${tier.color}99`  // 99 = 0.6 opacity
-    }
-  } else {
-    // Shadow style - same as highlight: border + glow shadow
-    return {
-      border: `2px solid ${tier.color}CC`,  // CC = 0.8 opacity
-      boxShadow: `0 0 4px 1px ${tier.color}99`  // 99 = 0.6 opacity
-    }
+  switch (tier.style) {
+    case 'border':
+      return { border: `2px solid ${tier.color}` }
+      
+    case 'shadow':
+    case 'highlight':
+      return {
+        border: `2px solid ${tier.color}CC`,
+        boxShadow: `0 0 4px 1px ${tier.color}99`
+      }
+      
+    case 'solid':
+      return {
+        border: `2px solid ${tier.color}`,
+        backgroundColor: `${tier.color}40`,
+        boxShadow: `inset 0 0 0 1px ${tier.color}20`
+      }
+      
+    case 'gradient':
+      return {
+        border: `2px solid ${tier.color}`,
+        background: `linear-gradient(180deg, ${tier.color}30 0%, ${tier.color}10 100%)`,
+        boxShadow: `0 2px 8px ${tier.color}20`
+      }
+      
+    case 'underlined':
+      return {
+        borderBottom: `3px solid ${tier.color}`,
+        boxShadow: `0 3px 6px -3px ${tier.color}40`
+      }
+      
+    case 'left-bar':
+      return {
+        borderLeft: `4px solid ${tier.color}`,
+        backgroundColor: `${tier.color}15`
+      }
+      
+    case 'corner-ribbon':
+      return {
+        borderTop: `2px solid ${tier.color}`,
+        borderRight: `2px solid ${tier.color}`,
+        borderTopRightRadius: '6px',
+        background: `linear-gradient(135deg, ${tier.color}25 0%, transparent 50%)`
+      }
+      
+    case 'glow-pulse':
+      return {
+        border: `2px solid ${tier.color}`,
+        boxShadow: `0 0 8px ${tier.color}80, 0 0 16px ${tier.color}40, 0 0 24px ${tier.color}20`,
+        animation: 'tierPulse 2s infinite'
+      }
+      
+    default:
+      return { border: `2px solid ${tier.color}` }
   }
 })
 
-// Card-level tier styling (for future use if needed)
+// Card-level tier styling for grouped blob mode
 const tierCardStyle = computed(() => {
-  // Currently empty, but can be used for card-level tier effects
-  return {}
+  if (!props.groupedMode || !props.tier || isBanned.value || draftStore.isUnavailable(props.champion.name)) return {}
+  
+  const style = {
+    backgroundColor: `${props.tier.color}40`,
+    zIndex: 1,
+    borderRadius: '0px',
+    margin: '0px',
+    padding: '0px',
+    border: '1px solid transparent',
+    boxShadow: `inset 0 0 0 1px ${props.tier.color}70`
+  }
+  
+  // Extend background into gaps while keeping card position unchanged
+  if (props.neighbors.left) style.marginLeft = '-4px'
+  if (props.neighbors.right) style.marginRight = '-4px'
+  if (props.neighbors.top) style.marginTop = '-4px'
+  if (props.neighbors.bottom) style.marginBottom = '-4px'
+  
+  // Compensate padding to keep internal content position
+  if (props.neighbors.left) style.paddingLeft = '4px'
+  if (props.neighbors.right) style.paddingRight = '4px'
+  if (props.neighbors.top) style.paddingTop = '4px'
+  if (props.neighbors.bottom) style.paddingBottom = '4px'
+  
+  // Draw borders only on outer perimeter edges
+  if (!props.neighbors.left) style.borderLeft = `2px solid ${props.tier.color}`
+  if (!props.neighbors.right) style.borderRight = `2px solid ${props.tier.color}`
+  if (!props.neighbors.top) style.borderTop = `2px solid ${props.tier.color}`
+  if (!props.neighbors.bottom) style.borderBottom = `2px solid ${props.tier.color}`
+  
+  // Only apply rounded corners on actual outer edges
+  if (!props.neighbors.top && !props.neighbors.left) style.borderTopLeftRadius = '8px'
+  if (!props.neighbors.top && !props.neighbors.right) style.borderTopRightRadius = '8px'
+  if (!props.neighbors.bottom && !props.neighbors.left) style.borderBottomLeftRadius = '8px'
+  if (!props.neighbors.bottom && !props.neighbors.right) style.borderBottomRightRadius = '8px'
+  
+  return style
 })
 
 // Dynamic hover styling based on editor mode and selected tier
@@ -202,5 +295,24 @@ const handleRightClick = () => {
   }
 }
 
-
 </script>
+
+<style scoped>
+@keyframes tierPulse {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 8px var(--pulse-color, currentColor)
+  }
+  50% {
+    filter: brightness(1.15);
+    box-shadow: 0 0 12px var(--pulse-color, currentColor), 0 0 20px var(--pulse-color, currentColor)
+  }
+}
+
+.compact-champion-card.grouped-tier {
+  border-radius: 0;
+  margin: 0;
+  border: none;
+  background-clip: padding-box;
+}
+</style>

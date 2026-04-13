@@ -987,17 +987,25 @@ function handleSlotClick(slotData) {
     return;
   }
 
-  if (draftingStore.selectedChampionForPlacement) {
-    // Place champion from grid
-    if (
-      slot &&
-      !slot.champion &&
-      isChampionAvailableForPlacement(
-        draftingStore.selectedChampionForPlacement,
-      )
-    ) {
-      seriesStore.updateCurrentDraftSlot(
-        side,
+    if (draftingStore.selectedChampionForPlacement) {
+      // Place champion from grid
+      if (
+        slot &&
+        isChampionAvailableForPlacement(
+          draftingStore.selectedChampionForPlacement,
+        )
+      ) {
+        // If slot already has a champion, remove it first (return to pool)
+        if (slot.champion) {
+          // Clear the existing champion from this slot
+          seriesStore.updateCurrentDraftSlot(side, type, index, {
+            champion: null,
+            notes: slot.notes || "",
+          });
+        }
+        
+        seriesStore.updateCurrentDraftSlot(
+          side,
         type,
         index,
         draftingStore.selectedChampionForPlacement,

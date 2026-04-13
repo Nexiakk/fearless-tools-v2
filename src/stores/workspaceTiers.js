@@ -237,7 +237,6 @@ export const useWorkspaceTiersStore = defineStore('workspaceTiers', () => {
 
   function selectTier(tierId) {
     selectedTierId.value = tierId
-    queueSave()
   }
 
   function assignChampionToTier(championName, tierId, role = null) {
